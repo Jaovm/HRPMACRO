@@ -1,12 +1,10 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import yfinance as yf
 from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.efficient_frontier import EfficientFrontier
-import time
 
 st.set_page_config(page_title="Alocação HRP + Estratégias", layout="wide")
 st.title("📈 Alocação com HRP + Estratégias Otimizadas")
@@ -28,27 +26,25 @@ def carregar_dados(tickers, start_date, end_date):
     for ticker in tickers:
         try:
             data = yf.download(ticker, start=start_date, end=end_date)
+            # Verificar se 'Adj Close' está disponível
             if 'Adj Close' in data.columns:
                 dados[ticker] = data['Adj Close']
-            elif 'Close' in data.columns:  # Garantir que o 'Close' seja usado caso 'Adj Close' falhe
+            # Caso contrário, usar 'Close'
+            elif 'Close' in data.columns:
                 dados[ticker] = data['Close']
             else:
-                st.warning(f"Não foi possível encontrar dados para {ticker}.")
+                st.warning(f"Coluna 'Adj Close' nem 'Close' encontrada para {ticker}. Dados não serão considerados.")
                 continue
         except Exception as e:
             st.warning(f"Falha ao baixar dados de {ticker}: {e}")
             continue
 
+    # Se não houver dados, retornar um DataFrame vazio
     if not dados:
         st.error("Não foi possível baixar dados para nenhum ativo.")
         return pd.DataFrame(), pd.DataFrame()
 
-    # Verificar se todos os dados estão estruturados corretamente
-    for ticker in dados:
-        if isinstance(dados[ticker], pd.Series):  # Se os dados forem uma série, converte para lista
-            dados[ticker] = dados[ticker].values.tolist()
-
-    # Garantir que o DataFrame tenha um índice válido
+    # Verificar se os dados têm formato válido
     try:
         df_dados = pd.DataFrame(dados)
         df_dados.index = pd.to_datetime(data.index)  # Usar o índice de data do último ativo
