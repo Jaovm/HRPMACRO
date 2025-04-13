@@ -79,10 +79,12 @@ if st.button("Gerar Alocação Otimizada e Aporte"):
     if dados.empty:
         st.warning("Os dados de preços estão vazios. Verifique os tickers ou o período.")
     else:
-        # Desempacotar o multiíndice, se necessário
+        # Verificar se o DataFrame possui MultiIndex
         if isinstance(dados.columns, pd.MultiIndex):
             dados = dados.xs('Close', axis=1, level=0)  # Obtendo preços de fechamento
+            st.warning("Usando preços de fechamento após desempacotar o MultiIndex.")
         
+        # Caso contrário, os dados são simples e já contêm os preços desejados
         # Calculando os retornos diários
         retornos = dados.pct_change().dropna()
 
