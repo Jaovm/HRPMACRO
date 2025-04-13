@@ -336,77 +336,77 @@ def get_quasi_diag(link):
     return hrp_weights.values
 
 
-st.subheader("📈 Ranking de Oportunidades de Compra")
+st.set_page_config(layout="wide")
+st.title("Painel de Aporte - Carteira Buy and Hold")
 
-# Identifica setor favorecido
-setor_favorecido = setores_por_cenario.get(cenario_macro, [])
-df_carteira_atual['Setor'] = df_carteira_atual['Ticker'].map(setores_por_ticker)
-df_carteira_atual['Favorecido?'] = df_carteira_atual['Setor'].isin(setor_favorecido)
+st.markdown("Este painel simula sugestões de aporte baseadas em uma estratégia combinada de HRP e Sharpe, considerando o cenário atual e sua carteira atual. Não realiza vendas, apenas sugestões de alocação do novo capital.")
 
-# Preço atual + preço-alvo
-df_carteira_atual['Preço Atual'] = df_carteira_atual['Ticker'].apply(lambda x: get_info_yf(x).get("currentPrice", None))
-df_carteira_atual['Preço Alvo'] = df_carteira_atual['Ticker'].apply(lambda x: get_info_yf(x).get("targetMeanPrice", None))
-df_carteira_atual['Potencial Upside'] = (df_carteira_atual['Preço Alvo'] / df_carteira_atual['Preço Atual']) - 1
+# Carteira default
+default_data = {
+    'AGRO3.SA': 10,
+    'BBAS3.SA': 1.2,
+    'BBSE3.SA': 6.5,
+    'BPAC11.SA': 10.6,
+    'EGIE3.SA': 5,
+    'ITUB3.SA': 0.5,
+    'PRIO3.SA': 15,
+    'PSSA3.SA': 15,
+    'SAPR3.SA': 6.7,
+    'SBSP3.SA': 4,
+    'VIVT3.SA': 6.4,
+    'WEGE3.SA': 15,
+    'TOTS3.SA': 1,
+    'B3SA3.SA': 0.1,
+    'TAEE3.SA': 3
+}
 
-# Ranking por setor favorecido + upside
-ranking = df_carteira_atual[df_carteira_atual['Favorecido?']].sort_values('Potencial Upside', ascending=False)
-st.dataframe(ranking[['Ticker', 'Setor', 'Preço Atual', 'Preço Alvo', 'Potencial Upside']].style.format({
-    'Preço Atual': 'R$ {:.2f}', 'Preço Alvo': 'R$ {:.2f}', 'Potencial Upside': '{:.2%}'
-}))
+st.sidebar.header("Carteira Atual")
+carteira_usuario = {}
 
-st.subheader("🔁 Nova Alocação com HRP")
+for acao, peso in default_data.items():
+    carteira_usuario[acao] = st.sidebar.number_input(f"{acao}", min_value=0.0, max_value=100.0, value=peso)
 
-# Baixa cotações históricas
-tickers = df_carteira_atual['Ticker'].tolist()
-prices = yf.download(tickers, period="5y", interval="1d")['Adj Close'].dropna()
-returns = prices.pct_change().dropna()
+aporte = st.sidebar.number_input("Valor do Aporte (R$)", min_value=100.0, value=1000.0, step=100.0)
 
-# Matriz de covariância com Ledoit-Wolf
-lw = LedoitWolf()
-cov_matrix = lw.fit(returns).covariance_
+# Normalizando carteira atual
+pesos_atuais = pd.Series(carteira_usuario)
+pesos_atuais = pesos_atuais / pesos_atuais.sum()
 
-# HRP
-hrp = HierarchicalRiskParity()
-weights_hrp = hrp.allocate(asset_names=returns.columns.tolist(), cov_matrix=cov_matrix)
+# Dados históricos
+tickers = list(pesos_atuais.index)
+dados = carregar_dados(tickers)
+retornos_df = dados.pct_change().dropna()
+retornos_esperados = mean_historical_return(dados)
+cov_matrix = CovarianceShrinkage(dados).ledoit_wolf()
 
-# Penaliza ativos de setores não favorecidos
-for ticker in weights_hrp.keys():
-    setor = setores_por_ticker.get(ticker, None)
-    if setor not in setor_favorecido:
-        weights_hrp[ticker] *= 0.5  # penalização leve
+# Otimização
+pesos_sugeridos = otimizar_portfolio_hrp_sharpe(retornos_esperados, cov_matrix)
 
-# Normaliza pesos novamente
-total = sum(weights_hrp.values())
-for t in weights_hrp:
-    weights_hrp[t] /= total
+# Simulação de aporte sem venda
+novo_valor_total = 1 + (aporte / 100)
+valor_total_atual = 100
+novo_valor_total_em_percentual = (pesos_atuais * valor_total_atual + pesos_sugeridos * aporte) / novo_valor_total
+novo_valor_total_em_percentual *= 100
 
-# Apresenta
-df_hrp = pd.DataFrame.from_dict(weights_hrp, orient='index', columns=['Peso HRP'])
-df_hrp['Peso Atual'] = df_carteira_atual.set_index('Ticker')['Peso (%)']
-df_hrp['Setor'] = df_hrp.index.map(setores_por_ticker)
-df_hrp['Favorecido?'] = df_hrp['Setor'].isin(setor_favorecido)
-st.dataframe(df_hrp.style.format({"Peso Atual": "{:.2%}", "Peso HRP": "{:.2%}"}))
+st.subheader("Sugestão de Alocação com Aporte")
+st.dataframe(pd.DataFrame({
+    'Peso Atual (%)': pesos_atuais * 100,
+    'Sugerido p/ Aporte (%)': pesos_sugeridos * 100,
+    'Novo Peso (%)': novo_valor_total_em_percentual
+}).round(2))
 
-st.subheader("💸 Sugestão de Alocação do Novo Aporte")
+# Resumo dos setores favorecidos - versão simplificada
+st.subheader("Empresas Favorecidas no Cenário Atual")
+setores_favorecidos = {
+    'Alta de Juros': ['BBAS3.SA', 'BBSE3.SA', 'PSSA3.SA', 'ITUB3.SA'],
+    'Alta do Petróleo': ['PRIO3.SA'],
+    'Cenário Estável': ['WEGE3.SA', 'TOTS3.SA', 'VIVT3.SA'],
+    'Defensivos': ['TAEE3.SA', 'EGIE3.SA', 'SBSP3.SA', 'SAPR3.SA']
+}
 
-# Calcula valor alvo por HRP
-df_hrp['Valor Ideal HRP'] = df_hrp['Peso HRP'] * (valor_total_carteira + valor_aporte)
-df_hrp['Valor Atual'] = df_hrp['Peso Atual'] * valor_total_carteira
-df_hrp['Sugestão de Compra (R$)'] = df_hrp['Valor Ideal HRP'] - df_hrp['Valor Atual']
-df_hrp['Sugestão de Compra (R$)'] = df_hrp['Sugestão de Compra (R$)'].apply(lambda x: max(0, x))  # evita venda
-
-# Normaliza sugestões para bater com valor do aporte
-total_sugestao = df_hrp['Sugestão de Compra (R$)'].sum()
-df_hrp['Sugestão Corrigida (R$)'] = df_hrp['Sugestão de Compra (R$)'] / total_sugestao * valor_aporte
-
-# Exibe
-df_sugestao = df_hrp[['Peso Atual', 'Peso HRP', 'Valor Atual', 'Valor Ideal HRP', 'Sugestão Corrigida (R$)', 'Setor', 'Favorecido?']]
-st.dataframe(df_sugestao.style.format({
-    "Peso Atual": "{:.2%}", "Peso HRP": "{:.2%}", 
-    "Valor Atual": "R$ {:.2f}", "Valor Ideal HRP": "R$ {:.2f}", 
-    "Sugestão Corrigida (R$)": "R$ {:.2f}"
-}))
-
-# Valor total conferência
-valor_total_sugerido = df_sugestao['Sugestão Corrigida (R$)'].sum()
-st.markdown(f"**Total sugerido: R$ {valor_total_sugerido:,.2f}**")
+for cenario, empresas in setores_favorecidos.items():
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        st.markdown(f"**{cenario}**")
+    with col2:
+        st.markdown(", ".join(empresas))
