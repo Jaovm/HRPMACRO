@@ -57,15 +57,17 @@ def main():
     inflacao_anual = get_inflacao()  # Atualizado para corrigir erro de inflação
     selic = get_selic()  # Agora com a Selic corrigida
     meta_inflacao = 3.0  # Meta de inflação do Banco Central
+    meta_selic = 13.75  # Meta de Selic (valor aproximado, é atualizado periodicamente pelo Banco Central)
 
     # Exibir cenário macroeconômico
     st.subheader("Cenário Macroeconômico Atual")
     if inflacao_anual:
         st.write(f"Inflação Anual: {inflacao_anual}%")
     if selic:
-        st.write(f"Taxa Selic: {selic}%")
+        st.write(f"Taxa Selic Atual: {selic}%")
     st.write(f"Meta de Inflação: {meta_inflacao}%")
-    
+    st.write(f"Meta de Selic: {meta_selic}%")
+
     # Analisando o cenário econômico para definir uma tendência
     if inflacao_anual and inflacao_anual > meta_inflacao and selic >= 14.2:
         st.write("Cenário: Alta inflação e Selic alta, tendência de recessão ou inflação controlada.")
