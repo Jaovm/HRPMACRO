@@ -25,6 +25,30 @@ def get_inflacao():
         st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
         return None
 
+# Função para obter a taxa Selic
+def get_selic():
+    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.4186/dados?formato=csv'
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        data = response.text.splitlines()
+        if len(data) > 1:
+            # Processando os dados da Selic (assumindo que o índice 1 é o valor da Selic)
+            selic_data = [line.split(';') for line in data]
+            try:
+                # A última Selic é a mais recente, então vamos pegar o último valor
+                selic = selic_data[-1][1].replace('"', '').replace(',', '.')
+                return round(float(selic), 2)  # Converte para float e arredonda para duas casas decimais
+            except ValueError as e:
+                st.error(f"Erro ao processar a Selic: {e}")
+                return None
+        else:
+            st.error("Nenhum dado encontrado na resposta da API de Selic.")
+            return None
+    else:
+        st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
+        return None
+
 # Função principal para exibir o app
 def main():
     st.title("Análise de Carteira de Investimentos e Cenário Macroeconômico")
