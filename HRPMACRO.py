@@ -65,11 +65,22 @@ def classificar_cenario_macro(m):
 # ========= PREÇO ALVO ==========
 
 def obter_preco_diario_ajustado(tickers, periodo='7y'):
+    # Baixa os dados de múltiplos tickers
     dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
-    if len(tickers) == 1:
-        return dados['Adj Close'].to_frame()
-    else:
+    
+    # Verifica se o retorno é com MultiIndex (dados de múltiplos tickers)
+    if isinstance(dados.columns, pd.MultiIndex):
+        # Retorna o 'Adj Close' para cada ticker
         return dados['Adj Close']
+    else:
+        # Caso seja apenas um ticker, retorna a coluna 'Adj Close'
+        return dados[['Adj Close']]
+
+# Teste com a função ajustada
+ativos = ['PETR4.SA', 'ITUB4.SA', 'WEGE3.SA']  # Exemplos de tickers
+precos_ajustados = obter_preco_diario_ajustado(ativos, '7y')
+print(precos_ajustados)
+
 
 
 def otimizar_carteira_sharpe(tickers):
