@@ -66,7 +66,7 @@ def main():
     if selic:
         st.write(f"Taxa Selic Atual: {selic}%")
     st.write(f"Meta de Inflação: {meta_inflacao}%")
-    st.write(f"Meta de Selic: {meta_selic}%")
+    st.write(f"Meta de Selic: {selic}%")
 
     # Analisando o cenário econômico para definir uma tendência
     if inflacao_anual and inflacao_anual > meta_inflacao and selic >= 14.2:
