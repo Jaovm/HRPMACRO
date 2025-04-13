@@ -4,7 +4,7 @@ import numpy as np
 import yfinance as yf
 from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
-from pypfopt.hierarchical_portfolio import HierarchicalRiskParity
+from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.efficient_frontier import EfficientFrontier
 from pypfopt.objective_functions import negative_sharpe
 
@@ -35,32 +35,33 @@ matriz_cov = CovarianceShrinkage(precos).ledoit_wolf()
 
 # Funções de alocação
 def alocacao_hrp(returns):
-    hrp = HierarchicalRiskParity()
-    hrp.allocate(returns=returns)
-    return hrp.clean_weights
+    cov = returns.cov()
+    hrp = HRPOpt(returns=returns, cov_matrix=cov)
+    pesos = hrp.optimize()
+    return pesos
 
 def alocacao_hrp_sharpe(returns, media_ret, cov_matrix):
-    hrp = HierarchicalRiskParity()
-    hrp.allocate(returns=returns)
-    tickers_hrp = list(hrp.clean_weights.keys())
-    
+    hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
+    pesos_hrp = hrp.optimize()
+    tickers_hrp = list(pesos_hrp.keys())
+
     ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
     pesos = ef.max_sharpe()
     return ef.clean_weights()
 
 def alocacao_hrp_maior_retorno(returns, media_ret, cov_matrix):
-    hrp = HierarchicalRiskParity()
-    hrp.allocate(returns=returns)
-    tickers_hrp = list(hrp.clean_weights.keys())
+    hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
+    pesos_hrp = hrp.optimize()
+    tickers_hrp = list(pesos_hrp.keys())
 
     ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
     ef.max_quadratic_utility()
     return ef.clean_weights()
 
 def alocacao_hrp_menor_risco(returns, media_ret, cov_matrix):
-    hrp = HierarchicalRiskParity()
-    hrp.allocate(returns=returns)
-    tickers_hrp = list(hrp.clean_weights.keys())
+    hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
+    pesos_hrp = hrp.optimize()
+    tickers_hrp = list(pesos_hrp.keys())
 
     ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
     ef.min_volatility()
