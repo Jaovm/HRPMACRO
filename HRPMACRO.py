@@ -40,6 +40,10 @@ def calcular_hrp(tickers, retornos):
     if retornos.shape[0] < 2:
         raise ValueError("Número insuficiente de observações para calcular a matriz de distâncias.")
     
+    # Mostrando os retornos para depuração
+    st.write(f"Retornos dos ativos ({len(retornos)} observações):")
+    st.write(retornos.head())
+
     # Calculando a matriz de covariância
     cov = LedoitWolf().fit(retornos).covariance_
 
@@ -49,9 +53,12 @@ def calcular_hrp(tickers, retornos):
     
     # Aplicando cluster hierárquico para determinar a estrutura de risco
     dist_matrix = sch.distance.pdist(cov)
+    
+    # Verificando a forma da matriz de distâncias
+    st.write(f"Matriz de distâncias calculada ({dist_matrix.shape[0]} elementos):")
     if dist_matrix.size == 0:
         raise ValueError("A matriz de distâncias está vazia. Verifique os dados.")
-        
+    
     linkage = sch.linkage(dist_matrix, method='ward')
     
     # Obtendo a estrutura hierárquica
