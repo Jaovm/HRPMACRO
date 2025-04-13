@@ -71,7 +71,7 @@ def get_selic():
         return None
 
 def get_inflacao():
-    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433?formato=csv'
+    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=csv'
     response = requests.get(url)
     
     if response.status_code == 200:
