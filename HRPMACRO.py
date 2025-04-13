@@ -37,8 +37,13 @@ def get_bcb(code):
 
 def obter_preco_petroleo():
     try:
-        return float(yf.Ticker("CL=F").history(period="1d")['Close'].iloc[-1])
-    except:
+        dados = yf.Ticker("CL=F").history(period="5d")
+        if not dados.empty and 'Close' in dados.columns:
+            return float(dados['Close'].dropna().iloc[-1])
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Erro ao obter preço do petróleo: {e}")
         return None
 
 def obter_macro():
@@ -58,6 +63,38 @@ def classificar_cenario_macro(m):
         return "Neutro"
 
 # ========= PREÇO ALVO ==========
+
+def obter_preco_diario_ajustado(tickers, periodo='7y'):
+    dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
+    if len(tickers) == 1:
+        return dados['Adj Close'].to_frame()
+    else:
+        return dados['Adj Close']
+
+
+def otimizar_carteira_sharpe(tickers):
+    dados = obter_preco_diario_ajustado(tickers)
+    retornos = dados.pct_change().dropna()
+    media_retorno = retornos.mean()
+    cov = LedoitWolf().fit(retornos).covariance_
+
+    def sharpe_neg(pesos):
+        retorno_esperado = np.dot(pesos, media_retorno)
+        volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+        return -retorno_esperado / volatilidade if volatilidade != 0 else 0
+
+    n = len(tickers)
+    pesos_iniciais = np.array([1/n] * n)
+    limites = [(0, 1) for _ in range(n)]
+    restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
+
+    resultado = minimize(sharpe_neg, pesos_iniciais, method='SLSQP', bounds=limites, constraints=restricoes)
+
+    if resultado.success:
+        return resultado.x
+    else:
+        return None
+
 def obter_preco_alvo(ticker):
     try:
         return yf.Ticker(ticker).info.get('targetMeanPrice', None)
@@ -153,40 +190,6 @@ def otimizar_carteira_hrp(tickers):
     cov = LedoitWolf().fit(retornos).covariance_
     ivp = 1. / np.diag(cov)
     ivp /= ivp.sum()
-
- 
-def otimizar_carteira_sharpe(tickers):
-    dados = obter_preco_diario_ajustado(tickers)
-    retornos = dados.pct_change().dropna()
-    media_retornos = retornos.mean()
-    cov_matrix = LedoitWolf().fit(retornos).covariance_
-
-    num_ativos = len(tickers)
-    init_weights = np.array([1.0 / num_ativos] * num_ativos)
-    bounds = tuple((0, 1) for _ in range(num_ativos))
-    constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
-
-    def sharpe_neg(weights):
-        port_return = np.dot(weights, media_retornos)
-        port_std = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
-        sharpe_ratio = port_return / port_std
-        return -sharpe_ratio
-
-    opt = minimize(sharpe_neg, init_weights, method='SLSQP', bounds=bounds, constraints=constraints)
-
-    if opt.success:
-        return opt.x
-    else:
-        return None
-
-    sort_ix = get_quasi_diag(linkage_matrix)
-    sorted_tickers = [retornos.columns[i] for i in sort_ix]
-    cov = LedoitWolf().fit(retornos).covariance_
-    ivp = 1. / np.diag(cov)
-    ivp /= ivp.sum()
-
- 
-
 
     def get_cluster_var(cov, cluster_items):
         cov_slice = cov[np.ix_(cluster_items, cluster_items)]
