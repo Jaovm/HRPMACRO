@@ -407,3 +407,73 @@ if st.button("Gerar Alocação Otimizada"):
                 st.error("Falha na otimização da carteira.")
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
+
+# ========= SUGESTÃO DE APORTES =========
+
+def sugerir_nova_alocacao_hrp(carteira_atual, pesos_atuais, macro, aporte):
+    cenario = classificar_cenario_macro(macro)
+    ativos_sugeridos = filtrar_ativos_validos(carteira_atual, cenario, macro)
+    tickers_sugeridos = [a['ticker'] for a in ativos_sugeridos]
+
+    if not tickers_sugeridos:
+        return None, ativos_sugeridos
+
+    pesos_novos = otimizar_carteira_hrp(tickers_sugeridos)
+
+    # Ajustar aporte apenas nos ativos existentes
+    nova_alocacao = {}
+    total_atual = sum(pesos_atuais.values())
+    total_final = total_atual + aporte
+
+    for ticker in carteira_atual:
+        peso_atual = pesos_atuais.get(ticker, 0) * total_atual
+        if ticker in tickers_sugeridos:
+            idx = tickers_sugeridos.index(ticker)
+            peso_sugerido = pesos_novos[idx] * aporte
+            nova_alocacao[ticker] = (peso_atual + peso_sugerido) / total_final
+        else:
+            nova_alocacao[ticker] = peso_atual / total_final
+
+    return nova_alocacao, ativos_sugeridos
+
+# ========= STREAMLIT APP =========
+
+st.title("📊 Otimizador de Carteira com Sugestão de Aportes (HRP + Macro)")
+
+tickers_input = st.text_input("Tickers da carteira (separados por vírgula):", value="AGRO3.SA,BBAS3.SA,BBSE3.SA,BPAC11.SA,EGIE3.SA,ITUB3.SA,PRIO3.SA,PSSA3.SA,SAPR11.SA,SBSP3.SA,VIVT3.SA,WEGE3.SA,TOTS3.SA,B3SA3.SA,TAEE11.SA")
+aporte = st.number_input("Novo aporte (em R$):", min_value=0.0, value=1000.0, step=100.0)
+
+carteira = [t.strip().upper() for t in tickers_input.split(',') if t.strip()]
+macro = obter_macro()
+cenario = classificar_cenario_macro(macro)
+
+st.subheader("📈 Cenário Macroeconômico Atual")
+st.write(f"**Selic:** {macro['selic']}% | **IPCA:** {macro['ipca']}% | **Dólar:** R${macro['dolar']} | **Petróleo:** ${macro['petroleo']}")
+st.markdown(f"**🧭 Cenário Classificado:** `{cenario}`")
+
+st.subheader("✅ Ativos com Preço-Alvo Abaixo do Atual e Favorecidos pelo Cenário")
+
+ativos_filtrados = filtrar_ativos_validos(carteira, cenario, macro)
+st.dataframe(pd.DataFrame(ativos_filtrados))
+
+# Alocação atual (supondo igualitária se não for informada)
+pesos_atuais = {ticker: 1/len(carteira) for ticker in carteira}
+
+# Sugestão de nova alocação com base em HRP
+nova_alocacao, ativos_utilizados = sugerir_nova_alocacao_hrp(carteira, pesos_atuais, macro, aporte)
+
+if nova_alocacao:
+    st.subheader("🔁 Nova Alocação Após Aporte (HRP + Cenário Macro)")
+    df_alocacao = pd.DataFrame({
+        "Ticker": nova_alocacao.keys(),
+        "Alocação Atual (%)": [round(pesos_atuais.get(t, 0)*100, 2) for t in nova_alocacao.keys()],
+        "Alocação Sugerida (%)": [round(p*100, 2) for p in nova_alocacao.values()]
+    })
+    st.dataframe(df_alocacao)
+
+    st.subheader("🌟 Destaques Favoráveis ao Cenário Atual")
+    ativos_favoraveis = [a for a in ativos_utilizados if a['favorecido']]
+    st.write([a['ticker'] for a in ativos_favoraveis])
+
+else:
+    st.warning("Nenhum ativo sugerido com base nos critérios de cenário macro, preço-alvo e exportação.")
