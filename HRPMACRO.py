@@ -334,55 +334,77 @@ def otimizar_carteira_hrp(tickers):
     return hrp_weights.values
 
 
-# Cabeçalho
-st.title("Painel de Análise de Carteira e Sugestões de Aporte")
+st.subheader("📈 Ranking de Oportunidades de Compra")
 
-# Entrada da carteira atual
-df_input = st.text_area("Insira a carteira atual no formato TICKER:PESO (um por linha):", "AGRO3.SA:10\nBBAS3.SA:1.2\nBBSE3.SA:6.5")
+# Identifica setor favorecido
+setor_favorecido = setores_por_cenario.get(cenario_macro, [])
+df_carteira_atual['Setor'] = df_carteira_atual['Ticker'].map(setores_por_ticker)
+df_carteira_atual['Favorecido?'] = df_carteira_atual['Setor'].isin(setor_favorecido)
 
-try:
-    carteira_dict = {
-        linha.split(':')[0].strip(): float(linha.split(':')[1].strip())
-        for linha in df_input.strip().split('\n') if ':' in linha
-    }
-    carteira_tickers = list(carteira_dict.keys())
-    carteira_pesos = np.array(list(carteira_dict.values()))
-    carteira_pesos = carteira_pesos / carteira_pesos.sum()
-except:
-    st.error("Erro ao processar a carteira. Verifique o formato.")
-    st.stop()
+# Preço atual + preço-alvo
+df_carteira_atual['Preço Atual'] = df_carteira_atual['Ticker'].apply(lambda x: get_info_yf(x).get("currentPrice", None))
+df_carteira_atual['Preço Alvo'] = df_carteira_atual['Ticker'].apply(lambda x: get_info_yf(x).get("targetMeanPrice", None))
+df_carteira_atual['Potencial Upside'] = (df_carteira_atual['Preço Alvo'] / df_carteira_atual['Preço Atual']) - 1
 
-# Seleção do valor do novo aporte
-aporte = st.number_input("Valor do novo aporte (em % sobre a carteira atual):", min_value=0.0, max_value=100.0, value=10.0)
+# Ranking por setor favorecido + upside
+ranking = df_carteira_atual[df_carteira_atual['Favorecido?']].sort_values('Potencial Upside', ascending=False)
+st.dataframe(ranking[['Ticker', 'Setor', 'Preço Atual', 'Preço Alvo', 'Potencial Upside']].style.format({
+    'Preço Atual': 'R$ {:.2f}', 'Preço Alvo': 'R$ {:.2f}', 'Potencial Upside': '{:.2%}'
+}))
 
-# Obter cenário macroeconômico
-dados_macro = obter_macro()
-cenario_macro = classificar_cenario_macro(dados_macro)
-st.metric("Cenário Macroeconômico", cenario_macro)
+st.subheader("🔁 Nova Alocação com HRP")
 
-# Sugestão de alocação com HRP
-pesos_hrp = otimizar_carteira_hrp(carteira_tickers)
-if pesos_hrp is not None:
-    nova_aloc_hrp = pd.Series(pesos_hrp, index=carteira_tickers).sort_values(ascending=False)
-    st.subheader("Sugestão de Alocação com HRP")
-    st.dataframe(nova_aloc_hrp.apply(lambda x: f"{x*100:.2f}%"))
+# Baixa cotações históricas
+tickers = df_carteira_atual['Ticker'].tolist()
+prices = yf.download(tickers, period="5y", interval="1d")['Adj Close'].dropna()
+returns = prices.pct_change().dropna()
 
-    # Simulação da carteira com e sem o aporte
-    st.subheader("Simulação Antes e Depois do Aporte")
-    df_simulacao = pd.DataFrame({
-        'Antes': carteira_pesos,
-        'Sugestão Pós-Aporte': (carteira_pesos*(100/(100+aporte)) + nova_aloc_hrp*(aporte/(100+aporte))).values
-    }, index=carteira_tickers)
-    st.dataframe(df_simulacao.applymap(lambda x: f"{x*100:.2f}%"))
-else:
-    st.warning("Não foi possível otimizar a carteira com HRP.")
+# Matriz de covariância com Ledoit-Wolf
+lw = LedoitWolf()
+cov_matrix = lw.fit(returns).covariance_
 
-# Ranking de ações da carteira por oportunidade
-st.subheader("Ranking de Oportunidades na Carteira")
-ativos_rank = filtrar_ativos_validos(carteira_tickers, cenario_macro, dados_macro)
-df_ranking = pd.DataFrame(ativos_rank)
-if not df_ranking.empty:
-    df_ranking = df_ranking[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'score']].sort_values(by='score', ascending=False)
-    st.dataframe(df_ranking)
-else:
-    st.info("Nenhuma ação da carteira possui preço-alvo disponível ou está atrativa segundo os critérios definidos.")
+# HRP
+hrp = HierarchicalRiskParity()
+weights_hrp = hrp.allocate(asset_names=returns.columns.tolist(), cov_matrix=cov_matrix)
+
+# Penaliza ativos de setores não favorecidos
+for ticker in weights_hrp.keys():
+    setor = setores_por_ticker.get(ticker, None)
+    if setor not in setor_favorecido:
+        weights_hrp[ticker] *= 0.5  # penalização leve
+
+# Normaliza pesos novamente
+total = sum(weights_hrp.values())
+for t in weights_hrp:
+    weights_hrp[t] /= total
+
+# Apresenta
+df_hrp = pd.DataFrame.from_dict(weights_hrp, orient='index', columns=['Peso HRP'])
+df_hrp['Peso Atual'] = df_carteira_atual.set_index('Ticker')['Peso (%)']
+df_hrp['Setor'] = df_hrp.index.map(setores_por_ticker)
+df_hrp['Favorecido?'] = df_hrp['Setor'].isin(setor_favorecido)
+st.dataframe(df_hrp.style.format({"Peso Atual": "{:.2%}", "Peso HRP": "{:.2%}"}))
+
+st.subheader("💸 Sugestão de Alocação do Novo Aporte")
+
+# Calcula valor alvo por HRP
+df_hrp['Valor Ideal HRP'] = df_hrp['Peso HRP'] * (valor_total_carteira + valor_aporte)
+df_hrp['Valor Atual'] = df_hrp['Peso Atual'] * valor_total_carteira
+df_hrp['Sugestão de Compra (R$)'] = df_hrp['Valor Ideal HRP'] - df_hrp['Valor Atual']
+df_hrp['Sugestão de Compra (R$)'] = df_hrp['Sugestão de Compra (R$)'].apply(lambda x: max(0, x))  # evita venda
+
+# Normaliza sugestões para bater com valor do aporte
+total_sugestao = df_hrp['Sugestão de Compra (R$)'].sum()
+df_hrp['Sugestão Corrigida (R$)'] = df_hrp['Sugestão de Compra (R$)'] / total_sugestao * valor_aporte
+
+# Exibe
+df_sugestao = df_hrp[['Peso Atual', 'Peso HRP', 'Valor Atual', 'Valor Ideal HRP', 'Sugestão Corrigida (R$)', 'Setor', 'Favorecido?']]
+st.dataframe(df_sugestao.style.format({
+    "Peso Atual": "{:.2%}", "Peso HRP": "{:.2%}", 
+    "Valor Atual": "R$ {:.2f}", "Valor Ideal HRP": "R$ {:.2f}", 
+    "Sugestão Corrigida (R$)": "R$ {:.2f}"
+}))
+
+# Valor total conferência
+valor_total_sugerido = df_sugestao['Sugestão Corrigida (R$)'].sum()
+st.markdown(f"**Total sugerido: R$ {valor_total_sugerido:,.2f}**")
