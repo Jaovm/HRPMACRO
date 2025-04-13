@@ -1,49 +1,39 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
 import requests
 from sklearn.covariance import LedoitWolf
-from scipy.optimize import minimize
+from scipy.cluster.hierarchy import linkage, dendrogram
+from scipy.spatial.distance import squareform
 
-# ========= DICIONÁRIOS ==========
-
-# Ativos e pesos atuais
-carteira_atual = {
-    'AGRO3.SA': 10.0,
-    'BBAS3.SA': 1.2,
-    'BBSE3.SA': 6.5,
-    'BPAC11.SA': 10.6,
-    'EGIE3.SA': 5.0,
-    'ITUB3.SA': 0.5,
-    'PRIO3.SA': 15.0,
-    'PSSA3.SA': 15.0,
-    'SAPR3.SA': 6.7,
-    'SBSP3.SA': 4.0,
-    'VIVT3.SA': 6.4,
-    'WEGE3.SA': 15.0,
-    'TOTS3.SA': 1.0,
-    'B3SA3.SA': 0.1,
-    'TAEE3.SA': 3.0
-}
-
-# Define setores por ativo
+# ============================ DICIONÁRIOS DE SETORES ============================
 setores_por_ticker = {
-    'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
-    'EGIE3.SA': 'Utilidades', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
-    'ABEV3.SA': 'Consumo básico', 'B3SA3.SA': 'Financeiro', 'MGLU3.SA': 'Consumo discricionário',
-    'HAPV3.SA': 'Saúde', 'RADL3.SA': 'Saúde', 'RENT3.SA': 'Consumo discricionário',
-    'VALE3.SA': 'Indústria', 'TOTS3.SA': 'Tecnologia',
+    'AGRO3.SA': 'Agro',
+    'BBAS3.SA': 'Banco',
+    'BBSE3.SA': 'Seguradora',
+    'BPAC11.SA': 'Banco',
+    'EGIE3.SA': 'Energia',
+    'ITUB3.SA': 'Banco',
+    'PRIO3.SA': 'Petróleo',
+    'PSSA3.SA': 'Seguradora',
+    'SAPR3.SA': 'Saneamento',
+    'SBSP3.SA': 'Saneamento',
+    'VIVT3.SA': 'Telecomunicação',
+    'WEGE3.SA': 'Indústria',
+    'TOTS3.SA': 'Tecnologia',
+    'B3SA3.SA': 'Bolsa',
+    'TAEE3.SA': 'Energia',
 }
 
 setores_por_cenario = {
-    "Expansionista": ['Consumo discricionário', 'Tecnologia', 'Indústria'],
-    "Neutro": ['Saúde', 'Financeiro', 'Utilidades', 'Varejo'],
-    "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico']
+    "Expansionista": ['Tecnologia', 'Indústria', 'Agro', 'Consumo discricionário'],
+    "Neutro": ['Banco', 'Seguradora', 'Telecomunicação', 'Saneamento'],
+    "Restritivo": ['Energia', 'Petróleo', 'Saneamento', 'Consumo básico']
 }
 
-# ========= FUNÇÕES ==========
-
+# ============================ FUNÇÕES DE MACRO ============================
 def get_bcb(code):
     url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
     r = requests.get(url)
@@ -53,182 +43,110 @@ def obter_macro():
     return {
         "selic": get_bcb(432),
         "ipca": get_bcb(433),
-        "dolar": get_bcb(1)
+        "meta_inflacao": 3.0
     }
 
 def classificar_cenario_macro(m):
-    if m['ipca'] > 5 or m['selic'] > 12:
+    if m['ipca'] > m['meta_inflacao'] and m['selic'] >= 12:
         return "Restritivo"
-    elif m['ipca'] < 4 and m['selic'] < 10:
+    elif m['ipca'] < m['meta_inflacao'] and m['selic'] < 10:
         return "Expansionista"
     else:
         return "Neutro"
 
-def obter_preco_alvo(ticker):
-    try:
-        return yf.Ticker(ticker).info.get('targetMeanPrice', None)
-    except:
-        return None
+# ============================ HRP ============================
+def get_returns(tickers):
+    dados = yf.download(tickers, period="3y", auto_adjust=True)['Close']
+    return dados.pct_change().dropna()
 
-def obter_preco_atual(ticker):
-    try:
-        return yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
-    except:
-        return None
+def correlacao_dist(corr):
+    return ((1 - corr) / 2) ** 0.5
 
-# ========= FILTRAR AÇÕES ==========
+def get_hrp_weights(retornos, setores, setores_favorecidos):
+    corr = retornos.corr()
+    dist = correlacao_dist(corr)
+    link = linkage(squareform(dist), method='single')
+    dendro = dendrogram(link, no_plot=True)
+    ordenados = dendro['leaves']
+    tickers = list(retornos.columns)
+    tickers_ordenados = [tickers[i] for i in ordenados]
 
-def filtrar_ativos_validos(carteira, cenario):
-    setores_bons = setores_por_cenario[cenario]
-    ativos_validos = []
+    def get_cluster_var(cov, items):
+        sub_cov = cov.loc[items, items]
+        w = np.linalg.inv(sub_cov).sum(axis=1)
+        w /= w.sum()
+        return np.dot(np.dot(w, sub_cov), w.T)
 
-    for ticker in carteira:
-        setor = setores_por_ticker.get(ticker, None)
-        preco_atual = obter_preco_atual(ticker)
-        preco_alvo = obter_preco_alvo(ticker)
+    def recursive_bisect(cov, tickers_ordenados):
+        w = pd.Series(1, index=tickers_ordenados)
+        clusters = [tickers_ordenados]
+        while len(clusters) > 0:
+            cluster = clusters.pop(0)
+            if len(cluster) <= 1:
+                continue
+            split = len(cluster) // 2
+            cluster1 = cluster[:split]
+            cluster2 = cluster[split:]
+            var1 = get_cluster_var(cov, cluster1)
+            var2 = get_cluster_var(cov, cluster2)
+            alpha = 1 - var1 / (var1 + var2)
+            w[cluster1] *= alpha
+            w[cluster2] *= 1 - alpha
+            clusters += [cluster1, cluster2]
+        return w
 
-        if preco_atual is None or preco_alvo is None:
-            continue
-        if preco_atual < preco_alvo:
-            ativos_validos.append({
-                "ticker": ticker,
-                "setor": setor,
-                "preco_atual": preco_atual,
-                "preco_alvo": preco_alvo,
-                "favorecido": setor in setores_bons
-            })
-
-    return ativos_validos
-
-# ========= OTIMIZAÇÃO CORRIGIDA ==========
-
-def obter_preco_diario_ajustado(tickers):
-    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
-
-    if isinstance(dados_brutos.columns, pd.MultiIndex):
-        # Vários ativos — usa MultiIndex com 'Adj Close'
-        if 'Adj Close' in dados_brutos.columns.get_level_values(0):
-            return dados_brutos['Adj Close']
-        elif 'Close' in dados_brutos.columns.get_level_values(0):
-            return dados_brutos['Close']
-        else:
-            raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
-    else:
-        # Apenas 1 ativo — dados_brutos tem colunas simples
-        if 'Adj Close' in dados_brutos.columns:
-            return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
-        elif 'Close' in dados_brutos.columns:
-            return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
-        else:
-            raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
-
-def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.30, pesos_setor=None):
-    # Verifica se há dados ausentes ou inválidos nos retornos
-    dados = obter_preco_diario_ajustado(tickers)
-    retornos = dados.pct_change().dropna()
-
-    # Verifica e limpa valores inválidos ou infinitos
-    if retornos.isnull().any().any() or np.isinf(retornos.values).any():
-        st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
-        return None
-
-    # Calcula a média anualizada e a matriz de covariância com Ledoit-Wolf
-    medias = retornos.mean() * 252
     cov = LedoitWolf().fit(retornos).covariance_
+    cov_df = pd.DataFrame(cov, index=retornos.columns, columns=retornos.columns)
+    pesos = recursive_bisect(cov_df, tickers_ordenados)
 
-    n = len(tickers)
+    # Ajustar pesos com base no cenário macro
+    pesos *= [1.2 if setores[t] in setores_favorecidos else 1 for t in pesos.index]
+    pesos /= pesos.sum()
+    return pesos
 
-    # Função de objetivo para maximizar o Sharpe, com ajuste baseado nos pesos de setores
-    def sharpe_neg(pesos):
-        # Ajuste com base no peso do setor
-        pesos_ajustados = np.array([peso * pesos_setor[setores_por_ticker.get(ticker, '')] if setores_por_ticker.get(ticker, '') in pesos_setor else peso for ticker, peso in zip(tickers, pesos)])
-        
-        retorno_esperado = np.dot(pesos_ajustados, medias)
-        volatilidade = np.sqrt(np.dot(pesos_ajustados.T, np.dot(cov, pesos_ajustados)))
-        return -retorno_esperado / volatilidade
+# ============================ STREAMLIT ============================
+st.set_page_config("Carteira com HRP + Macro", layout="wide")
+st.title("📊 Carteira com Alocação Hierárquica Ponderada + Macroeconomia")
 
-    # Inicializa os pesos dentro das restrições e com a soma igual a 1
-    init = np.array([1/n] * n)
-
-    # Garantir que os pesos estão dentro dos limites e somam 1
-    def verificar_restricoes(pesos):
-        if np.any(pesos < min_pct) or np.any(pesos > max_pct):
-            return np.inf  # Penaliza soluções que violam restrições
-        return np.sum(pesos) - 1  # Soma deve ser 1
-
-    # Restrição para garantir que a soma dos pesos seja 1
-    constraints = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
-
-    # Restrições de alocação mínima e máxima por ativo
-    bounds = tuple((min_pct, max_pct) for _ in range(n))
-
-    # Tentando otimizar com uma abordagem mais robusta
-    try:
-        resultado = minimize(sharpe_neg, init, bounds=bounds, constraints=constraints, method='trust-constr')
-        if resultado.success:
-            return resultado.x
-        else:
-            st.error(f"Otimização falhou: {resultado.message}")
-            return None
-    except Exception as e:
-        st.error(f"Erro na otimização: {str(e)}")
-        return None
-
-# ========= STREAMLIT ==========
-
-st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
-st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
-
-# MACRO
+# Macro
 macro = obter_macro()
 cenario = classificar_cenario_macro(macro)
-col1, col2, col3 = st.columns(3)
-col1.metric("Selic (%)", f"{macro['selic']:.2f}")
-col2.metric("Inflação IPCA (%)", f"{macro['ipca']:.2f}")
-col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
-st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
+st.sidebar.metric("Selic (%)", f"{macro['selic']:.2f}")
+st.sidebar.metric("Inflação (%)", f"{macro['ipca']:.2f}")
+st.sidebar.metric("Meta Inflação (%)", f"{macro['meta_inflacao']:.2f}")
+st.sidebar.info(f"**Cenário Atual:** {cenario}")
 
-# INPUT
-st.subheader("📌 Informe sua carteira atual")
-tickers = st.text_input("Tickers separados por vírgula", ", ".join(carteira_atual.keys())).upper()
-carteira = [t.strip() for t in tickers.split(",") if t.strip()]
+# Carteira atual (fixa)
+pesos_atuais = {
+    'AGRO3.SA': 0.10, 'BBAS3.SA': 0.012, 'BBSE3.SA': 0.065, 'BPAC11.SA': 0.106,
+    'EGIE3.SA': 0.05, 'ITUB3.SA': 0.005, 'PRIO3.SA': 0.15, 'PSSA3.SA': 0.15,
+    'SAPR3.SA': 0.067, 'SBSP3.SA': 0.04, 'VIVT3.SA': 0.064, 'WEGE3.SA': 0.15,
+    'TOTS3.SA': 0.01, 'B3SA3.SA': 0.001, 'TAEE3.SA': 0.03
+}
 
-aporte_mensal = st.number_input("Valor do aporte mensal (R$)", min_value=0, value=500)
+tickers = list(pesos_atuais.keys())
+retornos = get_returns(tickers)
+pesos_hrp = get_hrp_weights(retornos, setores_por_ticker, setores_por_cenario[cenario])
 
-if st.button("Gerar Alocação Otimizada e Aporte"):
-    ativos_validos = filtrar_ativos_validos(carteira, cenario)
+# Mostrar comparação
+df_pesos = pd.DataFrame({
+    "Setor": [setores_por_ticker[t] for t in tickers],
+    "Peso Atual (%)": [pesos_atuais[t] * 100 for t in tickers],
+    "Peso Sugerido HRP (%)": (pesos_hrp[tickers] * 100).round(2)
+}, index=tickers)
 
-    if not ativos_validos:
-        st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
-    else:
-        tickers_validos = [a['ticker'] for a in ativos_validos]
+st.subheader("📌 Comparação de Pesos na Carteira")
+st.dataframe(df_pesos.sort_values("Peso Sugerido HRP (%)", ascending=False))
 
-        # Peso de cada setor baseado no cenário macroeconômico
-        pesos_setor = {setor: 1 for setor in setores_por_cenario[cenario]}
+# Aporte mensal
+st.subheader("💰 Sugestão de Aporte Mensal")
+aporte = st.number_input("Valor do aporte (R$)", min_value=100.0, value=1000.0, step=100.0)
 
-        try:
-            pesos = otimizar_carteira_sharpe(tickers_validos, pesos_setor=pesos_setor)
-            if pesos is not None:
-                # Calcula a nova alocação considerando o aporte
-                aporte_total = aporte_mensal
-                aporte_distribuido = pesos * aporte_total
-                
-                # Atualiza a tabela com os pesos atuais, novos e o aporte
-                df_resultado = pd.DataFrame(ativos_validos)
-                df_resultado["Alocação Atual (%)"] = df_resultado["ticker"].map(carteira_atual)
-                df_resultado["Alocação Nova (%)"] = (pesos * 100).round(2)
-                df_resultado["Aporte (R$)"] = (aporte_distribuido).round(2)
-                df_resultado = df_resultado.sort_values("Alocação Nova (%)", ascending=False)
-                
-                st.success("✅ Carteira otimizada com Sharpe máximo (restrições relaxadas: 1%-30%).")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação Atual (%)", "Alocação Nova (%)", "Aporte (R$)"]])
+nova_carteira = {t: pesos_atuais[t] + (pesos_hrp[t] * aporte / 100000) for t in tickers}
+df_aporte = pd.DataFrame({
+    "Setor": [setores_por_ticker[t] for t in tickers],
+    "Novo Peso (%)": [nova_carteira[t] * 100 for t in tickers]
+}, index=tickers)
+st.dataframe(df_aporte.sort_values("Novo Peso (%)", ascending=False))
 
-                # Sugestões de compra
-                st.subheader("💡 Sugestões de Compra")
-                for ativo in ativos_validos:
-                    if ativo['preco_atual'] < ativo['preco_alvo']:
-                        st.write(f"**{ativo['ticker']}** - Setor: {ativo['setor']} | Preço Atual: R$ {ativo['preco_atual']} | Preço Alvo: R$ {ativo['preco_alvo']} (Comprar!)")
-            else:
-                st.error("Falha na otimização da carteira.")
-        except Exception as e:
-            st.error(f"Erro na otimização: {str(e)}")
+st.success("✅ Aporte distribuído com base na alocação HRP favorecendo setores do cenário atual.")
