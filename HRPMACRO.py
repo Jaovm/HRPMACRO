@@ -88,6 +88,9 @@ def obter_preco_atual(ticker):
 
 # ========= FILTRAR AÇÕES ==========
 def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
+    if preco_atual is None or preco_alvo is None or preco_atual == 0:
+        return -np.inf  # Garante que esse ativo nunca será escolhido
+
     upside = (preco_alvo - preco_atual) / preco_atual
     bonus = 0.1 if favorecido else 0
     if ticker in empresas_exportadoras:
@@ -96,6 +99,7 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
         if macro['petroleo'] and macro['petroleo'] > 80:
             bonus += 0.05
     return upside + bonus
+
 
 def filtrar_ativos_validos(carteira, cenario, macro):
     setores_bons = setores_por_cenario[cenario]
