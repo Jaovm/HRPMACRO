@@ -8,19 +8,8 @@ import requests
 
 # Função para obter dados financeiros
 def obter_preco_diario_ajustado(tickers):
-    try:
-        df = yf.download(tickers, start="2018-01-01", end="2025-01-01")
-        # Verificando se a coluna 'Adj Close' existe
-        if 'Adj Close' in df.columns:
-            return df['Adj Close']
-        elif 'Close' in df.columns:  # Usando 'Close' como fallback
-            st.warning("A coluna 'Adj Close' não foi encontrada. Utilizando 'Close'.")
-            return df['Close']
-        else:
-            raise ValueError("Nenhuma coluna de preço válida encontrada.")
-    except Exception as e:
-        st.error(f"Erro ao obter os dados financeiros: {str(e)}")
-        return pd.DataFrame()
+    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Close']
+    return df
 
 # Função para obter dados do Banco Central (BCB)
 def get_bcb(code):
@@ -50,8 +39,15 @@ def calcular_hrp(tickers, retornos):
     # Calculando a matriz de covariância
     cov = LedoitWolf().fit(retornos).covariance_
 
+    # Verificando se a covariância é válida
+    if cov.size == 0:
+        raise ValueError("A matriz de covariância está vazia ou inválida.")
+    
     # Aplicando cluster hierárquico para determinar a estrutura de risco
     dist_matrix = sch.distance.pdist(cov)
+    if dist_matrix.size == 0:
+        raise ValueError("A matriz de distâncias está vazia. Verifique os dados.")
+        
     linkage = sch.linkage(dist_matrix, method='ward')
     
     # Obtendo a estrutura hierárquica
@@ -75,15 +71,15 @@ def calcular_hrp(tickers, retornos):
 def otimizar_carteira_hrp(tickers, min_pct=0.01, max_pct=0.30, pesos_setor=None):
     # Obtendo os dados de preço ajustado
     dados = obter_preco_diario_ajustado(tickers)
-    
-    # Verificando se os dados foram carregados corretamente
-    if dados.empty:
-        return None
-    
     retornos = dados.pct_change().dropna()
 
     if retornos.isnull().any().any() or np.isinf(retornos.values).any():
         st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
+        return None
+
+    # Verificando se os dados de retornos são suficientes
+    if retornos.shape[0] < 2:
+        st.warning("Não há dados suficientes para calcular os retornos.")
         return None
 
     # Aplicando o método HRP
