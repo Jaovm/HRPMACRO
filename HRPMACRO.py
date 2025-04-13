@@ -117,7 +117,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.17):
+def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.20):
     # Verifica se há dados ausentes ou inválidos nos retornos
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
@@ -197,7 +197,7 @@ if st.button("Gerar Alocação Otimizada"):
                 df_resultado = pd.DataFrame(ativos_validos)
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
                 df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
-                st.success("✅ Carteira otimizada com Sharpe máximo (restrições relaxadas: 1%-30%).")
+                st.success("✅ Carteira otimizada com Sharpe máximo (restrições relaxadas: 1%-20%).")
                 st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação (%)"]])
             else:
                 st.error("Falha na otimização da carteira.")
