@@ -109,7 +109,7 @@ setores_por_ticker = {
     'CPLE6.SA': 'Utilidades Públicas',
 }
 
-
+setor_favorecido = setores_por_cenario.get(cenario_macro, [])
 setores_por_cenario = {
     "Expansionista": [
         'Consumo Discricionário',
@@ -133,7 +133,6 @@ setores_por_cenario = {
     ]
 }
 
-setor_favorecido = setores_por_cenario.get(cenario_macro, [])
 
 empresas_exportadoras = [
     'VALE3.SA',  # Mineração
