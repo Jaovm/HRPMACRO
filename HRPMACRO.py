@@ -12,7 +12,7 @@ from scipy.optimize import minimize
 
 setores_por_ticker = {
     # Bancos
-    'ITUB3.SA': 'Bancos',
+    'ITUB4.SA': 'Bancos',
     'BBDC4.SA': 'Bancos',
     'SANB11.SA': 'Bancos',
     'BBAS3.SA': 'Bancos',
