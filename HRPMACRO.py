@@ -181,7 +181,7 @@ st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
 # INPUT
 st.subheader("📌 Informe sua carteira atual")
-tickers = st.text_input("Tickers separados por vírgula", "WEGE3.SA, PETR4.SA, VIVT3.SA, TOTS3.SA").upper()
+tickers = st.text_input("Tickers separados por vírgula", "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA").upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
 
 if st.button("Gerar Alocação Otimizada"):
