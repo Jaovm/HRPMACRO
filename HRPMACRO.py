@@ -178,7 +178,7 @@ if st.button("Analisar carteira"):
     if ativos_filtrados:
         df_resultado = pd.DataFrame(ativos_filtrados)
         df_resultado["Alocação (%)"] = 100 * df_resultado['score'] / df_resultado['score'].sum()
-        st.dataframe(df_resultado[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'Alocação (%)', 'score", 'explicacao']].set_index('ticker'))
+        st.dataframe(df_resultado[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'Alocação (%)', 'score', 'explicacao']].set_index('ticker'))
         exibir_grafico_alocacao(df_resultado)
     else:
         st.warning("Nenhum ativo da carteira passou nos filtros de score e dados disponíveis.")
