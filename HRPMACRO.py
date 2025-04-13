@@ -29,21 +29,11 @@ carteira_atual = {
 
 # Define setores por ativo
 setores_por_ticker = {
-    'AGRO3.SA': 'Consumo básico',
-    'BBAS3.SA': 'Financeiro',
-    'BBSE3.SA': 'Financeiro',
-    'BPAC11.SA': 'Financeiro',
-    'EGIE3.SA': 'Utilidades',
-    'ITUB3.SA': 'Financeiro',
-    'PRIO3.SA': 'Energia',
-    'PSSA3.SA': 'Financeiro',
-    'SAPR3.SA': 'Utilidades',
-    'SBSP3.SA': 'Utilidades',
-    'VIVT3.SA': 'Comunicações',
-    'WEGE3.SA': 'Indústria',
-    'TOTS3.SA': 'Tecnologia',
-    'B3SA3.SA': 'Financeiro',
-    'TAEE3.SA': 'Utilidades'
+    'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
+    'EGIE3.SA': 'Utilidades', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
+    'ABEV3.SA': 'Consumo básico', 'B3SA3.SA': 'Financeiro', 'MGLU3.SA': 'Consumo discricionário',
+    'HAPV3.SA': 'Saúde', 'RADL3.SA': 'Saúde', 'RENT3.SA': 'Consumo discricionário',
+    'VALE3.SA': 'Indústria', 'TOTS3.SA': 'Tecnologia',
 }
 
 setores_por_cenario = {
@@ -132,7 +122,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.30):
+def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.30, pesos_setor=None):
     # Verifica se há dados ausentes ou inválidos nos retornos
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
@@ -148,10 +138,13 @@ def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.30):
 
     n = len(tickers)
 
-    # Função de objetivo para maximizar o Sharpe
+    # Função de objetivo para maximizar o Sharpe, com ajuste baseado nos pesos de setores
     def sharpe_neg(pesos):
-        retorno_esperado = np.dot(pesos, medias)
-        volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+        # Ajuste com base no peso do setor
+        pesos_ajustados = np.array([peso * pesos_setor[setores_por_ticker.get(ticker, '')] if setores_por_ticker.get(ticker, '') in pesos_setor else peso for ticker, peso in zip(tickers, pesos)])
+        
+        retorno_esperado = np.dot(pesos_ajustados, medias)
+        volatilidade = np.sqrt(np.dot(pesos_ajustados.T, np.dot(cov, pesos_ajustados)))
         return -retorno_esperado / volatilidade
 
     # Inicializa os pesos dentro das restrições e com a soma igual a 1
@@ -209,8 +202,12 @@ if st.button("Gerar Alocação Otimizada e Aporte"):
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
     else:
         tickers_validos = [a['ticker'] for a in ativos_validos]
+
+        # Peso de cada setor baseado no cenário macroeconômico
+        pesos_setor = {setor: 1 for setor in setores_por_cenario[cenario]}
+
         try:
-            pesos = otimizar_carteira_sharpe(tickers_validos)
+            pesos = otimizar_carteira_sharpe(tickers_validos, pesos_setor=pesos_setor)
             if pesos is not None:
                 # Calcula a nova alocação considerando o aporte
                 aporte_total = aporte_mensal
@@ -225,6 +222,12 @@ if st.button("Gerar Alocação Otimizada e Aporte"):
                 
                 st.success("✅ Carteira otimizada com Sharpe máximo (restrições relaxadas: 1%-30%).")
                 st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação Atual (%)", "Alocação Nova (%)", "Aporte (R$)"]])
+
+                # Sugestões de compra
+                st.subheader("💡 Sugestões de Compra")
+                for ativo in ativos_validos:
+                    if ativo['preco_atual'] < ativo['preco_alvo']:
+                        st.write(f"**{ativo['ticker']}** - Setor: {ativo['setor']} | Preço Atual: R$ {ativo['preco_atual']} | Preço Alvo: R$ {ativo['preco_alvo']} (Comprar!)")
             else:
                 st.error("Falha na otimização da carteira.")
         except Exception as e:
