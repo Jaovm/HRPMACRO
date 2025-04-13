@@ -58,9 +58,23 @@ def get_selic():
 def get_inflacao():
     url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433?formato=csv'
     response = requests.get(url)
-    data = response.text.splitlines()
-    inflacao_data = [line.split(';') for line in data]
-    return float(inflacao_data[-1][1].replace(',', '.'))  # Última inflação
+    
+    if response.status_code == 200:
+        data = response.text.splitlines()
+        # Verificar se os dados estão no formato esperado
+        if len(data) > 1:
+            inflacao_data = [line.split(';') for line in data]
+            try:
+                return float(inflacao_data[-1][1].replace(',', '.'))  # Última inflação
+            except IndexError:
+                st.error("Erro ao acessar os dados de inflação. Tente novamente.")
+                return None
+        else:
+            st.error("Nenhum dado encontrado na resposta da API.")
+            return None
+    else:
+        st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
+        return None
 
 # Dados da carteira e setores
 pesos_atuais = {
@@ -104,10 +118,10 @@ inflacao_anual = get_inflacao()  # Obter inflação
 selic = get_selic()  # Obter taxa Selic
 meta_inflacao = 3.0  # Meta de inflação do Banco Central
 
-if inflacao_anual > meta_inflacao and selic >= 14.25:
+if inflacao_anual and inflacao_anual > meta_inflacao and selic >= 14.25:
     cenario = 'Restritivo'
     setores_favorecidos = ['Utilidades', 'Energia', 'Consumo básico', 'Saúde']
-elif inflacao_anual <= meta_inflacao and selic <= 10.0:
+elif inflacao_anual and inflacao_anual <= meta_inflacao and selic <= 10.0:
     cenario = 'Expansivo'
     setores_favorecidos = ['Tecnologia', 'Consumo discricionário', 'Financeiro']
 else:
