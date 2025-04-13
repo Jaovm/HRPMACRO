@@ -262,7 +262,18 @@ if st.button("Gerar Alocação Otimizada"):
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
                 df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
                 # Cálculo de novos pesos considerando carteira anterior + novo aporte
-                valores_atuais = pesos_atuais * (1000000)  # assume carteira de R$1.000.000 como base
+                # Filtra pesos atuais apenas para os ativos que estão na recomendação
+                tickers_resultado = df_resultado["ticker"].tolist()
+
+# Cria um dicionário de ticker -> peso original
+                pesos_dict = dict(zip(carteira, pesos_atuais))
+
+# Extrai os pesos apenas para os tickers selecionados
+                pesos_atuais_filtrados = np.array([pesos_dict[t] for t in tickers_resultado])
+
+# Continua o cálculo
+                valores_atuais = pesos_atuais_filtrados * 1000000  # exemplo: carteira anterior de 1 milhão
+
                 valores_aporte = pesos * aporte
                 valores_totais = valores_atuais + valores_aporte
                 pesos_finais = valores_totais / valores_totais.sum()
