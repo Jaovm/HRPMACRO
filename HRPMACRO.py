@@ -147,6 +147,9 @@ empresas_exportadoras = [
     'CMIN3.SA',  # Mineração
 ]
 
+macro = obter_macro()
+cenario_macro = classificar_cenario_macro(macro)
+setor_favorecido = setores_por_cenario.get(cenario_macro, [])
 
 # ========= MACRO ==========
 def get_bcb(code):
