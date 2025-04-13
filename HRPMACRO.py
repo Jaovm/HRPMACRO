@@ -6,6 +6,35 @@ import yfinance as yf
 
 
 # Função para obter dados do Banco Central
+
+# Configuração da página
+st.set_page_config(page_title="Otimização de Carteira Inteligente", layout="wide", initial_sidebar_state="expanded")
+
+# ====== CABEÇALHO ======
+st.title("\U0001F4C8 Otimização e Sugestão de Carteira")
+st.markdown("""
+Este painel permite:
+- **Análise macroeconômica automática** com dados do BCB e do mercado.
+- **Filtragem de ações** com base em cenário, preço-alvo e exportação.
+- **Otimização de carteira** via Sharpe e HRP.
+---
+""")
+
+# ====== SIDEBAR ======
+with st.sidebar:
+    st.header("\U0001F9ED Navegação")
+    pagina = st.radio("Selecione a etapa:", [
+        "\U0001F4CC Introdução",
+        "\U0001F310 Análise Macroeconômica",
+        "\U0001F4C9 Otimização da Carteira",
+        "\U0001F4B5 Sugestão de Aporte",
+        "\u2705 Ranking de Ações"
+    ])
+    st.markdown("---")
+    st.caption("Desenvolvido por [Seu Nome] 💼")
+
+# ====== FUNÇÕES AUXILIARES (Defina estas funções em outro arquivo e importe) ======
+# obter_macro()
 def get_bcb(code):
     url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
     try:
@@ -49,39 +78,86 @@ def classificar_cenario_macro(m):
     else:
         return "Neutro"
 
-
-# Configuração da página
-st.set_page_config(page_title="Otimização de Carteira Inteligente", layout="wide", initial_sidebar_state="expanded")
-
-# ====== CABEÇALHO ======
-st.title("\U0001F4C8 Otimização e Sugestão de Carteira")
-st.markdown("""
-Este painel permite:
-- **Análise macroeconômica automática** com dados do BCB e do mercado.
-- **Filtragem de ações** com base em cenário, preço-alvo e exportação.
-- **Otimização de carteira** via Sharpe e HRP.
----
-""")
-
-# ====== SIDEBAR ======
-with st.sidebar:
-    st.header("\U0001F9ED Navegação")
-    pagina = st.radio("Selecione a etapa:", [
-        "\U0001F4CC Introdução",
-        "\U0001F310 Análise Macroeconômica",
-        "\U0001F4C9 Otimização da Carteira",
-        "\U0001F4B5 Sugestão de Aporte",
-        "\u2705 Ranking de Ações"
-    ])
-    st.markdown("---")
-    st.caption("Desenvolvido por [Seu Nome] 💼")
-
-# ====== FUNÇÕES AUXILIARES (Defina estas funções em outro arquivo e importe) ======
-# obter_macro()
-# classificar_cenario_macro(macro)
 # filtrar_ativos_validos(tickers, cenario, macro)
+def filtrar_ativos_validos(carteira, cenario, macro):
+    setores_bons = setores_por_cenario[cenario]
+    ativos_validos = []
+
+    for ticker in carteira:
+        setor = setores_por_ticker.get(ticker, None)
+        preco_atual = obter_preco_atual(ticker)
+        preco_alvo = obter_preco_alvo(ticker)
+
+        if preco_atual is None or preco_alvo is None:
+            continue
+        if preco_atual < preco_alvo:
+            favorecido = setor in setores_bons
+            score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro)
+            ativos_validos.append({
+                "ticker": ticker,
+                "setor": setor,
+                "preco_atual": preco_atual,
+                "preco_alvo": preco_alvo,
+                "favorecido": favorecido,
+                "score": score
+            })
+
+    ativos_validos.sort(key=lambda x: x['score'], reverse=True)
+    return ativos_validos
+    
 # otimizar_carteira_sharpe(tickers)
+
+def otimizar_carteira_sharpe(tickers):
+    dados = obter_preco_diario_ajustado(tickers)
+    retornos = dados.pct_change().dropna()
+    media_retorno = retornos.mean()
+    cov = LedoitWolf().fit(retornos).covariance_
+
+    def sharpe_neg(pesos):
+        retorno_esperado = np.dot(pesos, media_retorno)
+        volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+        return -retorno_esperado / volatilidade if volatilidade != 0 else 0
+
+    n = len(tickers)
+    pesos_iniciais = np.array([1/n] * n)
+    limites = [(0, 1) for _ in range(n)]
+    restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
+
+    resultado = minimize(sharpe_neg, pesos_iniciais, method='SLSQP', bounds=limites, constraints=restricoes)
+
+    if resultado.success:
+        return resultado.x
+    else:
+        return None
+
 # otimizar_carteira_hrp(tickers)
+def otimizar_carteira_hrp(tickers):
+    dados = obter_preco_diario_ajustado(tickers)
+    retornos = dados.pct_change().dropna()
+    dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
+    linkage_matrix = linkage(squareform(dist), method='single')
+
+    def get_quasi_diag(link):
+        link = link.astype(int)
+        sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
+        num_items = link[-1, 3]
+        while sort_ix.max() >= num_items:
+            sort_ix.index = range(0, sort_ix.shape[0]*2, 2)
+            df0 = sort_ix[sort_ix >= num_items]
+            i = df0.index
+            j = df0.values - num_items
+            sort_ix[i] = link[j, 0]
+            df1 = pd.Series(link[j, 1], index=i+1)
+            sort_ix = pd.concat([sort_ix, df1])
+            sort_ix = sort_ix.sort_index()
+            sort_ix.index = range(sort_ix.shape[0])
+        return sort_ix.tolist()
+
+    sort_ix = get_quasi_diag(linkage_matrix)
+    sorted_tickers = [retornos.columns[i] for i in sort_ix]
+    cov = LedoitWolf().fit(retornos).covariance_
+    ivp = 1. / np.diag(cov)
+    ivp /= ivp.sum()
 
 # ====== FUNÇÃO PRINCIPAL ======
 def painel_inteligente():
