@@ -133,6 +133,8 @@ setores_por_cenario = {
     ]
 }
 
+setor_favorecido = setores_por_cenario.get(cenario_macro, [])
+
 empresas_exportadoras = [
     'VALE3.SA',  # Mineração
     'SUZB3.SA',  # Celulose
