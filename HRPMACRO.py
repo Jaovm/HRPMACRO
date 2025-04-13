@@ -106,7 +106,8 @@ def otimizar_carteira_sharpe(tickers, min_pct=0.05, max_pct=0.20):
 
     # Verifica e limpa valores inválidos ou infinitos
     if retornos.isnull().any().any() or np.isinf(retornos.values).any():
-        raise ValueError("Os dados de retornos contêm valores inválidos ou ausentes.")
+        st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
+        return None
 
     # Calcula a média anualizada e a matriz de covariância com Ledoit-Wolf
     medias = retornos.mean() * 252
@@ -123,19 +124,29 @@ def otimizar_carteira_sharpe(tickers, min_pct=0.05, max_pct=0.20):
     # Inicializa os pesos dentro das restrições e com a soma igual a 1
     init = np.array([1/n] * n)
 
+    # Garantir que os pesos estão dentro dos limites e somam 1
+    def verificar_restricoes(pesos):
+        if np.any(pesos < min_pct) or np.any(pesos > max_pct):
+            return np.inf  # Penaliza soluções que violam restrições
+        return np.sum(pesos) - 1  # Soma deve ser 1
+
     # Restrição para garantir que a soma dos pesos seja 1
     constraints = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
     # Restrições de alocação mínima e máxima por ativo
     bounds = tuple((min_pct, max_pct) for _ in range(n))
 
-    # Tenta otimizar com uma abordagem mais robusta
-    resultado = minimize(sharpe_neg, init, bounds=bounds, constraints=constraints, method='SLSQP')
-
-    if resultado.success:
-        return resultado.x
-    else:
-        raise ValueError("Otimização falhou. Verifique se os dados estão corretos ou tente alterar as restrições.")
+    # Tentando otimizar com uma abordagem mais robusta
+    try:
+        resultado = minimize(sharpe_neg, init, bounds=bounds, constraints=constraints, method='SLSQP')
+        if resultado.success:
+            return resultado.x
+        else:
+            st.error(f"Otimização falhou: {resultado.message}")
+            return None
+    except Exception as e:
+        st.error(f"Erro na otimização: {str(e)}")
+        return None
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
@@ -164,10 +175,13 @@ if st.button("Gerar Alocação Otimizada"):
         tickers_validos = [a['ticker'] for a in ativos_validos]
         try:
             pesos = otimizar_carteira_sharpe(tickers_validos)
-            df_resultado = pd.DataFrame(ativos_validos)
-            df_resultado["Alocação (%)"] = (pesos * 100).round(2)
-            df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
-            st.success("✅ Carteira otimizada com Sharpe máximo (restrições padrão: 5%-20%).")
-            st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação (%)"]])
+            if pesos is not None:
+                df_resultado = pd.DataFrame(ativos_validos)
+                df_resultado["Alocação (%)"] = (pesos * 100).round(2)
+                df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
+                st.success("✅ Carteira otimizada com Sharpe máximo (restrições padrão: 5%-20%).")
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação (%)"]])
+            else:
+                st.error("Falha na otimização da carteira.")
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
