@@ -1,6 +1,54 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
+import yfinance as yf
+
+
+# Função para obter dados do Banco Central
+def get_bcb(code):
+    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
+    try:
+        r = requests.get(url)
+        if r.status_code == 200:
+            return float(r.json()[0]['valor'].replace(",", "."))
+        else:
+            st.warning(f"Não foi possível obter o dado com código {code} do BCB.")
+            return None
+    except Exception as e:
+        st.error(f"Erro ao acessar dados do BCB (código {code}): {e}")
+        return None
+
+# Função para obter o preço atual do barril de petróleo (WTI)
+def obter_preco_petroleo():
+    try:
+        dados = yf.Ticker("CL=F").history(period="5d")
+        if not dados.empty and 'Close' in dados.columns:
+            return float(dados['Close'].dropna().iloc[-1])
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Erro ao obter preço do petróleo: {e}")
+        return None
+
+# Função principal que reúne os dados macroeconômicos
+def obter_macro():
+    return {
+        "selic": get_bcb(432),       # Taxa Selic
+        "ipca": get_bcb(433),        # IPCA
+        "dolar": get_bcb(1),         # Dólar comercial
+        "petroleo": obter_preco_petroleo()  # Preço do petróleo WTI
+    }
+
+# Função para classificar o cenário macroeconômico
+def classificar_cenario_macro(m):
+    if m['ipca'] > 5 or m['selic'] > 12:
+        return "Restritivo"
+    elif m['ipca'] < 4 and m['selic'] < 10:
+        return "Expansionista"
+    else:
+        return "Neutro"
+
 
 # Configuração da página
 st.set_page_config(page_title="Otimização de Carteira Inteligente", layout="wide", initial_sidebar_state="expanded")
