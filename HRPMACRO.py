@@ -148,6 +148,13 @@ def otimizar_carteira_hrp(tickers):
             sort_ix.index = range(sort_ix.shape[0])
         return sort_ix.tolist()
 
+    sort_ix = get_quasi_diag(linkage_matrix)
+    sorted_tickers = [retornos.columns[i] for i in sort_ix]
+    cov = LedoitWolf().fit(retornos).covariance_
+    ivp = 1. / np.diag(cov)
+    ivp /= ivp.sum()
+
+ 
 def otimizar_carteira_sharpe(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
