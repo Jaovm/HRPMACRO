@@ -7,8 +7,15 @@ import yfinance as yf
 import requests
 
 # Função para obter dados financeiros
-def obter_preco_diario_ajustado(tickers):
-    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Adj Close']
+def obter_preco_diario(tickers):
+    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")
+    if 'Adj Close' in df.columns:
+        df = df['Adj Close']
+    elif 'Close' in df.columns:
+        df = df['Close']
+    else:
+        st.error("Nenhuma coluna de preços encontrada nos dados.")
+        return None
     return df
 
 # Função para obter dados do Banco Central (BCB)
@@ -64,7 +71,10 @@ def calcular_hrp(tickers, retornos):
 # Função para otimizar a carteira com o HRP
 def otimizar_carteira_hrp(tickers, min_pct=0.01, max_pct=0.30, pesos_setor=None):
     # Obtendo os dados de preço ajustado
-    dados = obter_preco_diario_ajustado(tickers)
+    dados = obter_preco_diario(tickers)
+    if dados is None:
+        return None
+    
     retornos = dados.pct_change().dropna()
 
     if retornos.isnull().any().any() or np.isinf(retornos.values).any():
