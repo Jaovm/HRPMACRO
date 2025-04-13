@@ -5,9 +5,7 @@ from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.efficient_frontier import EfficientFrontier
-import requests
 
-# Configuração da página
 st.set_page_config(page_title="Alocação HRP + Estratégias", layout="wide")
 st.title("📈 Alocação com HRP + Estratégias Otimizadas")
 
@@ -18,7 +16,10 @@ tickers = [
     "VIVT3.SA", "WEGE3.SA", "TOTS3.SA", "B3SA3.SA", "TAEE3.SA"
 ]
 
-# Função para carregar dados de preços e retornos
+st.sidebar.header("📊 Parâmetros de Simulação")
+start_date = st.sidebar.date_input("Data inicial", pd.to_datetime("2018-01-01"))
+end_date = st.sidebar.date_input("Data final", pd.to_datetime("2024-12-31"))
+
 @st.cache_data
 def carregar_dados(tickers, start_date, end_date):
     dados = {}
@@ -31,11 +32,14 @@ def carregar_dados(tickers, start_date, end_date):
                 dados[ticker] = data['Close'].tolist()  # Converte para lista
             else:
                 continue
-        except:
+        except Exception as e:
+            st.warning(f"Erro ao carregar dados para {ticker}: {e}")
             continue
-    if not dados:
-        return pd.DataFrame(), pd.DataFrame()
     
+    if not dados:
+        st.error("Não há dados suficientes para calcular a alocação de portfólio.")
+        return pd.DataFrame(), pd.DataFrame()
+
     # Verificar se os dados têm o formato correto para construção do DataFrame
     if isinstance(dados, dict) and all(isinstance(v, list) for v in dados.values()):
         df_dados = pd.DataFrame(dados)
@@ -43,19 +47,13 @@ def carregar_dados(tickers, start_date, end_date):
         retornos = df_dados.pct_change().dropna()
         return df_dados, retornos
     else:
+        st.error("Formato de dados inválido")
         return pd.DataFrame(), pd.DataFrame()
 
-# Carregar dados
-st.sidebar.header("📊 Parâmetros de Simulação")
-start_date = st.sidebar.date_input("Data inicial", pd.to_datetime("2018-01-01"))
-end_date = st.sidebar.date_input("Data final", pd.to_datetime("2024-12-31"))
-
 precos, retornos = carregar_dados(tickers, start_date, end_date)
-
 if retornos.empty:
     st.error("Não há dados suficientes para calcular a alocação de portfólio.")
 else:
-    # Calcular a média de retornos
     try:
         media_retornos = mean_historical_return(precos)
     except Exception as e:
@@ -114,7 +112,7 @@ else:
     for titulo, setores in cenarios.items():
         st.markdown(f"**{titulo}** ➤ {', '.join(setores)}")
 
-    # Resultados de alocação
+    # Resultado das alocações
     st.header("⚖️ Alocações Sugeridas com Base nas Estratégias")
 
     def exibir_pesos(nome_estrategia, pesos):
@@ -128,36 +126,3 @@ else:
     exibir_pesos("HRP + Sharpe", alocacao_hrp_sharpe(retornos, media_retornos, matriz_cov))
     exibir_pesos("HRP + Maior Retorno", alocacao_hrp_maior_retorno(retornos, media_retornos, matriz_cov))
     exibir_pesos("HRP + Menor Risco", alocacao_hrp_menor_risco(retornos, media_retornos, matriz_cov))
-
-    # Dados sobre dólar e petróleo
-    st.header("🌍 Indicadores Econômicos: Dólar e Petróleo")
-    
-    def obter_dolar():
-        url_dolar = "https://api.exchangerate-api.com/v4/latest/USD"
-        response = requests.get(url_dolar)
-        if response.status_code == 200:
-            data = response.json()
-            return data['rates']['BRL']
-        else:
-            st.warning("Falha ao obter a cotação do dólar.")
-            return None
-
-    def obter_petroleo():
-        url_petroleo = "https://api.oilpriceapi.com/v1/prices/latest"
-        headers = {"Authorization": "Bearer your_api_key_here"}  # Substitua com sua chave de API
-        response = requests.get(url_petroleo, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            return data['data'][0]['price']
-        else:
-            st.warning("Falha ao obter o preço do petróleo.")
-            return None
-    
-    dolar = obter_dolar()
-    petroleo = obter_petroleo()
-
-    if dolar and petroleo:
-        st.markdown(f"📉 Cotação do Dólar (USD/BRL): **R${dolar:.2f}**")
-        st.markdown(f"🛢️ Preço do Petróleo (WTI): **${petroleo:.2f}**")
-    else:
-        st.warning("Não foi possível obter os dados completos para Dólar ou Petróleo.")
