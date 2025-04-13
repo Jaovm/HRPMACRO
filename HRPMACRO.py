@@ -367,6 +367,8 @@ usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
 
+print("Ativos válidos:", ativos_validos)
+print("Tipo:", type(ativos_validos))
 if ativos_validos:
     df_ativos = pd.DataFrame(ativos_validos)
     df_ativos['upside'] = df_ativos['upside'].apply(lambda x: f"{x:.1%}")
@@ -380,7 +382,6 @@ if ativos_validos:
         'favorecido': 'Favorecido',
         'score': 'Score'
     })
-
 
 
     if not ativos_validos:
