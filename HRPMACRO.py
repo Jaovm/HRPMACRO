@@ -7,18 +7,22 @@ from sklearn.covariance import LedoitWolf
 from scipy.optimize import minimize
 
 # ========= DICIONÁRIOS ==========
+
 setores_por_ticker = {
-    'AGRO3.SA': 'Agro', 'BBAS3.SA': 'Financeiro', 'BBSE3.SA': 'Financeiro',
-    'BPAC11.SA': 'Financeiro', 'EGIE3.SA': 'Utilidades', 'ITUB3.SA': 'Financeiro',
-    'PRIO3.SA': 'Energia', 'PSSA3.SA': 'Financeiro', 'SAPR3.SA': 'Utilidades',
-    'SBSP3.SA': 'Utilidades', 'VIVT3.SA': 'Comunicação', 'WEGE3.SA': 'Indústria',
-    'TOTS3.SA': 'Tecnologia', 'B3SA3.SA': 'Financeiro', 'TAEE3.SA': 'Utilidades'
+    'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
+    'EGIE3.SA': 'Energia', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
+    'ABEV3.SA': 'Consumo básico', 'B3SA3.SA': 'Financeiro', 'MGLU3.SA': 'Consumo discricionário',
+    'HAPV3.SA': 'Saúde', 'RADL3.SA': 'Saúde', 'RENT3.SA': 'Consumo discricionário',
+    'VALE3.SA': 'Indústria', 'TOTS3.SA': 'Tecnologia', 'AGRO3.SA': 'Agronegócio',
+    'BBAS3.SA': 'Financeiro', 'BBSE3.SA': 'Seguradoras', 'BPAC11.SA': 'Financeiro',
+    'PRIO3.SA': 'Petróleo', 'PSSA3.SA': 'Seguradoras', 'SAPR3.SA': 'Utilidades',
+    'SBSP3.SA': 'Utilidades', 'TAEE3.SA': 'Energia',
 }
 
 setores_por_cenario = {
-    "Expansionista": ['Consumo discricionário', 'Tecnologia', 'Indústria', 'Comunicação', 'Agro'],
-    "Neutro": ['Saúde', 'Financeiro', 'Utilidades', 'Varejo'],
-    "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico', 'Financeiro']
+    "Expansionista": ['Consumo discricionário', 'Tecnologia', 'Indústria', 'Agronegócio'],
+    "Neutro": ['Saúde', 'Financeiro', 'Utilidades', 'Varejo', 'Seguradoras'],
+    "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico', 'Petróleo']
 }
 
 # ========= MACRO ==========
