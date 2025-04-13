@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import requests
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 import yfinance as yf
@@ -46,6 +47,21 @@ def get_recursive_bisection(cov, sort_ix):
             w[c_items1] *= 1 - alpha
     return w
 
+# Função para obter dados econômicos da API do Banco Central (SGS)
+def get_selic():
+    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados?formato=csv'
+    response = requests.get(url)
+    data = response.text.splitlines()
+    selic_data = [line.split(';') for line in data]
+    return float(selic_data[-1][1].replace(',', '.'))  # Última taxa Selic
+
+def get_inflacao():
+    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433?formato=csv'
+    response = requests.get(url)
+    data = response.text.splitlines()
+    inflacao_data = [line.split(';') for line in data]
+    return float(inflacao_data[-1][1].replace(',', '.'))  # Última inflação
+
 # Dados da carteira e setores
 pesos_atuais = {
     'AGRO3.SA': 0.10,
@@ -84,9 +100,8 @@ setores_por_ticker = {
 }
 
 # Determinar automaticamente o cenário macroeconômico
-# Para simplificação, utilizamos dados fixos; em uma aplicação real, esses dados seriam obtidos de fontes atualizadas
-inflacao_anual = 5.48  # IPCA 12 meses até março de 2025
-selic = 14.25  # Taxa Selic atual
+inflacao_anual = get_inflacao()  # Obter inflação
+selic = get_selic()  # Obter taxa Selic
 meta_inflacao = 3.0  # Meta de inflação do Banco Central
 
 if inflacao_anual > meta_inflacao and selic >= 14.25:
@@ -110,6 +125,9 @@ aporte = st.number_input("Valor do novo aporte (R$)", min_value=100.0, value=500
 if st.button("Gerar sugestão de alocação"):
     ativos_fav = [t for t in pesos_atuais.keys() if setores_por_ticker.get(t) in setores_favorecidos]
     if not ativos_fav:
-        st.warning("Nenhum ativo da carteira pertence aos setores favorecidos no cenário atual")
-::contentReference[oaicite:9]{index=9}
- 
+        st.warning("Nenhum ativo da carteira pertence aos setores favorecidos no cenário atual.")
+    else:
+        # Ajustar alocação usando HRP com base nos ativos favorecidos
+        st.write("Ativos favorecidos:", ativos_fav)
+        # Aqui você pode aplicar o método de HRP para gerar a alocação do novo aporte com base nos ativos favorecidos.
+        st.write("Nova alocação sugerida com HRP")
