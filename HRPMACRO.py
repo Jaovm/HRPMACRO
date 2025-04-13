@@ -251,13 +251,15 @@ def filtrar_ativos_validos(carteira, cenario, macro):
             favorecido = setor in setores_bons
             score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro)
             ativos_validos.append({
-                "ticker": ticker,
-                "setor": setor,
-                "preco_atual": preco_atual,
-                "preco_alvo": preco_alvo,
-                "favorecido": favorecido,
-                "score": score
-            })
+    "ticker": ticker,
+    "setor": setor,
+    "preco_atual": preco_atual,
+    "preco_alvo": preco_alvo,
+    "upside": (preco_alvo - preco_atual) / preco_atual,
+    "favorecido": favorecido,
+    "score": score
+})
+
 
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
     return ativos_validos
