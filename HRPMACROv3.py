@@ -58,6 +58,103 @@ def classificar_cenario_macro(m):
         return "Neutro"
 
 # ========= PREÇO ALVO ==========
+import streamlit as st
+import pandas as pd
+import numpy as np
+import yfinance as yf
+import requests
+from sklearn.covariance import LedoitWolf
+from scipy.cluster.hierarchy import linkage, dendrogram
+from scipy.spatial.distance import squareform
+from scipy.optimize import minimize
+
+# ========= DICIONÁRIOS ==========
+
+setores_por_ticker = {
+    'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
+    'EGIE3.SA': 'Energia', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
+    'ABEV3.SA': 'Consumo básico', 'B3SA3.SA': 'Financeiro', 'MGLU3.SA': 'Consumo discricionário',
+    'HAPV3.SA': 'Saúde', 'RADL3.SA': 'Saúde', 'RENT3.SA': 'Consumo discricionário',
+    'VALE3.SA': 'Indústria', 'TOTS3.SA': 'Tecnologia', 'AGRO3.SA': 'Agronegócio',
+    'BBAS3.SA': 'Financeiro', 'BBSE3.SA': 'Seguradoras', 'BPAC11.SA': 'Financeiro',
+    'PRIO3.SA': 'Petróleo', 'PSSA3.SA': 'Seguradoras', 'SAPR3.SA': 'Utilidades',
+    'SBSP3.SA': 'Utilidades', 'TAEE3.SA': 'Energia'
+}
+
+setores_por_cenario = {
+    "Expansionista": ['Consumo discricionário', 'Tecnologia', 'Indústria', 'Agronegócio'],
+    "Neutro": ['Saúde', 'Financeiro', 'Utilidades', 'Varejo', 'Seguradoras'],
+    "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico', 'Petróleo']
+}
+
+empresas_exportadoras = ['AGRO3.SA', 'PRIO3.SA']
+
+# ========= MACRO ==========
+def get_bcb(code):
+    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
+    r = requests.get(url)
+    return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
+
+def obter_preco_petroleo():
+    try:
+        dados = yf.Ticker("CL=F").history(period="5d")
+        if not dados.empty and 'Close' in dados.columns:
+            return float(dados['Close'].dropna().iloc[-1])
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Erro ao obter preço do petróleo: {e}")
+        return None
+
+def obter_macro():
+    return {
+        "selic": get_bcb(432),
+        "ipca": get_bcb(433),
+        "dolar": get_bcb(1),
+        "petroleo": obter_preco_petroleo()
+    }
+
+def classificar_cenario_macro(m):
+    if m['ipca'] > 5 or m['selic'] > 12:
+        return "Restritivo"
+    elif m['ipca'] < 4 and m['selic'] < 10:
+        return "Expansionista"
+    else:
+        return "Neutro"
+
+# ========= PREÇO ALVO ==========
+
+def obter_preco_diario_ajustado(tickers, periodo='7y'):
+    dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
+    if len(tickers) == 1:
+        return dados['Adj Close'].to_frame()
+    else:
+        return dados['Adj Close']
+
+
+def otimizar_carteira_sharpe(tickers):
+    dados = obter_preco_diario_ajustado(tickers)
+    retornos = dados.pct_change().dropna()
+    media_retorno = retornos.mean()
+    cov = LedoitWolf().fit(retornos).covariance_
+
+    def sharpe_neg(pesos):
+        retorno_esperado = np.dot(pesos, media_retorno)
+        volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+        return -retorno_esperado / volatilidade if volatilidade != 0 else 0
+
+    n = len(tickers)
+    pesos_iniciais = np.array([1/n] * n)
+    limites = [(0, 1) for _ in range(n)]
+    restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
+
+    resultado = minimize(sharpe_neg, pesos_iniciais, method='SLSQP', bounds=limites, constraints=restricoes)
+
+    if resultado.success:
+        return resultado.x
+    else:
+        return None
+
 def obter_preco_alvo(ticker):
     try:
         return yf.Ticker(ticker).info.get('targetMeanPrice', None)
