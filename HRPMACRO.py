@@ -367,6 +367,22 @@ usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
 
+if ativos_validos:
+    df_ativos = pd.DataFrame(ativos_validos)
+    df_ativos['upside'] = df_ativos['upside'].apply(lambda x: f"{x:.1%}")
+    df_ativos['score'] = df_ativos['score'].round(2)
+    df_ativos = df_ativos.rename(columns={
+        'ticker': 'Ticker',
+        'setor': 'Setor',
+        'preco_atual': 'Preço Atual',
+        'preco_alvo': 'Preço Alvo',
+        'upside': 'Upside',
+        'favorecido': 'Favorecido',
+        'score': 'Score'
+    })
+
+
+
     if not ativos_validos:
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
     else:
