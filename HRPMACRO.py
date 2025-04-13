@@ -27,6 +27,7 @@ carteira_atual = {
     'TAEE3.SA': 3.0
 }
 
+# Define setores por ativo
 setores_por_ticker = {
     'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
     'EGIE3.SA': 'Utilidades', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
@@ -41,7 +42,7 @@ setores_por_cenario = {
     "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico']
 }
 
-# ========= MACRO ==========
+# ========= FUNÇÕES ==========
 
 def get_bcb(code):
     url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
@@ -62,8 +63,6 @@ def classificar_cenario_macro(m):
         return "Expansionista"
     else:
         return "Neutro"
-
-# ========= PREÇO ALVO ==========
 
 def obter_preco_alvo(ticker):
     try:
@@ -191,7 +190,9 @@ st.subheader("📌 Informe sua carteira atual")
 tickers = st.text_input("Tickers separados por vírgula", ", ".join(carteira_atual.keys())).upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
 
-if st.button("Gerar Alocação Otimizada"):
+aporte_mensal = st.number_input("Valor do aporte mensal (R$)", min_value=0, value=500)
+
+if st.button("Gerar Alocação Otimizada e Aporte"):
     ativos_validos = filtrar_ativos_validos(carteira, cenario)
 
     if not ativos_validos:
@@ -201,14 +202,19 @@ if st.button("Gerar Alocação Otimizada"):
         try:
             pesos = otimizar_carteira_sharpe(tickers_validos)
             if pesos is not None:
-                # Atualiza a tabela com os pesos atuais e novos
+                # Calcula a nova alocação considerando o aporte
+                aporte_total = aporte_mensal
+                aporte_distribuido = pesos * aporte_total
+                
+                # Atualiza a tabela com os pesos atuais, novos e o aporte
                 df_resultado = pd.DataFrame(ativos_validos)
                 df_resultado["Alocação Atual (%)"] = df_resultado["ticker"].map(carteira_atual)
                 df_resultado["Alocação Nova (%)"] = (pesos * 100).round(2)
+                df_resultado["Aporte (R$)"] = (aporte_distribuido).round(2)
                 df_resultado = df_resultado.sort_values("Alocação Nova (%)", ascending=False)
                 
                 st.success("✅ Carteira otimizada com Sharpe máximo (restrições relaxadas: 1%-30%).")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação Atual (%)", "Alocação Nova (%)"]])
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação Atual (%)", "Alocação Nova (%)", "Aporte (R$)"]])
             else:
                 st.error("Falha na otimização da carteira.")
         except Exception as e:
