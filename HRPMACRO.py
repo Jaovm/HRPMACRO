@@ -49,7 +49,7 @@ def get_recursive_bisection(cov, sort_ix):
 
 # Função para obter dados econômicos da API do Banco Central (SGS)
 def get_selic():
-    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados?formato=csv'
+    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json'
     response = requests.get(url)
     data = response.text.splitlines()
     selic_data = [line.split(';') for line in data]
