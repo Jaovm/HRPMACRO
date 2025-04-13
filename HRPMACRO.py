@@ -8,17 +8,17 @@ from scipy.optimize import minimize
 
 # ========= DICIONÁRIOS ==========
 setores_por_ticker = {
-    'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
-    'EGIE3.SA': 'Utilidades', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
-    'ABEV3.SA': 'Consumo básico', 'B3SA3.SA': 'Financeiro', 'MGLU3.SA': 'Consumo discricionário',
-    'HAPV3.SA': 'Saúde', 'RADL3.SA': 'Saúde', 'RENT3.SA': 'Consumo discricionário',
-    'VALE3.SA': 'Indústria', 'TOTS3.SA': 'Tecnologia',
+    'AGRO3.SA': 'Agro', 'BBAS3.SA': 'Financeiro', 'BBSE3.SA': 'Financeiro',
+    'BPAC11.SA': 'Financeiro', 'EGIE3.SA': 'Utilidades', 'ITUB3.SA': 'Financeiro',
+    'PRIO3.SA': 'Energia', 'PSSA3.SA': 'Financeiro', 'SAPR3.SA': 'Utilidades',
+    'SBSP3.SA': 'Utilidades', 'VIVT3.SA': 'Comunicação', 'WEGE3.SA': 'Indústria',
+    'TOTS3.SA': 'Tecnologia', 'B3SA3.SA': 'Financeiro', 'TAEE3.SA': 'Utilidades'
 }
 
 setores_por_cenario = {
-    "Expansionista": ['Consumo discricionário', 'Tecnologia', 'Indústria'],
+    "Expansionista": ['Consumo discricionário', 'Tecnologia', 'Indústria', 'Comunicação', 'Agro'],
     "Neutro": ['Saúde', 'Financeiro', 'Utilidades', 'Varejo'],
-    "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico']
+    "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico', 'Financeiro']
 }
 
 # ========= MACRO ==========
@@ -56,6 +56,11 @@ def obter_preco_atual(ticker):
         return None
 
 # ========= FILTRAR AÇÕES ==========
+def calcular_score(preco_atual, preco_alvo, favorecido):
+    upside = (preco_alvo - preco_atual) / preco_atual
+    bonus = 0.1 if favorecido else 0
+    return upside + bonus
+
 def filtrar_ativos_validos(carteira, cenario):
     setores_bons = setores_por_cenario[cenario]
     ativos_validos = []
@@ -68,22 +73,25 @@ def filtrar_ativos_validos(carteira, cenario):
         if preco_atual is None or preco_alvo is None:
             continue
         if preco_atual < preco_alvo:
+            favorecido = setor in setores_bons
+            score = calcular_score(preco_atual, preco_alvo, favorecido)
             ativos_validos.append({
                 "ticker": ticker,
                 "setor": setor,
                 "preco_atual": preco_atual,
                 "preco_alvo": preco_alvo,
-                "favorecido": setor in setores_bons
+                "favorecido": favorecido,
+                "score": score
             })
 
+    ativos_validos.sort(key=lambda x: x['score'], reverse=True)
     return ativos_validos
 
-# ========= OTIMIZAÇÃO CORRIGIDA ==========
+# ========= OTIMIZAÇÃO ==========
 def obter_preco_diario_ajustado(tickers):
     dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
 
     if isinstance(dados_brutos.columns, pd.MultiIndex):
-        # Vários ativos — usa MultiIndex com 'Adj Close'
         if 'Adj Close' in dados_brutos.columns.get_level_values(0):
             return dados_brutos['Adj Close']
         elif 'Close' in dados_brutos.columns.get_level_values(0):
@@ -91,7 +99,6 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
     else:
-        # Apenas 1 ativo — dados_brutos tem colunas simples
         if 'Adj Close' in dados_brutos.columns:
             return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
         elif 'Close' in dados_brutos.columns:
@@ -100,43 +107,26 @@ def obter_preco_diario_ajustado(tickers):
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
 def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.30):
-    # Verifica se há dados ausentes ou inválidos nos retornos
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
 
-    # Verifica e limpa valores inválidos ou infinitos
     if retornos.isnull().any().any() or np.isinf(retornos.values).any():
-        st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
+        st.warning("Os dados de retornos contêm valores inválidos ou ausentes.")
         return None
 
-    # Calcula a média anualizada e a matriz de covariância com Ledoit-Wolf
     medias = retornos.mean() * 252
     cov = LedoitWolf().fit(retornos).covariance_
-
     n = len(tickers)
 
-    # Função de objetivo para maximizar o Sharpe
     def sharpe_neg(pesos):
         retorno_esperado = np.dot(pesos, medias)
         volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
         return -retorno_esperado / volatilidade
 
-    # Inicializa os pesos dentro das restrições e com a soma igual a 1
     init = np.array([1/n] * n)
-
-    # Garantir que os pesos estão dentro dos limites e somam 1
-    def verificar_restricoes(pesos):
-        if np.any(pesos < min_pct) or np.any(pesos > max_pct):
-            return np.inf  # Penaliza soluções que violam restrições
-        return np.sum(pesos) - 1  # Soma deve ser 1
-
-    # Restrição para garantir que a soma dos pesos seja 1
     constraints = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
-
-    # Restrições de alocação mínima e máxima por ativo
     bounds = tuple((min_pct, max_pct) for _ in range(n))
 
-    # Tentando otimizar com uma abordagem mais robusta
     try:
         resultado = minimize(sharpe_neg, init, bounds=bounds, constraints=constraints, method='trust-constr')
         if resultado.success:
@@ -152,7 +142,6 @@ def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.30):
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
 
-# MACRO
 macro = obter_macro()
 cenario = classificar_cenario_macro(macro)
 col1, col2, col3 = st.columns(3)
@@ -161,10 +150,12 @@ col2.metric("Inflação IPCA (%)", f"{macro['ipca']:.2f}")
 col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
-# INPUT
 st.subheader("📌 Informe sua carteira atual")
-tickers = st.text_input("Tickers separados por vírgula", "WEGE3.SA, PETR4.SA, VIVT3.SA, TOTS3.SA").upper()
+default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
+tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
+
+aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, cenario)
@@ -178,9 +169,11 @@ if st.button("Gerar Alocação Otimizada"):
             if pesos is not None:
                 df_resultado = pd.DataFrame(ativos_validos)
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
+                df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
                 df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
-                st.success("✅ Carteira otimizada com Sharpe máximo (restrições relaxadas: 1%-30%).")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação (%)"]])
+
+                st.success("✅ Carteira otimizada com Sharpe máximo e simulação de aporte mensal feita!")
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)"]])
             else:
                 st.error("Falha na otimização da carteira.")
         except Exception as e:
