@@ -6,7 +6,6 @@ from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.efficient_frontier import EfficientFrontier
-from pypfopt.objective_functions import negative_sharpe
 
 st.set_page_config(page_title="Alocação HRP + Estratégias", layout="wide")
 st.title("📈 Alocação com HRP + Estratégias Otimizadas")
@@ -44,9 +43,10 @@ def alocacao_hrp_sharpe(returns, media_ret, cov_matrix):
     hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
     pesos_hrp = hrp.optimize()
     tickers_hrp = list(pesos_hrp.keys())
-
+    
+    # Cálculo do índice de Sharpe manualmente
     ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
-    pesos = ef.max_sharpe()
+    pesos_sharpe = ef.max_sharpe(risk_free_rate=0.03)  # Definindo uma taxa livre de risco
     return ef.clean_weights()
 
 def alocacao_hrp_maior_retorno(returns, media_ret, cov_matrix):
