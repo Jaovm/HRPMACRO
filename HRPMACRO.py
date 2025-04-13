@@ -117,7 +117,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.30):
+def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.17):
     # Verifica se há dados ausentes ou inválidos nos retornos
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
