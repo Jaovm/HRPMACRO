@@ -1,4 +1,9 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
 import yfinance as yf
+from scipy.optimize import minimize
+from sklearn.preprocessing import StandardScaler
 import requests
 import datetime
 
@@ -58,142 +63,29 @@ with st.expander("Cenário Macroeconômico Atual"):
             except Exception as e:
                 st.error("Erro ao buscar dados: " + str(e))
 
-setores_ativos = {
-    # Bancos
-    'ITUB4.SA': 'Bancos',
-    'BBDC4.SA': 'Bancos',
-    'SANB11.SA': 'Bancos',
-    'BBAS3.SA': 'Bancos',
-    'ABCB4.SA': 'Bancos',
-    'BRSR6.SA': 'Bancos',
-    'BMGB4.SA': 'Bancos',
-    'BPAC11.SA': 'Bancos',
-
-    # Seguradoras
-    'BBSE3.SA': 'Seguradoras',
-    'PSSA3.SA': 'Seguradoras',
-    'SULA11.SA': 'Seguradoras',
-    'CXSE3.SA': 'Seguradoras',
-
-    # Bolsas e Serviços Financeiros
-    'B3SA3.SA': 'Bolsas e Serviços Financeiros',
-    'XPBR31.SA': 'Bolsas e Serviços Financeiros',
-
-    # Energia Elétrica
-    'EGIE3.SA': 'Energia Elétrica',
-    'CPLE6.SA': 'Energia Elétrica',
-    'TAEE11.SA': 'Energia Elétrica',
-    'CMIG4.SA': 'Energia Elétrica',
-    'AURE3.SA': 'Energia Elétrica',
-    'CPFE3.SA': 'Energia Elétrica',
-    'AESB3.SA': 'Energia Elétrica',
-
-    # Petróleo, Gás e Biocombustíveis
-    'PETR4.SA': 'Petróleo, Gás e Biocombustíveis',
-    'PRIO3.SA': 'Petróleo, Gás e Biocombustíveis',
-    'RECV3.SA': 'Petróleo, Gás e Biocombustíveis',
-    'RRRP3.SA': 'Petróleo, Gás e Biocombustíveis',
-    'UGPA3.SA': 'Petróleo, Gás e Biocombustíveis',
-    'VBBR3.SA': 'Petróleo, Gás e Biocombustíveis',
-
-    # Mineração e Siderurgia
-    'VALE3.SA': 'Mineração e Siderurgia',
-    'CSNA3.SA': 'Mineração e Siderurgia',
-    'GGBR4.SA': 'Mineração e Siderurgia',
-    'CMIN3.SA': 'Mineração e Siderurgia',
-    'GOAU4.SA': 'Mineração e Siderurgia',
-    'BRAP4.SA': 'Mineração e Siderurgia',
-
-    # Indústria e Bens de Capital
-    'WEGE3.SA': 'Indústria e Bens de Capital',
-    'RANI3.SA': 'Indústria e Bens de Capital',
-    'KLBN11.SA': 'Indústria e Bens de Capital',
-    'SUZB3.SA': 'Indústria e Bens de Capital',
-    'UNIP6.SA': 'Indústria e Bens de Capital',
-    'KEPL3.SA': 'Indústria e Bens de Capital',
-
-    # Agronegócio
-    'AGRO3.SA': 'Agronegócio',
-    'SLCE3.SA': 'Agronegócio',
-    'SMTO3.SA': 'Agronegócio',
-    'CAML3.SA': 'Agronegócio',
-
-    # Saúde
-    'HAPV3.SA': 'Saúde',
-    'FLRY3.SA': 'Saúde',
-    'RDOR3.SA': 'Saúde',
-    'QUAL3.SA': 'Saúde',
-    'RADL3.SA': 'Saúde',
-
-    # Tecnologia
-    'TOTS3.SA': 'Tecnologia',
-    'POSI3.SA': 'Tecnologia',
-    'LINX3.SA': 'Tecnologia',
-    'LWSA3.SA': 'Tecnologia',
-
-    # Consumo Discricionário
-    'MGLU3.SA': 'Consumo Discricionário',
-    'LREN3.SA': 'Consumo Discricionário',
-    'RENT3.SA': 'Consumo Discricionário',
-    'ARZZ3.SA': 'Consumo Discricionário',
-    'ALPA4.SA': 'Consumo Discricionário',
-
-    # Consumo Básico
-    'ABEV3.SA': 'Consumo Básico',
-    'NTCO3.SA': 'Consumo Básico',
-    'PCAR3.SA': 'Consumo Básico',
-    'MDIA3.SA': 'Consumo Básico',
-
-    # Comunicação
-    'VIVT3.SA': 'Comunicação',
-    'TIMS3.SA': 'Comunicação',
-    'OIBR3.SA': 'Comunicação',
-
-    # Utilidades Públicas
-    'SBSP3.SA': 'Utilidades Públicas',
-    'SAPR11.SA': 'Utilidades Públicas',
-    'CSMG3.SA': 'Utilidades Públicas',
-    'ALUP11.SA': 'Utilidades Públicas',
-    'CPLE6.SA': 'Utilidades Públicas',
-}
-
-
 setores_por_cenario = {
-    "Expansionista": [
-        'Consumo Discricionário',
-        'Tecnologia',
-        'Indústria e Bens de Capital',
-        'Agronegócio'
-    ],
-    "Neutro": [
-        'Saúde',
-        'Bancos',
-        'Seguradoras',
-        'Bolsas e Serviços Financeiros',
-        'Utilidades Públicas'
-    ],
-    "Restritivo": [
-        'Energia Elétrica',
-        'Petróleo, Gás e Biocombustíveis',
-        'Mineração e Siderurgia',
-        'Consumo Básico',
-        'Comunicação'
-    ]
+    "Expansionista": ["Tecnologia", "Consumo", "Construção Civil", "Varejo", "Indústria"],
+    "Restritivo": ["Energia", "Saúde", "Utilidades Públicas", "Bancos", "Seguradoras"],
+    "Neutro": ["Telecom", "Exportadoras", "Serviços", "Bens de Capital"]
 }
 
-empresas_exportadoras = [
-    'VALE3.SA',  # Mineração
-    'SUZB3.SA',  # Celulose
-    'KLBN11.SA', # Papel e Celulose
-    'AGRO3.SA',  # Agronegócio
-    'PRIO3.SA',  # Petróleo
-    'SLCE3.SA',  # Agronegócio
-    'SMTO3.SA',  # Açúcar e Etanol
-    'CSNA3.SA',  # Siderurgia
-    'GGBR4.SA',  # Siderurgia
-    'CMIN3.SA',  # Mineração
-]
-
+setores_ativos = {
+    "AGRO3.SA": "Exportadoras",
+    "BBAS3.SA": "Bancos",
+    "BBSE3.SA": "Seguradoras",
+    "BPAC11.SA": "Bancos",
+    "EGIE3.SA": "Energia",
+    "ITUB3.SA": "Bancos",
+    "PRIO3.SA": "Petróleo",
+    "PSSA3.SA": "Seguradoras",
+    "SAPR3.SA": "Utilidades Públicas",
+    "SBSP3.SA": "Utilidades Públicas",
+    "VIVT3.SA": "Telecom",
+    "WEGE3.SA": "Indústria",
+    "TOTS3.SA": "Tecnologia",
+    "B3SA3.SA": "Serviços",
+    "TAEE3.SA": "Energia"
+}
 
 def recomendar_ativos_por_cenario(cenario, setores_ativos, setores_por_cenario):
     setores_favoraveis = setores_por_cenario.get(cenario, [])
@@ -202,38 +94,6 @@ def recomendar_ativos_por_cenario(cenario, setores_ativos, setores_por_cenario):
         if setor in setores_favoraveis
     ]
     return recomendados, setores_favoraveis
-
-with st.expander("Recomendações baseadas no cenário"):
-    if "cenario_atual" in st.session_state:
-        cenario = st.session_state["cenario_atual"]
-        recomendados, setores_fav = recomendar_ativos_por_cenario(
-            cenario, setores_ativos, setores_por_cenario
-        )
-        st.subheader(f"Setores favorecidos no cenário {cenario}:")
-        st.write(", ".join(setores_fav))
-
-        st.subheader("Ações recomendadas da sua carteira:")
-        for ativo in recomendados:
-            st.markdown(f"- **{ativo}** ({setores_ativos[ativo]})")
-    else:
-        st.info("Detecte o cenário atual primeiro para obter recomendações.")
-
-# Interface: checkbox para filtrar ativos recomendados
-usar_so_recomendados = st.checkbox("Usar apenas ativos recomendados pelo cenário atual", value=True)
-
-# Definição da lista final de ativos
-if usar_so_recomendados and "cenario_atual" in st.session_state:
-    ativos_para_otimizacao = [
-        ativo for ativo, setor in setores_ativos.items()
-        if setor in setores_por_cenario[st.session_state["cenario_atual"]]
-    ]
-else:
-    ativos_para_otimizacao = list(setores_ativos.keys())
-
-# Substituir a linha antiga:
-# tickers = ["AGRO3.SA", "BBAS3.SA", ...]
-# por:
-tickers = ativos_para_otimizacao
 
 def calcular_score(ativo, upside, setor, cenario, historico_bom=None):
     score = 0
@@ -254,64 +114,85 @@ def calcular_score(ativo, upside, setor, cenario, historico_bom=None):
 
     return round(score, 3)
 
-st.subheader("Pontuação dos ativos")
+# Definindo a lista de ativos
+ativos = ['AGRO3.SA', 'BBAS3.SA', 'BBSE3.SA', 'BPAC11.SA', 'EGIE3.SA', 'ITUB3.SA', 'PRIO3.SA', 'PSSA3.SA', 'SAPR3.SA', 'SBSP3.SA', 'VIVT3.SA', 'WEGE3.SA', 'TOTS3.SA', 'B3SA3.SA', 'TAEE3.SA']
 
-# Exemplo de dados simulados (você pode puxar real via API)
-upside_simulado = {
-    "AGRO3.SA": 0.6, "BBAS3.SA": 0.5, "BBSE3.SA": 0.45, "BPAC11.SA": 0.7,
-    "EGIE3.SA": 0.4, "ITUB3.SA": 0.55, "PRIO3.SA": 0.75, "PSSA3.SA": 0.35,
-    "SAPR3.SA": 0.3, "SBSP3.SA": 0.2, "VIVT3.SA": 0.4, "WEGE3.SA": 0.6,
-    "TOTS3.SA": 0.65, "B3SA3.SA": 0.5, "TAEE3.SA": 0.3
-}
-historico_bom = ["PRIO3.SA", "BBAS3.SA", "WEGE3.SA"]  # Exemplo simples
+# Baixando os preços históricos dos ativos
+inicio = '2017-01-01'
+fim = '2025-01-01'
+precos = yf.download(ativos, start=inicio, end=fim)['Adj Close']
 
-# Construção da tabela
-dados = []
-cenario_atual = st.session_state.get("cenario_atual", "Neutro")
-for ativo in setores_ativos:
-    setor = setores_ativos[ativo]
-    score = calcular_score(ativo, upside_simulado, setor, cenario_atual, historico_bom)
-    dados.append({"Ativo": ativo, "Setor": setor, "Score": score})
+# Calculando os retornos diários dos ativos
+retornos = precos.pct_change().dropna()
 
-df_score = pd.DataFrame(dados).sort_values(by="Score", ascending=False).reset_index(drop=True)
-st.dataframe(df_score)
+# Calculando os retornos esperados e a matriz de covariância
+retornos_esperados = retornos.mean() * 252  # anualizado
+covariancia = retornos.cov() * 252  # anualizado
 
-limite_score = 0.5
-ativos_filtrados_score = df_score[df_score["Score"] >= limite_score]["Ativo"].tolist()
+# Função para calcular o retorno do portfólio
+def calc_retorno(pesos):
+    return np.dot(pesos, retornos_esperados)
 
-tickers = ativos_filtrados_score
+# Função para calcular o risco do portfólio
+def calc_risco(pesos):
+    return np.sqrt(np.dot(pesos.T, np.dot(covariancia, pesos)))
 
-st.subheader("Exportar alocação final")
+# Função objetivo (negativa do Sharpe ratio)
+def objetivo(pesos):
+    retorno_portfolio = calc_retorno(pesos)
+    risco_portfolio = calc_risco(pesos)
+    return -retorno_portfolio / risco_portfolio
 
-# Criar DataFrame com alocação
-df_alocacao = pd.DataFrame({
-    "Ativo": list(pesos_finais.keys()),
-    "Peso (%)": [round(p * 100, 2) for p in pesos_finais.values()]
-})
+# Restrições
+restricao_soma = {'type': 'eq', 'fun': lambda pesos: np.sum(pesos) - 1}  # soma dos pesos deve ser 1
+restricoes = [restricao_soma]
 
-# Exibir
-st.dataframe(df_alocacao)
+# Limite de pesos individuais
+limite = 0.05
+limites = [(0, limite) for _ in range(len(ativos))]
 
-# Gerar CSV
-csv = df_alocacao.to_csv(index=False).encode('utf-8')
-st.download_button("📥 Baixar Alocação (CSV)", data=csv, file_name="alocacao_portfolio.csv", mime='text/csv')
+# Função para otimizar o portfólio usando o método de minimização
+resultado = minimize(objetivo, [1/len(ativos)]*len(ativos), method='SLSQP', bounds=limites, constraints=restricoes)
+pesos_finais = dict(zip(ativos, resultado.x))
 
-# Simular retorno da carteira
-retornos_carteira = sum(retornos[ativo] * peso for ativo, peso in pesos_finais.items())
-retorno_acumulado_carteira = (1 + retornos_carteira).cumprod()
+# Calculando o desempenho acumulado do portfólio
+retorno_carteira = sum(retornos[ativo] * peso for ativo, peso in pesos_finais.items())
+retorno_acumulado_carteira = (1 + retorno_carteira).cumprod()
 
-# IBOV (exemplo com ^BVSP)
+# Baixando os dados do IBOV para comparação
 precos_ibov = yf.download("^BVSP", start=inicio, end=fim)["Adj Close"]
 retornos_ibov = precos_ibov.pct_change().dropna()
 retorno_acumulado_ibov = (1 + retornos_ibov).cumprod()
 
-# Unificar série
+# Criando o painel comparativo entre a carteira e o IBOV
 df_comparativo = pd.DataFrame({
     "Carteira Otimizada": retorno_acumulado_carteira,
     "IBOV": retorno_acumulado_ibov
 }).dropna()
 
-# Plotar
+# Calculando o score de cada ativo com base no retorno esperado, risco e setor
+# (Aqui, consideramos uma fórmula simples de score: Retorno Esperado / Risco)
+df_score = pd.DataFrame({
+    "Ativo": ativos,
+    "Score": [retornos_esperados[ativo] / np.sqrt(covariancia[ativo].sum()) for ativo in ativos]
+})
+
+# Exibindo os scores
+st.subheader("🔍 Score de Ativos")
+st.dataframe(df_score)
+
+# Exibindo a alocação final
+st.subheader("📊 Alocação Final do Portfólio")
+df_alocacao = pd.DataFrame({
+    "Ativo": list(pesos_finais.keys()),
+    "Peso (%)": [round(p * 100, 2) for p in pesos_finais.values()]
+})
+st.dataframe(df_alocacao)
+
+# Exportando a alocação para CSV
+csv = df_alocacao.to_csv(index=False).encode('utf-8')
+st.download_button("📥 Baixar Alocação (CSV)", data=csv, file_name="alocacao_portfolio.csv", mime='text/csv')
+
+# Exibindo o gráfico comparativo entre a carteira otimizada e o IBOV
 st.subheader("📊 Desempenho Carteira vs IBOV")
 st.line_chart(df_comparativo)
-
