@@ -49,11 +49,25 @@ def get_recursive_bisection(cov, sort_ix):
 
 # Função para obter dados econômicos da API do Banco Central (SGS)
 def get_selic():
-    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json'
+    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados?formato=csv'
     response = requests.get(url)
-    data = response.text.splitlines()
-    selic_data = [line.split(';') for line in data]
-    return float(selic_data[-1][1].replace(',', '.'))  # Última taxa Selic
+    
+    if response.status_code == 200:
+        data = response.text.splitlines()
+        if len(data) > 1:
+            selic_data = [line.split(';') for line in data]
+            try:
+                # Verificar se o formato está correto
+                return float(selic_data[-1][1].replace(',', '.'))  # Última taxa Selic
+            except (IndexError, ValueError) as e:
+                st.error(f"Erro ao acessar os dados da taxa Selic: {e}")
+                return None
+        else:
+            st.error("Nenhum dado encontrado na resposta da API da Selic.")
+            return None
+    else:
+        st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
+        return None
 
 def get_inflacao():
     url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433?formato=csv'
@@ -61,16 +75,15 @@ def get_inflacao():
     
     if response.status_code == 200:
         data = response.text.splitlines()
-        # Verificar se os dados estão no formato esperado
         if len(data) > 1:
             inflacao_data = [line.split(';') for line in data]
             try:
                 return float(inflacao_data[-1][1].replace(',', '.'))  # Última inflação
-            except IndexError:
-                st.error("Erro ao acessar os dados de inflação. Tente novamente.")
+            except (IndexError, ValueError) as e:
+                st.error(f"Erro ao acessar os dados de inflação: {e}")
                 return None
         else:
-            st.error("Nenhum dado encontrado na resposta da API.")
+            st.error("Nenhum dado encontrado na resposta da API da inflação.")
             return None
     else:
         st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
