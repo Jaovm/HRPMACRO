@@ -1,75 +1,28 @@
 import streamlit as st
+import yfinance as yf
+import numpy as np
 import requests
 import pandas as pd
-import numpy as np
-from scipy.cluster.hierarchy import linkage
-from scipy.spatial.distance import squareform
-import yfinance as yf
+from scipy.optimize import minimize
 
-# Funções auxiliares para HRP
-def correl_to_dist(corr):
-    return np.sqrt(0.5 * (1 - corr))
-
-def get_quasi_diag(link):
-    link = link.astype(int)
-    sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
-    num_items = link[-1, 3]
-    while sort_ix.max() >= num_items:
-        sort_ix.index = range(0, sort_ix.shape[0]*2, 2)
-        df0 = sort_ix[sort_ix >= num_items]
-        i = df0.index
-        j = df0.values - num_items
-        sort_ix[i] = link[j, 0]
-        df1 = pd.Series(link[j, 1], index=i+1)
-        sort_ix = pd.concat([sort_ix, df1])
-        sort_ix = sort_ix.sort_index()
-        sort_ix.index = range(sort_ix.shape[0])
-    return sort_ix.tolist()
-
-def get_cluster_var(cov, items):
-    cov_ = cov.loc[items, items]
-    w_ = np.linalg.inv(cov_).sum(axis=1)
-    w_ /= w_.sum()
-    return np.dot(w_, np.dot(cov_, w_))
-
-def get_recursive_bisection(cov, sort_ix):
-    w = pd.Series(1, index=sort_ix)
-    c_items = [sort_ix]
-    while len(c_items) > 0:
-        c_items = [i[j:k] for i in c_items for j, k in ((0, len(i)//2), (len(i)//2, len(i))) if len(i) > 1]
-        for i in range(0, len(c_items), 2):
-            c_items0 = c_items[i]
-            c_items1 = c_items[i + 1]
-            c_var0 = get_cluster_var(cov, c_items0)
-            c_var1 = get_cluster_var(cov, c_items1)
-            alpha = 1 - c_var0 / (c_var0 + c_var1)
-            w[c_items0] *= alpha
-            w[c_items1] *= 1 - alpha
-    return w
-
-# Função para obter dados econômicos da API do Banco Central (SGS)
+# Função para obter os dados da taxa SELIC
 def get_selic():
-    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados?formato=csv'
+    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=csv'
     response = requests.get(url)
     
     if response.status_code == 200:
         data = response.text.splitlines()
         if len(data) > 1:
             selic_data = [line.split(';') for line in data]
-            try:
-                # Remover aspas da string e converter para float
-                selic_value = selic_data[-1][1].replace('"', '').replace(',', '.')
-                return float(selic_value)  # Última taxa Selic
-            except (IndexError, ValueError) as e:
-                st.error(f"Erro ao acessar os dados da taxa Selic: {e}")
-                return None
+            return float(selic_data[-1][1].replace('"', '').replace(',', '.'))  # Última taxa Selic
         else:
-            st.error("Nenhum dado encontrado na resposta da API da Selic.")
+            st.error("Nenhum dado encontrado na resposta da API da SELIC.")
             return None
     else:
         st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
         return None
 
+# Função para calcular a inflação anual com base nos últimos 12 meses
 def get_inflacao():
     url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=csv'
     response = requests.get(url)
@@ -78,13 +31,13 @@ def get_inflacao():
         data = response.text.splitlines()
         if len(data) > 1:
             inflacao_data = [line.split(';') for line in data]
-            try:
-                # Remover aspas e vírgula, depois converter para float
-                inflacao_value = inflacao_data[-1][1].replace('"', '').replace(',', '.')
-                return float(inflacao_value)  # Última inflação
-            except (IndexError, ValueError) as e:
-                st.error(f"Erro ao acessar os dados de inflação: {e}")
-                return None
+            
+            # Pegando os últimos 12 meses de inflação mensal
+            inflacao_mensal = [float(line[1].replace('"', '').replace(',', '.')) for line in inflacao_data[-12:]]
+            
+            # Calculando a inflação anual composta
+            inflacao_anual = np.prod([1 + (x / 100) for x in inflacao_mensal]) - 1
+            return round(inflacao_anual * 100, 2)  # Retorna a inflação anual em porcentagem
         else:
             st.error("Nenhum dado encontrado na resposta da API da inflação.")
             return None
@@ -92,77 +45,69 @@ def get_inflacao():
         st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
         return None
 
-# Dados da carteira e setores
-pesos_atuais = {
-    'AGRO3.SA': 0.10,
-    'BBAS3.SA': 0.012,
-    'BBSE3.SA': 0.065,
-    'BPAC11.SA': 0.106,
-    'EGIE3.SA': 0.05,
-    'ITUB3.SA': 0.005,
-    'PRIO3.SA': 0.15,
-    'PSSA3.SA': 0.15,
-    'SAPR3.SA': 0.067,
-    'SBSP3.SA': 0.04,
-    'VIVT3.SA': 0.064,
-    'WEGE3.SA': 0.15,
-    'TOTS3.SA': 0.01,
-    'B3SA3.SA': 0.001,
-    'TAEE3.SA': 0.03
-}
+# Função para sugerir alocação da carteira com base no cenário macroeconômico
+def sugerir_alocacao_mercado(cenario_macroeconomico, pesos_atuais, ativos_selecionados):
+    setores_favorecidos = cenario_macroeconomico['setores_favorecidos']
+    alocacao_sugerida = pesos_atuais.copy()
 
-setores_por_ticker = {
-    'AGRO3.SA': 'Consumo básico',
-    'BBAS3.SA': 'Financeiro',
-    'BBSE3.SA': 'Financeiro',
-    'BPAC11.SA': 'Financeiro',
-    'EGIE3.SA': 'Utilidades',
-    'ITUB3.SA': 'Financeiro',
-    'PRIO3.SA': 'Energia',
-    'PSSA3.SA': 'Financeiro',
-    'SAPR3.SA': 'Utilidades',
-    'SBSP3.SA': 'Utilidades',
-    'VIVT3.SA': 'Comunicações',
-    'WEGE3.SA': 'Indústria',
-    'TOTS3.SA': 'Tecnologia',
-    'B3SA3.SA': 'Financeiro',
-    'TAEE3.SA': 'Utilidades'
-}
+    for setor in setores_favorecidos:
+        # Filtrando ativos no setor favorecido
+        ativos_favorecidos = [ativo for ativo, dados in ativos_selecionados.items() if dados['setor'] == setor]
+        
+        # Atualizando o peso de ativos nos setores favorecidos
+        for ativo in ativos_favorecidos:
+            alocacao_sugerida[ativo] = pesos_atuais.get(ativo, 0) + 0.05  # Adiciona um peso extra de 5% aos setores favorecidos
 
-# Determinar automaticamente o cenário macroeconômico
-inflacao_anual = get_inflacao()  # Obter inflação
-selic = get_selic()  # Obter taxa Selic
-meta_inflacao = 3.0  # Meta de inflação do Banco Central
+    # Normalizando os pesos para garantir que a soma seja 100%
+    soma_pesos = sum(alocacao_sugerida.values())
+    for ativo in alocacao_sugerida:
+        alocacao_sugerida[ativo] = alocacao_sugerida[ativo] / soma_pesos
 
-if inflacao_anual and inflacao_anual > meta_inflacao and selic >= 14.25:
-    cenario = 'Restritivo'
-    setores_favorecidos = ['Utilidades', 'Energia', 'Consumo básico', 'Saúde']
-elif inflacao_anual and inflacao_anual <= meta_inflacao and selic <= 10.0:
-    cenario = 'Expansivo'
-    setores_favorecidos = ['Tecnologia', 'Consumo discricionário', 'Financeiro']
-else:
-    cenario = 'Neutro'
-    setores_favorecidos = ['Indústria', 'Comunicações', 'Financeiro']
+    return alocacao_sugerida
 
-# App
-st.title("Sugestão de Alocação de Aporte com HRP")
+# Função principal para exibir o app
+def main():
+    st.title("Análise de Carteira de Investimentos e Cenário Macroeconômico")
 
-# Exibir dados econômicos
-st.write(f"**Taxa SELIC atual:** {selic:.2f}%")
-st.write(f"**Inflação Anual:** {inflacao_anual:.2f}%")
-st.write(f"**Meta de Inflação:** {meta_inflacao}%")
+    # Obter dados do cenário macroeconômico
+    inflacao_anual = get_inflacao()
+    selic = get_selic()
+    meta_inflacao = 3.0  # Meta de inflação do Banco Central
 
-st.write(f"**Cenário Macroeconômico Atual:** {cenario}")
-st.write(f"**Setores Favorecidos:** {', '.join(setores_favorecidos)}")
+    # Exibir cenário macroeconômico
+    st.subheader("Cenário Macroeconômico Atual")
+    st.write(f"Inflação Anual: {inflacao_anual}%")
+    st.write(f"Taxa Selic: {selic}%")
+    st.write(f"Meta de Inflação: {meta_inflacao}%")
+    
+    # Definindo ativos selecionados e seus pesos atuais
+    ativos_selecionados = {
+        "AGRO3.SA": {"setor": "Agronegócio", "peso_atual": 0.10},
+        "BBAS3.SA": {"setor": "Financeiro", "peso_atual": 0.15},
+        "BBSE3.SA": {"setor": "Seguradoras", "peso_atual": 0.12},
+        "BPAC11.SA": {"setor": "Financeiro", "peso_atual": 0.20},
+        "EGIE3.SA": {"setor": "Energia", "peso_atual": 0.10},
+        "ITUB3.SA": {"setor": "Financeiro", "peso_atual": 0.10},
+        "PRIO3.SA": {"setor": "Energia", "peso_atual": 0.10},
+        "PSSA3.SA": {"setor": "Seguradoras", "peso_atual": 0.05},
+        "SAPR3.SA": {"setor": "Utilities", "peso_atual": 0.05},
+        "SBSP3.SA": {"setor": "Utilities", "peso_atual": 0.05},
+        "VIVT3.SA": {"setor": "Telecomunicações", "peso_atual": 0.05},
+        "WEGE3.SA": {"setor": "Indústria", "peso_atual": 0.10},
+        "TOTS3.SA": {"setor": "Tecnologia", "peso_atual": 0.05},
+        "B3SA3.SA": {"setor": "Financeiro", "peso_atual": 0.03},
+        "TAEE3.SA": {"setor": "Energia", "peso_atual": 0.05},
+    }
 
-aporte = st.number_input("Valor do novo aporte (R$)", min_value=100.0, value=5000.0, step=100.0)
+    # Simulando o cenário macroeconômico
+    cenario_macroeconomico = {
+        "setores_favorecidos": ["Energia", "Financeiro"]
+    }
 
-if st.button("Gerar sugestão de alocação"):
-    ativos_fav = [t for t in pesos_atuais.keys() if setores_por_ticker.get(t) in setores_favorecidos]
-    if not ativos_fav:
-        st.warning("Nenhum ativo da carteira pertence aos setores favorecidos no cenário atual.")
-    else:
-        # Ajustar alocação usando HRP com base nos ativos favorecidos
-        st.write("Ativos favorecidos:", ativos_fav)
-        # Aqui você pode aplicar o método de HRP para gerar a alocação do novo aporte com base nos ativos favorecidos.
-        st.write("Nova alocação sugerida com HRP")
+    # Sugerindo nova alocação
+    alocacao_sugerida = sugerir_alocacao_mercado(cenario_macroeconomico, pesos_atuais={}, ativos_selecionados=ativos_selecionados)
+    st.write("Nova alocação sugerida com base no cenário macroeconômico:")
+    st.write(alocacao_sugerida)
+
+if __name__ == "__main__":
+    main()
