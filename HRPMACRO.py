@@ -255,13 +255,11 @@ def filtrar_ativos_validos(carteira, cenario, macro):
                 "setor": setor,
                 "preco_atual": preco_atual,
                 "preco_alvo": preco_alvo,
-                "upside": (preco_alvo - preco_atual) / preco_atual,
                 "favorecido": favorecido,
                 "score": score
             })
 
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
-    print("Ativos válidos:", ativos_validos)  # Verifique o conteúdo da lista
     return ativos_validos
 
 # ========= OTIMIZAÇÃO ==========
@@ -349,7 +347,7 @@ col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] e
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
 st.subheader("📌 Informe sua carteira atual")
-default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB4.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE11.SA"
+default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
 tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
 pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
@@ -366,22 +364,6 @@ usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
-
-if ativos_validos:
-    df_ativos = pd.DataFrame(ativos_validos)
-    df_ativos['upside'] = df_ativos['upside'].apply(lambda x: f"{x:.1%}")
-    df_ativos['score'] = df_ativos['score'].round(2)
-    df_ativos = df_ativos.rename(columns={
-        'ticker': 'Ticker',
-        'setor': 'Setor',
-        'preco_atual': 'Preço Atual',
-        'preco_alvo': 'Preço Alvo',
-        'upside': 'Upside',
-        'favorecido': 'Favorecido',
-        'score': 'Score'
-    })
-else:
-    print("Nenhum ativo válido encontrado.")
 
     if not ativos_validos:
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
@@ -425,4 +407,3 @@ else:
                 st.error("Falha na otimização da carteira.")
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
-
