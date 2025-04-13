@@ -27,20 +27,19 @@ def carregar_dados(tickers, start_date, end_date):
         try:
             data = yf.download(ticker, start=start_date, end=end_date)
             if 'Adj Close' in data.columns:
-                dados[ticker] = data['Adj Close']  # Manter como Series
+                dados[ticker] = data['Adj Close']
             elif 'Close' in data.columns:
-                dados[ticker] = data['Close']  # Manter como Series
+                dados[ticker] = data['Close']
             else:
                 continue
         except Exception as e:
             st.warning(f"Erro ao carregar dados para {ticker}: {e}")
             continue
-    
+
     if not dados:
         st.error("Não há dados suficientes para calcular a alocação de portfólio.")
         return pd.DataFrame(), pd.DataFrame()
 
-    # Verificar se os dados têm o formato correto para construção do DataFrame
     if isinstance(dados, dict) and all(isinstance(v, pd.Series) for v in dados.values()):
         df_dados = pd.DataFrame(dados)
         df_dados = df_dados.fillna(method='ffill').fillna(method='bfill')
@@ -58,14 +57,13 @@ else:
         media_retornos = mean_historical_return(precos)
     except Exception as e:
         st.error(f"Erro ao calcular a média de retornos: {e}")
-    
-    # Garantir que a matriz de covariância não contenha NaN
+
     try:
-        matriz_cov = CovarianceShrinkage(precos).ledoit_wolf()  # Cálculo da matriz de covariância
+        matriz_cov = CovarianceShrinkage(precos).ledoit_wolf()
     except ValueError as e:
         st.error(f"Erro ao calcular a matriz de covariância: {e}")
-    
-    # Funções de alocação
+
+    # Funções de alocação corrigidas
     def alocacao_hrp(returns):
         cov = returns.cov()
         hrp = HRPOpt(returns=returns, cov_matrix=cov)
@@ -76,9 +74,12 @@ else:
         hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
         pesos_hrp = hrp.optimize()
         tickers_hrp = list(pesos_hrp.keys())
-        
-        ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
-        pesos_sharpe = ef.max_sharpe(risk_free_rate=0.03)  # Definindo uma taxa livre de risco
+
+        media = media_ret[tickers_hrp].squeeze()
+        cov = cov_matrix.loc[tickers_hrp, tickers_hrp]
+
+        ef = EfficientFrontier(media, cov)
+        ef.max_sharpe(risk_free_rate=0.03)
         return ef.clean_weights()
 
     def alocacao_hrp_maior_retorno(returns, media_ret, cov_matrix):
@@ -86,7 +87,10 @@ else:
         pesos_hrp = hrp.optimize()
         tickers_hrp = list(pesos_hrp.keys())
 
-        ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
+        media = media_ret[tickers_hrp].squeeze()
+        cov = cov_matrix.loc[tickers_hrp, tickers_hrp]
+
+        ef = EfficientFrontier(media, cov)
         ef.max_quadratic_utility()
         return ef.clean_weights()
 
@@ -95,11 +99,14 @@ else:
         pesos_hrp = hrp.optimize()
         tickers_hrp = list(pesos_hrp.keys())
 
-        ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
+        media = media_ret[tickers_hrp].squeeze()
+        cov = cov_matrix.loc[tickers_hrp, tickers_hrp]
+
+        ef = EfficientFrontier(media, cov)
         ef.min_volatility()
         return ef.clean_weights()
 
-    # Seção de múltiplos cenários macroeconômicos
+    # Seção de múltiplos cenários
     st.header("🌐 Cenários Macroeconômicos Atuais")
     cenarios = {
         "Inflação em alta": ["Setores defensivos", "Utilidades públicas", "Energia"],
