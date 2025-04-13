@@ -6,6 +6,7 @@ from pypfopt.expected_returns import mean_historical_return
 from pypfopt.risk_models import CovarianceShrinkage
 from pypfopt.hierarchical_portfolio import HRPOpt
 from pypfopt.efficient_frontier import EfficientFrontier
+import time
 
 st.set_page_config(page_title="Alocação HRP + Estratégias", layout="wide")
 st.title("📈 Alocação com HRP + Estratégias Otimizadas")
@@ -30,6 +31,12 @@ def carregar_dados(tickers, start_date, end_date):
             dados[ticker] = yf.download(ticker, start=start_date, end=end_date)["Adj Close"]
         except Exception as e:
             st.warning(f"Falha ao baixar dados de {ticker}: {e}")
+            time.sleep(2)  # Espera 2 segundos antes de tentar novamente
+            try:
+                dados[ticker] = yf.download(ticker, start=start_date, end=end_date)["Adj Close"]
+            except Exception as e:
+                st.warning(f"Falha ao tentar novamente baixar dados de {ticker}: {e}")
+                continue
     
     # Converter para DataFrame e garantir que os tickers com falha sejam removidos
     df_dados = pd.DataFrame(dados)
@@ -42,8 +49,11 @@ precos, retornos = carregar_dados(tickers, start_date, end_date)
 if retornos.empty:
     st.error("Não há dados suficientes para calcular a alocação de portfólio.")
 else:
-    media_retornos = mean_historical_return(precos)
-
+    try:
+        media_retornos = mean_historical_return(precos)
+    except Exception as e:
+        st.error(f"Erro ao calcular a média de retornos: {e}")
+    
     # Garantir que a matriz de covariância não contenha NaN
     try:
         matriz_cov = CovarianceShrinkage(precos).ledoit_wolf()  # Cálculo da matriz de covariância
