@@ -8,11 +8,29 @@ from scipy.optimize import minimize
 
 # ========= DICIONÁRIOS ==========
 setores_por_ticker = {
-    'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
-    'EGIE3.SA': 'Utilidades', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
-    'ABEV3.SA': 'Consumo básico', 'B3SA3.SA': 'Financeiro', 'MGLU3.SA': 'Consumo discricionário',
-    'HAPV3.SA': 'Saúde', 'RADL3.SA': 'Saúde', 'RENT3.SA': 'Consumo discricionário',
-    'VALE3.SA': 'Indústria', 'TOTS3.SA': 'Tecnologia',
+    'AGRO3.SA': 'Consumo básico',
+    'BBAS3.SA': 'Financeiro',
+    'BBSE3.SA': 'Financeiro',
+    'BPAC11.SA': 'Financeiro',
+    'EGIE3.SA': 'Utilidades',
+    'ITUB3.SA': 'Financeiro',
+    'PRIO3.SA': 'Energia',
+    'PSSA3.SA': 'Financeiro',
+    'SAPR3.SA': 'Utilidades',
+    'SBSP3.SA': 'Utilidades',
+    'VIVT3.SA': 'Comunicações',
+    'WEGE3.SA': 'Indústria',
+    'TOTS3.SA': 'Tecnologia',
+    'B3SA3.SA': 'Financeiro',
+    'TAEE3.SA': 'Utilidades',
+    'PETR4.SA': 'Energia',
+    'LREN3.SA': 'Consumo discricionário',
+    'ABEV3.SA': 'Consumo básico',
+    'MGLU3.SA': 'Consumo discricionário',
+    'HAPV3.SA': 'Saúde',
+    'RADL3.SA': 'Saúde',
+    'RENT3.SA': 'Consumo discricionário',
+    'VALE3.SA': 'Indústria'
 }
 
 setores_por_cenario = {
