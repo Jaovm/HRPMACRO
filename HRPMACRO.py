@@ -164,15 +164,7 @@ def exibir_grafico_alocacao(df_resultado):
     st.plotly_chart(fig, use_container_width=True)
 
 # ========= INTERFACE STREAMLIT ==========
-st.set_page_config(page_title="Alocação de Carteira Macro", layout="wide")
-st.title("Análise e Alocação de Carteira com Base no Cenário Macroeconômico")
-
-carteira = st.multiselect("Selecione os ativos da carteira:", list(setores_por_ticker.keys()), default=list(setores_por_ticker.keys()))
-if st.button("Analisar carteira"):
-    with st.spinner("Obtendo dados macroeconômicos e de mercado..."):
-        macro = obter_macro()
-        cenario = classificar_cenario_macro(macro)
-        st.subheader("📌 Informe sua carteira atual")
+st.subheader("📌 Informe sua carteira atual")
 default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
 tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
