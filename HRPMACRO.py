@@ -232,6 +232,14 @@ st.subheader("📌 Informe sua carteira atual")
 default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
 tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
+pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
+try:
+    pesos_atuais = np.array([float(p.strip()) for p in pesos_input.split(",")])
+    pesos_atuais /= pesos_atuais.sum()  # normaliza para 100%
+except:
+    st.error("Erro ao interpretar os pesos. Verifique se estão separados por vírgula e correspondem aos tickers.")
+    st.stop()
+
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
@@ -253,10 +261,19 @@ if st.button("Gerar Alocação Otimizada"):
                 df_resultado = pd.DataFrame(ativos_validos)
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
                 df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
+                # Cálculo de novos pesos considerando carteira anterior + novo aporte
+                valores_atuais = pesos_atuais * (1000000)  # assume carteira de R$1.000.000 como base
+                valores_aporte = pesos * aporte
+                valores_totais = valores_atuais + valores_aporte
+                pesos_finais = valores_totais / valores_totais.sum()
+
+                df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
+
                 df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
 
                 st.success("✅ Carteira otimizada com sucesso!")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)"]])
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
+
             else:
                 st.error("Falha na otimização da carteira.")
         except Exception as e:
