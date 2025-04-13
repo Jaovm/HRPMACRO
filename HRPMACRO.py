@@ -159,27 +159,45 @@ st.info(f"**Cenário Atual:** {cenario}")
 tickers = list(carteira_atual.keys())
 aporte_mensal = st.number_input("Aporte mensal (R$)", min_value=0, value=500)
 
-if st.button("Gerar Alocação Pós-Aporte"):
-    ativos_validos = filtrar_ativos_validos(tickers, cenario)
+if st.button("Gerar Alocação com Aporte e Sugestões"):
+    ativos_validos = filtrar_ativos_validos(carteira, cenario)
 
     if not ativos_validos:
-        st.warning("Nenhum ativo está com preço atrativo.")
+        st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
     else:
         tickers_validos = [a['ticker'] for a in ativos_validos]
-        pesos_setor = {setor: 1 for setor in setores_por_cenario[cenario]}
-        pesos = otimizar_carteira_sharpe(tickers_validos, pesos_setor=pesos_setor)
 
-        if pesos is not None:
-            df = pd.DataFrame(ativos_validos)
-            df["Alocação Atual (%)"] = df["ticker"].map(carteira_atual)
-            df["Nova Alocação (%)"] = (df["Alocação Atual (%)"] * 1000 + pesos * aporte_mensal) / (1000 + aporte_mensal) * 100
-            df["Aporte (R$)"] = (pesos * aporte_mensal).round(2)
-            df = df.sort_values("Nova Alocação (%)", ascending=False)
+        # Peso de cada setor baseado no cenário macroeconômico
+        pesos_setor = {setor: 1.2 if setor in setores_por_cenario[cenario] else 1 for setor in set(setores_por_ticker.values())}
 
-            st.success("✅ Alocação calculada com base no novo aporte.")
-            st.dataframe(df[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação Atual (%)", "Nova Alocação (%)", "Aporte (R$)", "favorecido"]])
+        try:
+            pesos = otimizar_carteira_sharpe(tickers_validos, pesos_setor=pesos_setor)
+            if pesos is not None:
+                df = pd.DataFrame(ativos_validos)
+                df["Alocação Atual (%)"] = df["ticker"].map(carteira_atual)
 
-            st.subheader("💡 Sugestões de Compra:")
-            for ativo in df.itertuples():
-                if ativo.favorecido:
-                    st.write(f"**{ativo.ticker}** (setor {ativo.setor}) está abaixo do preço-alvo e favorecido no cenário atual — comprar!")
+                # Cálculos em R$ (assumindo carteira atual de R$1000)
+                df["Valor Atual (R$)"] = df["Alocação Atual (%)"] / 100 * 1000
+                df["Aporte (R$)"] = (pesos * aporte_mensal).round(2)
+                df["Valor Total (R$)"] = df["Valor Atual (R$)"] + df["Aporte (R$)"]
+                df["Nova Alocação (%)"] = df["Valor Total (R$)"] / (1000 + aporte_mensal) * 100
+                df["Favorecido no Cenário"] = df["setor"].apply(lambda s: "✅" if s in setores_por_cenario[cenario] else "")
+
+                df = df.sort_values("Nova Alocação (%)", ascending=False)
+
+                st.success("✅ Alocação após o aporte gerada com base no cenário macroeconômico.")
+                st.dataframe(df[[
+                    "ticker", "setor", "preco_atual", "preco_alvo",
+                    "Alocação Atual (%)", "Nova Alocação (%)",
+                    "Aporte (R$)", "Favorecido no Cenário"
+                ]])
+
+                # Sugestões de compra
+                st.subheader("💡 Sugestões de Compra")
+                for ativo in df.itertuples():
+                    if ativo.preco_atual < ativo.preco_alvo:
+                        st.write(f"**{ativo.ticker}** | Setor: {ativo.setor} | Preço Atual: R$ {ativo.preco_atual:.2f} | Alvo: R$ {ativo.preco_alvo:.2f} {'✅ Favorecido' if ativo.setor in setores_por_cenario[cenario] else ''}")
+            else:
+                st.error("Falha na otimização da carteira.")
+        except Exception as e:
+            st.error(f"Erro na otimização: {str(e)}")
