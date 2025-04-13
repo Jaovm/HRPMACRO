@@ -8,7 +8,7 @@ import requests
 
 # Função para obter dados financeiros
 def obter_preco_diario_ajustado(tickers):
-    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Close']
+    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Adj Close']
     return df
 
 # Função para obter dados do Banco Central (BCB)
@@ -64,8 +64,16 @@ def calcular_hrp(tickers, retornos):
 def otimizar_carteira_hrp(tickers, min_pct=0.01, max_pct=0.30, pesos_setor=None):
     # Obtendo os dados de preço ajustado
     dados = obter_preco_diario_ajustado(tickers)
+    
+    # Verificando se os dados de retorno são válidos
+    if dados.empty:
+        st.warning("Os dados de preços estão vazios. Verifique os tickers ou o período.")
+        return None
+
+    # Calculando os retornos diários
     retornos = dados.pct_change().dropna()
 
+    # Verificando se existem valores nulos ou infinitos nos retornos
     if retornos.isnull().any().any() or np.isinf(retornos.values).any():
         st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
         return None
