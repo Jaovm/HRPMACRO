@@ -8,25 +8,24 @@ import requests
 def obter_preco_diario_ajustado(tickers):
     df = yf.download(tickers, start="2018-01-01", end="2025-01-01")
     
-    # Verificar todas as colunas disponíveis
+    # Verificar se existe 'Adj Close', senão usar 'Close'
     colunas_disponiveis = df.columns.tolist()
-    
-    # Preferir 'Adj Close', caso contrário, 'Close', caso contrário, qualquer coluna numérica
+
     if 'Adj Close' in colunas_disponiveis:
         return df['Adj Close']
     elif 'Close' in colunas_disponiveis:
         st.warning("A coluna 'Adj Close' não foi encontrada, utilizando 'Close'.")
         return df['Close']
     else:
-        # Procurar por uma coluna numérica que provavelmente representa os preços
+        # Caso não encontre, tenta pegar qualquer coluna numérica
         for coluna in colunas_disponiveis:
             if pd.api.types.is_numeric_dtype(df[coluna]):
                 st.warning(f"A coluna '{coluna}' foi usada como fallback para o preço.")
                 return df[coluna]
 
-    # Se nenhuma coluna adequada for encontrada, retornar erro
+    # Se não encontrar nenhuma coluna válida, retorna um DataFrame vazio
     st.error("Nenhuma coluna válida de preço ajustado ou fechado foi encontrada.")
-    return pd.DataFrame()  # Retorna um DataFrame vazio em caso de erro
+    return pd.DataFrame()
 
 # Função para obter dados do Banco Central (BCB)
 def get_bcb(code):
@@ -79,9 +78,9 @@ if st.button("Gerar Alocação Otimizada e Aporte"):
     if dados.empty:
         st.warning("Os dados de preços estão vazios. Verifique os tickers ou o período.")
     else:
-        # Verificar se o DataFrame tem um MultiIndex
+        # Se o DataFrame é um MultiIndex, precisamos processá-lo de forma diferente
         if isinstance(dados.columns, pd.MultiIndex):
-            # Caso tenha MultiIndex, acessar o nível correto
+            # Se for um MultiIndex, selecionamos o nível de interesse
             dados = dados.xs('Close', axis=1, level=0)
             st.warning("Usando preços de fechamento após desempacotar o MultiIndex.")
         
