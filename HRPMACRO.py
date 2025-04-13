@@ -28,12 +28,21 @@ def carregar_dados(tickers, start_date, end_date):
     dados = {}
     for ticker in tickers:
         try:
-            dados[ticker] = yf.download(ticker, start=start_date, end=end_date)["Adj Close"]
+            data = yf.download(ticker, start=start_date, end=end_date)
+            if 'Adj Close' in data.columns:
+                dados[ticker] = data['Adj Close']
+            else:
+                st.warning(f"Coluna 'Adj Close' não encontrada para {ticker}. Tentando com 'Close'.")
+                dados[ticker] = data['Close']
         except Exception as e:
             st.warning(f"Falha ao baixar dados de {ticker}: {e}")
             time.sleep(2)  # Espera 2 segundos antes de tentar novamente
             try:
-                dados[ticker] = yf.download(ticker, start=start_date, end=end_date)["Adj Close"]
+                data = yf.download(ticker, start=start_date, end=end_date)
+                if 'Adj Close' in data.columns:
+                    dados[ticker] = data['Adj Close']
+                else:
+                    dados[ticker] = data['Close']
             except Exception as e:
                 st.warning(f"Falha ao tentar novamente baixar dados de {ticker}: {e}")
                 continue
