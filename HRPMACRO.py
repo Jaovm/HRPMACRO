@@ -47,20 +47,26 @@ def carregar_dados(tickers, start_date, end_date):
                 st.warning(f"Falha ao tentar novamente baixar dados de {ticker}: {e}")
                 continue
 
-    # Verificar se algum dado foi baixado
+    # Verificar se o dicionário de dados está vazio
     if not dados:
         st.error("Não foi possível baixar dados para nenhum ativo.")
         return pd.DataFrame(), pd.DataFrame()
 
-    # Verificar se o dicionário de dados contém dados válidos
+    # Verificar se algum valor em `dados` é válido
     if all(v is None or len(v) == 0 for v in dados.values()):
         st.error("Os dados baixados estão vazios. Não há informações suficientes.")
         return pd.DataFrame(), pd.DataFrame()
 
-    # Converter para DataFrame e garantir que os tickers com falha sejam removidos
-    df_dados = pd.DataFrame(dados)
+    # Se os dados são válidos, criar DataFrame
+    try:
+        df_dados = pd.DataFrame(dados)
+    except Exception as e:
+        st.error(f"Erro ao criar DataFrame a partir dos dados: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+    # Verificar se o DataFrame resultante está vazio
     if df_dados.empty:
-        st.error("Não há dados suficientes para calcular a alocação de portfólio.")
+        st.error("O DataFrame resultante está vazio. Não há dados suficientes para calcular a alocação.")
         return pd.DataFrame(), pd.DataFrame()
 
     df_dados = df_dados.dropna(axis=1)  # Remove ativos com dados ausentes
