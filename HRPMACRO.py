@@ -148,7 +148,7 @@ def otimizar_carteira_hrp(tickers):
             sort_ix.index = range(sort_ix.shape[0])
         return sort_ix.tolist()
 
-   def otimizar_carteira_sharpe(tickers):
+def otimizar_carteira_sharpe(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
     media_retornos = retornos.mean()
