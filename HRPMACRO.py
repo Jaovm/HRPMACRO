@@ -221,6 +221,12 @@ def classificar_cenario_macro(m):
     else:
         return "Neutro"
 
+def obter_preco_atual(ticker):
+    try:
+        return yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
+    except:
+        return None
+
 # filtrar_ativos_validos(tickers, cenario, macro)
 def filtrar_ativos_validos(carteira, cenario, macro):
     setores_bons = setores_por_cenario[cenario]
