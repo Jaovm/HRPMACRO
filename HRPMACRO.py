@@ -27,9 +27,9 @@ def carregar_dados(tickers, start_date, end_date):
         try:
             data = yf.download(ticker, start=start_date, end=end_date)
             if 'Adj Close' in data.columns:
-                dados[ticker] = data['Adj Close'].tolist()  # Converte para lista
+                dados[ticker] = data['Adj Close']  # Manter como Series
             elif 'Close' in data.columns:
-                dados[ticker] = data['Close'].tolist()  # Converte para lista
+                dados[ticker] = data['Close']  # Manter como Series
             else:
                 continue
         except Exception as e:
@@ -41,7 +41,7 @@ def carregar_dados(tickers, start_date, end_date):
         return pd.DataFrame(), pd.DataFrame()
 
     # Verificar se os dados têm o formato correto para construção do DataFrame
-    if isinstance(dados, dict) and all(isinstance(v, list) for v in dados.values()):
+    if isinstance(dados, dict) and all(isinstance(v, pd.Series) for v in dados.values()):
         df_dados = pd.DataFrame(dados)
         df_dados = df_dados.fillna(method='ffill').fillna(method='bfill')
         retornos = df_dados.pct_change().dropna()
