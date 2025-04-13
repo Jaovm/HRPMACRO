@@ -24,7 +24,6 @@ end_date = st.sidebar.date_input("Data final", pd.to_datetime("2024-12-31"))
 
 @st.cache_data
 def carregar_dados(tickers, start_date, end_date):
-    # Tentar fazer o download dos dados
     dados = {}
     for ticker in tickers:
         try:
@@ -36,7 +35,7 @@ def carregar_dados(tickers, start_date, end_date):
                 dados[ticker] = data['Close']
         except Exception as e:
             st.warning(f"Falha ao baixar dados de {ticker}: {e}")
-            time.sleep(2)  # Espera 2 segundos antes de tentar novamente
+            time.sleep(2)
             try:
                 data = yf.download(ticker, start=start_date, end=end_date)
                 if 'Adj Close' in data.columns:
@@ -52,14 +51,20 @@ def carregar_dados(tickers, start_date, end_date):
         st.error("Não foi possível baixar dados para nenhum ativo.")
         return pd.DataFrame(), pd.DataFrame()
 
+    # Garantir que todos os dados estão no formato adequado
+    for ticker in dados:
+        if isinstance(dados[ticker], pd.Series):  # Caso o dado seja uma série, convertemos para uma lista
+            dados[ticker] = dados[ticker].values.tolist()
+
     # Verificar se algum valor em `dados` é válido
     if all(v is None or len(v) == 0 for v in dados.values()):
         st.error("Os dados baixados estão vazios. Não há informações suficientes.")
         return pd.DataFrame(), pd.DataFrame()
 
-    # Se os dados são válidos, criar DataFrame
+    # Criar o DataFrame e definir o índice com base nas datas
     try:
         df_dados = pd.DataFrame(dados)
+        df_dados.index = data.index  # Usar o índice de data do último ticker como índice
     except Exception as e:
         st.error(f"Erro ao criar DataFrame a partir dos dados: {e}")
         return pd.DataFrame(), pd.DataFrame()
