@@ -2,197 +2,248 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from scipy.optimize import minimize
-from sklearn.preprocessing import StandardScaler
 import requests
-import datetime
+from sklearn.covariance import LedoitWolf
+from scipy.cluster.hierarchy import linkage, dendrogram
+from scipy.spatial.distance import squareform
+from scipy.optimize import minimize
 
-def get_selic():
-    url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.4189/dados/ultimos/1?formato=json"
-    r = requests.get(url).json()
-    return float(r[0]['valor'].replace(',', '.'))
+# ========= DICIONÁRIOS ==========
 
-def get_ipca():
-    url = "https://servicodados.ibge.gov.br/api/v3/agregados/433/dados/ultimos/1"
-    r = requests.get(url).json()
-    return float(r[0]['resultados'][0]['series'][0]['serie'].values()[0])
+setores_por_ticker = {
+    'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
+    'EGIE3.SA': 'Energia', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
+    'ABEV3.SA': 'Consumo básico', 'B3SA3.SA': 'Financeiro', 'MGLU3.SA': 'Consumo discricionário',
+    'HAPV3.SA': 'Saúde', 'RADL3.SA': 'Saúde', 'RENT3.SA': 'Consumo discricionário',
+    'VALE3.SA': 'Indústria', 'TOTS3.SA': 'Tecnologia', 'AGRO3.SA': 'Agronegócio',
+    'BBAS3.SA': 'Financeiro', 'BBSE3.SA': 'Seguradoras', 'BPAC11.SA': 'Financeiro',
+    'PRIO3.SA': 'Petróleo', 'PSSA3.SA': 'Seguradoras', 'SAPR3.SA': 'Utilidades',
+    'SBSP3.SA': 'Utilidades', 'TAEE3.SA': 'Energia'
+}
 
-def get_pib():
-    url = "https://servicodados.ibge.gov.br/api/v3/agregados/5932/periodos/ultimo/variaveis/4099?localidades=N1[all]"
-    r = requests.get(url).json()
-    valor = list(r[0]['resultados'][0]['series'][0]['serie'].values())[0]
-    return float(valor)
+setores_por_cenario = {
+    "Expansionista": ['Consumo discricionário', 'Tecnologia', 'Indústria', 'Agronegócio'],
+    "Neutro": ['Saúde', 'Financeiro', 'Utilidades', 'Varejo', 'Seguradoras'],
+    "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico', 'Petróleo']
+}
 
-def get_cambio():
-    url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.1/dados/ultimos/1?formato=json"
-    r = requests.get(url).json()
-    return float(r[0]['valor'].replace(',', '.'))
+empresas_exportadoras = ['AGRO3.SA', 'PRIO3.SA']
 
-def get_petroleo():
-    hoje = datetime.datetime.today().strftime('%Y-%m-%d')
-    petroleo = yf.download('BZ=F', end=hoje, period='5d')  # Brent
-    return round(petroleo['Close'][-1], 2)
+# ========= MACRO ==========
+def get_bcb(code):
+    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
+    r = requests.get(url)
+    return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
 
-def classificar_cenario(selic, ipca, pib):
-    if selic > 10 and ipca > 6 and pib < 0.5:
+def obter_preco_petroleo():
+    try:
+        dados = yf.Ticker("CL=F").history(period="5d")
+        if not dados.empty and 'Close' in dados.columns:
+            return float(dados['Close'].dropna().iloc[-1])
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Erro ao obter preço do petróleo: {e}")
+        return None
+
+def obter_macro():
+    return {
+        "selic": get_bcb(432),
+        "ipca": get_bcb(433),
+        "dolar": get_bcb(1),
+        "petroleo": obter_preco_petroleo()
+    }
+
+def classificar_cenario_macro(m):
+    if m['ipca'] > 5 or m['selic'] > 12:
         return "Restritivo"
-    elif selic < 7 and ipca < 4 and pib > 1.5:
+    elif m['ipca'] < 4 and m['selic'] < 10:
         return "Expansionista"
     else:
         return "Neutro"
 
-with st.expander("Cenário Macroeconômico Atual"):
-    if st.button("Detectar Cenário Atual"):
-        with st.spinner("Buscando dados macroeconômicos..."):
-            try:
-                selic = get_selic()
-                ipca = get_ipca()
-                pib = get_pib()
-                cambio = get_cambio()
-                petroleo = get_petroleo()
-                cenario = classificar_cenario(selic, ipca, pib)
+# ========= PREÇO ALVO ==========
 
-                st.success(f"Cenário atual: **{cenario}**")
-                st.write(f"- SELIC: {selic:.2f}%")
-                st.write(f"- IPCA: {ipca:.2f}%")
-                st.write(f"- PIB: {pib:.2f}%")
-                st.write(f"- Câmbio: R$ {cambio:.2f}")
-                st.write(f"- Petróleo (Brent): US$ {petroleo}")
+def obter_preco_diario_ajustado(tickers, periodo='7y'):
+    dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
+    if len(tickers) == 1:
+        return dados['Adj Close'].to_frame()
+    else:
+        return dados['Adj Close']
 
-                st.session_state["cenario_atual"] = cenario
-            except Exception as e:
-                st.error("Erro ao buscar dados: " + str(e))
 
-setores_por_cenario = {
-    "Expansionista": ["Tecnologia", "Consumo", "Construção Civil", "Varejo", "Indústria"],
-    "Restritivo": ["Energia", "Saúde", "Utilidades Públicas", "Bancos", "Seguradoras"],
-    "Neutro": ["Telecom", "Exportadoras", "Serviços", "Bens de Capital"]
-}
+def otimizar_carteira_sharpe(tickers):
+    dados = obter_preco_diario_ajustado(tickers)
+    retornos = dados.pct_change().dropna()
+    media_retorno = retornos.mean()
+    cov = LedoitWolf().fit(retornos).covariance_
 
-setores_ativos = {
-    "AGRO3.SA": "Exportadoras",
-    "BBAS3.SA": "Bancos",
-    "BBSE3.SA": "Seguradoras",
-    "BPAC11.SA": "Bancos",
-    "EGIE3.SA": "Energia",
-    "ITUB3.SA": "Bancos",
-    "PRIO3.SA": "Petróleo",
-    "PSSA3.SA": "Seguradoras",
-    "SAPR3.SA": "Utilidades Públicas",
-    "SBSP3.SA": "Utilidades Públicas",
-    "VIVT3.SA": "Telecom",
-    "WEGE3.SA": "Indústria",
-    "TOTS3.SA": "Tecnologia",
-    "B3SA3.SA": "Serviços",
-    "TAEE3.SA": "Energia"
-}
+    def sharpe_neg(pesos):
+        retorno_esperado = np.dot(pesos, media_retorno)
+        volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+        return -retorno_esperado / volatilidade if volatilidade != 0 else 0
 
-def recomendar_ativos_por_cenario(cenario, setores_ativos, setores_por_cenario):
-    setores_favoraveis = setores_por_cenario.get(cenario, [])
-    recomendados = [
-        ativo for ativo, setor in setores_ativos.items()
-        if setor in setores_favoraveis
-    ]
-    return recomendados, setores_favoraveis
+    n = len(tickers)
+    pesos_iniciais = np.array([1/n] * n)
+    limites = [(0, 1) for _ in range(n)]
+    restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
-def calcular_score(ativo, upside, setor, cenario, historico_bom=None):
-    score = 0
-    pesos = {
-        "upside": 0.4,
-        "setor_favoravel": 0.3,
-        "historico": 0.2,
-        "exportadora": 0.1
-    }
+    resultado = minimize(sharpe_neg, pesos_iniciais, method='SLSQP', bounds=limites, constraints=restricoes)
 
-    score += pesos["upside"] * upside.get(ativo, 0)
-    if setor in setores_por_cenario.get(cenario, []):
-        score += pesos["setor_favoravel"]
-    if historico_bom and ativo in historico_bom:
-        score += pesos["historico"]
-    if setor == "Exportadoras" and cenario in ["Restritivo", "Neutro"]:  # dólar alto tende a favorecer exportadoras
-        score += pesos["exportadora"]
+    if resultado.success:
+        return resultado.x
+    else:
+        return None
 
-    return round(score, 3)
+def obter_preco_alvo(ticker):
+    try:
+        return yf.Ticker(ticker).info.get('targetMeanPrice', None)
+    except:
+        return None
 
-# Definindo a lista de ativos
-ativos = ['AGRO3.SA', 'BBAS3.SA', 'BBSE3.SA', 'BPAC11.SA', 'EGIE3.SA', 'ITUB3.SA', 'PRIO3.SA', 'PSSA3.SA', 'SAPR3.SA', 'SBSP3.SA', 'VIVT3.SA', 'WEGE3.SA', 'TOTS3.SA', 'B3SA3.SA', 'TAEE3.SA']
+def obter_preco_atual(ticker):
+    try:
+        return yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
+    except:
+        return None
 
-# Baixando os preços históricos dos ativos
-inicio = '2017-01-01'
-fim = '2025-01-01'
-precos = yf.download(ativos, start=inicio, end=fim)['Adj Close']
+# ========= FILTRAR AÇÕES ==========
+def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
+    upside = (preco_alvo - preco_atual) / preco_atual
+    bonus = 0.1 if favorecido else 0
+    if ticker in empresas_exportadoras:
+        if macro['dolar'] and macro['dolar'] > 5:
+            bonus += 0.05
+        if macro['petroleo'] and macro['petroleo'] > 80:
+            bonus += 0.05
+    return upside + bonus
 
-# Calculando os retornos diários dos ativos
-retornos = precos.pct_change().dropna()
+def filtrar_ativos_validos(carteira, cenario, macro):
+    setores_bons = setores_por_cenario[cenario]
+    ativos_validos = []
 
-# Calculando os retornos esperados e a matriz de covariância
-retornos_esperados = retornos.mean() * 252  # anualizado
-covariancia = retornos.cov() * 252  # anualizado
+    for ticker in carteira:
+        setor = setores_por_ticker.get(ticker, None)
+        preco_atual = obter_preco_atual(ticker)
+        preco_alvo = obter_preco_alvo(ticker)
 
-# Função para calcular o retorno do portfólio
-def calc_retorno(pesos):
-    return np.dot(pesos, retornos_esperados)
+        if preco_atual is None or preco_alvo is None:
+            continue
+        if preco_atual < preco_alvo:
+            favorecido = setor in setores_bons
+            score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro)
+            ativos_validos.append({
+                "ticker": ticker,
+                "setor": setor,
+                "preco_atual": preco_atual,
+                "preco_alvo": preco_alvo,
+                "favorecido": favorecido,
+                "score": score
+            })
 
-# Função para calcular o risco do portfólio
-def calc_risco(pesos):
-    return np.sqrt(np.dot(pesos.T, np.dot(covariancia, pesos)))
+    ativos_validos.sort(key=lambda x: x['score'], reverse=True)
+    return ativos_validos
 
-# Função objetivo (negativa do Sharpe ratio)
-def objetivo(pesos):
-    retorno_portfolio = calc_retorno(pesos)
-    risco_portfolio = calc_risco(pesos)
-    return -retorno_portfolio / risco_portfolio
+# ========= OTIMIZAÇÃO ==========
+def obter_preco_diario_ajustado(tickers):
+    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
 
-# Restrições
-restricao_soma = {'type': 'eq', 'fun': lambda pesos: np.sum(pesos) - 1}  # soma dos pesos deve ser 1
-restricoes = [restricao_soma]
+    if isinstance(dados_brutos.columns, pd.MultiIndex):
+        if 'Adj Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Adj Close']
+        elif 'Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Close']
+        else:
+            raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
+    else:
+        if 'Adj Close' in dados_brutos.columns:
+            return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
+        elif 'Close' in dados_brutos.columns:
+            return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
+        else:
+            raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-# Limite de pesos individuais
-limite = 0.05
-limites = [(0, limite) for _ in range(len(ativos))]
+def otimizar_carteira_hrp(tickers):
+    dados = obter_preco_diario_ajustado(tickers)
+    retornos = dados.pct_change().dropna()
+    dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
+    linkage_matrix = linkage(squareform(dist), method='single')
 
-# Função para otimizar o portfólio usando o método de minimização
-resultado = minimize(objetivo, [1/len(ativos)]*len(ativos), method='SLSQP', bounds=limites, constraints=restricoes)
-pesos_finais = dict(zip(ativos, resultado.x))
+    def get_quasi_diag(link):
+        link = link.astype(int)
+        sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
+        num_items = link[-1, 3]
+        while sort_ix.max() >= num_items:
+            sort_ix.index = range(0, sort_ix.shape[0]*2, 2)
+            df0 = sort_ix[sort_ix >= num_items]
+            i = df0.index
+            j = df0.values - num_items
+            sort_ix[i] = link[j, 0]
+            df1 = pd.Series(link[j, 1], index=i+1)
+            sort_ix = pd.concat([sort_ix, df1])
+            sort_ix = sort_ix.sort_index()
+            sort_ix.index = range(sort_ix.shape[0])
+        return sort_ix.tolist()
 
-# Calculando o desempenho acumulado do portfólio
-retorno_carteira = sum(retornos[ativo] * peso for ativo, peso in pesos_finais.items())
-retorno_acumulado_carteira = (1 + retorno_carteira).cumprod()
+    sort_ix = get_quasi_diag(linkage_matrix)
+    sorted_tickers = [retornos.columns[i] for i in sort_ix]
+    cov = LedoitWolf().fit(retornos).covariance_
+    ivp = 1. / np.diag(cov)
+    ivp /= ivp.sum()
 
-# Baixando os dados do IBOV para comparação
-precos_ibov = yf.download("^BVSP", start=inicio, end=fim)["Adj Close"]
-retornos_ibov = precos_ibov.pct_change().dropna()
-retorno_acumulado_ibov = (1 + retornos_ibov).cumprod()
+    def get_cluster_var(cov, cluster_items):
+        cov_slice = cov[np.ix_(cluster_items, cluster_items)]
+        w_ = 1. / np.diag(cov_slice)
+        w_ /= w_.sum()
+        return np.dot(w_, np.dot(cov_slice, w_))
 
-# Criando o painel comparativo entre a carteira e o IBOV
-df_comparativo = pd.DataFrame({
-    "Carteira Otimizada": retorno_acumulado_carteira,
-    "IBOV": retorno_acumulado_ibov
-}).dropna()
+    def recursive_bisection(cov, sort_ix):
+        w = pd.Series(1, index=sort_ix)
+        cluster_items = [sort_ix]
+        while len(cluster_items) > 0:
+            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
+            for i in range(0, len(cluster_items), 2):
+                c0 = cluster_items[i]
+                c1 = cluster_items[i + 1]
+                var0 = get_cluster_var(cov, c0)
+                var1 = get_cluster_var(cov, c1)
+                alpha = 1 - var0 / (var0 + var1)
+                w[c0] *= alpha
+                w[c1] *= 1 - alpha
+        return w
 
-# Calculando o score de cada ativo com base no retorno esperado, risco e setor
-# (Aqui, consideramos uma fórmula simples de score: Retorno Esperado / Risco)
-df_score = pd.DataFrame({
-    "Ativo": ativos,
-    "Score": [retornos_esperados[ativo] / np.sqrt(covariancia[ativo].sum()) for ativo in ativos]
-})
+    hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
+    return hrp_weights.values
 
-# Exibindo os scores
-st.subheader("🔍 Score de Ativos")
-st.dataframe(df_score)
+# ========= STREAMLIT ==========
+st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
+st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
 
-# Exibindo a alocação final
-st.subheader("📊 Alocação Final do Portfólio")
-df_alocacao = pd.DataFrame({
-    "Ativo": list(pesos_finais.keys()),
-    "Peso (%)": [round(p * 100, 2) for p in pesos_finais.values()]
-})
-st.dataframe(df_alocacao)
+macro = obter_macro()
+cenario = classificar_cenario_macro(macro)
+col1, col2 = st.columns(2)
 
-# Exportando a alocação para CSV
-csv = df_alocacao.to_csv(index=False).encode('utf-8')
-st.download_button("📥 Baixar Alocação (CSV)", data=csv, file_name="alocacao_portfolio.csv", mime='text/csv')
+with col1:
+    st.subheader("Cenário Macroeconômico Atual")
+    st.write(f"Cenário: **{cenario}**")
+    st.write(f"IPCA: {macro['ipca']}%")
+    st.write(f"Taxa SELIC: {macro['selic']}%")
+    st.write(f"Preço do Petróleo: US${macro['petroleo']}")
 
-# Exibindo o gráfico comparativo entre a carteira otimizada e o IBOV
-st.subheader("📊 Desempenho Carteira vs IBOV")
-st.line_chart(df_comparativo)
+with col2:
+    st.subheader("Carteira de Ativos")
+    st.write("Lista de ações e seus respectivos setores:")
+    st.write(setores_por_ticker)
+
+ativos_validos = filtrar_ativos_validos(setores_por_ticker.keys(), cenario, macro)
+st.subheader("Ações Mais Indicadas para o Cenário Atual")
+for ativo in ativos_validos:
+    st.write(f"**{ativo['ticker']}** - Setor: {ativo['setor']} - Score: {ativo['score']}")
+
+# Executar a otimização da carteira com Sharpe
+optimal_weights = otimizar_carteira_sharpe([ativo['ticker'] for ativo in ativos_validos])
+st.write("Pesos Otimizados (Sharpe):", optimal_weights)
+
+# Executar a otimização HRP
+hrp_weights = otimizar_carteira_hrp([ativo['ticker'] for ativo in ativos_validos])
+st.write("Pesos Otimizados (HRP):", hrp_weights)
