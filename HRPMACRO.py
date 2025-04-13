@@ -11,28 +11,24 @@ def obter_preco_diario_ajustado(tickers):
     df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Close']
     return df
 
-# Função para obter dados do Banco Central (BCB)
-def get_bcb(code):
-    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
-    r = requests.get(url)
-    return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
+# Função para calcular a covariância e diagnosticar problemas
+def diagnosticar_covariancia(retornos):
+    # Verificando dados ausentes ou infinitos
+    if retornos.isnull().any().any() or np.isinf(retornos.values).any():
+        st.error("Os dados de retornos contêm valores ausentes ou infinitos.")
+        return None
 
-# Função para obter dados macroeconômicos
-def obter_macro():
-    return {
-        "selic": get_bcb(432),
-        "ipca": get_bcb(433),
-        "dolar": get_bcb(1)
-    }
+    # Verificando a variabilidade dos dados (se os retornos são constantes)
+    if (retornos.std() == 0).any():
+        st.warning("Alguns ativos têm retornos constantes (sem variação). Isso pode causar problemas na otimização.")
+        return None
 
-# Função para classificar o cenário macroeconômico
-def classificar_cenario_macro(m):
-    if m['ipca'] > 5 or m['selic'] > 12:
-        return "Restritivo"
-    elif m['ipca'] < 4 and m['selic'] < 10:
-        return "Expansionista"
-    else:
-        return "Neutro"
+    # Calculando a covariância
+    cov = LedoitWolf().fit(retornos).covariance_
+    st.write(f"Matriz de covariância calculada:")
+    st.write(cov)
+
+    return cov
 
 # Função para calcular o HRP (Hierarchical Risk Parity)
 def calcular_hrp(tickers, retornos):
@@ -40,28 +36,18 @@ def calcular_hrp(tickers, retornos):
     if retornos.shape[0] < 2:
         raise ValueError("Número insuficiente de observações para calcular a matriz de distâncias.")
     
-    # Mostrando os retornos para depuração
-    st.write(f"Retornos dos ativos ({len(retornos)} observações):")
-    st.write(retornos.head())
-
-    # Calculando a matriz de covariância
-    cov = LedoitWolf().fit(retornos).covariance_
+    # Diagnóstico da covariância
+    cov = diagnosticar_covariancia(retornos)
+    if cov is None:
+        raise ValueError("A covariância não pôde ser calculada devido a problemas nos dados.")
     
-    # Verificando se a covariância é válida
-    if cov.size == 0:
-        raise ValueError("A matriz de covariância está vazia ou inválida.")
-    
-    # Imprimindo a covariância para depuração
-    st.write(f"Matriz de covariância calculada:")
-    st.write(cov)
-    
-    # Aplicando cluster hierárquico para determinar a estrutura de risco
+    # Calculando a matriz de distâncias
     try:
         dist_matrix = sch.distance.pdist(cov)
     except Exception as e:
         st.error(f"Erro ao calcular a matriz de distâncias: {e}")
         return None
-    
+
     # Verificando a forma da matriz de distâncias
     st.write(f"Matriz de distâncias calculada ({dist_matrix.shape[0]} elementos):")
     if dist_matrix.size == 0:
