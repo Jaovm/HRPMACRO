@@ -110,6 +110,6 @@ aporte = st.number_input("Valor do novo aporte (R$)", min_value=100.0, value=500
 if st.button("Gerar sugestão de alocação"):
     ativos_fav = [t for t in pesos_atuais.keys() if setores_por_ticker.get(t) in setores_favorecidos]
     if not ativos_fav:
-        st.warning("Nenhum ativo da carteira pertence aos setores favorecidos no cenário atual
+        st.warning("Nenhum ativo da carteira pertence aos setores favorecidos no cenário atual"
 ::contentReference[oaicite:9]{index=9}
  
