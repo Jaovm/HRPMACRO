@@ -24,13 +24,16 @@ end_date = st.sidebar.date_input("Data final", pd.to_datetime("2024-12-31"))
 @st.cache_data
 def carregar_dados(tickers, start_date, end_date):
     dados = yf.download(tickers, start=start_date, end=end_date)["Adj Close"]
-    dados = dados.dropna(axis=1)
-    retornos = dados.pct_change().dropna()
+    dados = dados.dropna(axis=1)  # Remove colunas com NaN
+    dados = dados.fillna(method='ffill').fillna(method='bfill')  # Preenche NaNs com valores anteriores ou seguintes
+    retornos = dados.pct_change().dropna()  # Calcula os retornos percentuais
     return dados, retornos
 
 precos, retornos = carregar_dados(tickers, start_date, end_date)
 media_retornos = mean_historical_return(precos)
-matriz_cov = CovarianceShrinkage(precos).ledoit_wolf()
+
+# Garantir que a matriz de covariância não contenha NaN
+matriz_cov = CovarianceShrinkage(precos).ledoit_wolf()  # Cálculo da matriz de covariância
 
 # Funções de alocação
 def alocacao_hrp(returns):
