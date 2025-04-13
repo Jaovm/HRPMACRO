@@ -12,27 +12,32 @@ st.title("📈 Alocação com HRP + Estratégias Otimizadas")
 
 # Função para obter dados econômicos da API
 def obter_dados_economicos():
-    # Exemplo de URL fictícia, substitua com as APIs reais que você tiver acesso
-    url_ipca = "https://api.ibge.gov.br/ipca"  # Exemplo de URL para IPCA
-    url_pib = "https://api.ibge.gov.br/pib"  # Exemplo de URL para PIB
-    url_selic = "https://api.bcb.gov.br/selic"  # Exemplo de URL para Selic
+    # URLs das APIs
+    url_ipca = "https://servicodados.ibge.gov.br/api/docs/ipca"
+    url_pib = "https://servicodados.ibge.gov.br/api/docs/pib"
+    url_selic = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/intervalo/2020-01-01/2025-01-01?formato=application/json"
     
     try:
-        ipca_data = requests.get(url_ipca).json()  # A API para o IPCA
-        pib_data = requests.get(url_pib).json()  # A API para o PIB
-        selic_data = requests.get(url_selic).json()  # A API para o Selic
+        # Obter dados do IPCA e PIB do IBGE
+        ipca_data = requests.get(url_ipca).json()  # Exemplo de URL para IPCA
+        pib_data = requests.get(url_pib).json()  # Exemplo de URL para PIB
+        selic_data = requests.get(url_selic).json()  # Exemplo de URL para Selic
         
-        ipca = ipca_data["valor"][-1]  # Último valor do IPCA
-        pib = pib_data["valor"][-1]  # Último valor do PIB
-        selic = selic_data["valor"][-1]  # Última taxa de Selic
+        ipca = ipca_data[-1]["valor"]  # Último valor do IPCA
+        pib = pib_data[-1]["valor"]  # Último valor do PIB
+        selic = selic_data[-1]["valor"]  # Última taxa de Selic
         
-        return ipca, pib, selic
+        # Obter Dólar e Petróleo usando yfinance
+        dolar = yf.download("USDBRL=X", period="1d")['Close'].iloc[-1]
+        petroleo = yf.download("CL=F", period="1d")['Close'].iloc[-1]
+        
+        return ipca, pib, selic, dolar, petroleo
     except Exception as e:
         st.error(f"Erro ao obter dados econômicos: {e}")
-        return None, None, None
+        return None, None, None, None, None
 
 # Função para detectar o cenário econômico com base nos dados
-def detectar_cenario(ipca, pib, selic):
+def detectar_cenario(ipca, pib, selic, dolar, petroleo):
     cenarios = []
     
     # Inflação
@@ -53,14 +58,26 @@ def detectar_cenario(ipca, pib, selic):
     else:  # PIB em queda
         cenarios.append("PIB desacelerando")
     
+    # Dólar
+    if dolar > 5.5:  # Dólar forte
+        cenarios.append("Dólar forte")
+    elif dolar < 4.5:  # Dólar fraco
+        cenarios.append("Dólar fraco")
+    
+    # Petróleo
+    if petroleo > 80:  # Preço do petróleo alto
+        cenarios.append("Petróleo em alta")
+    elif petroleo < 50:  # Preço do petróleo baixo
+        cenarios.append("Petróleo em baixa")
+    
     return cenarios
 
 # Carregar dados econômicos
-ipca, pib, selic = obter_dados_economicos()
+ipca, pib, selic, dolar, petroleo = obter_dados_economicos()
 
 # Verificar se conseguimos os dados
-if ipca is not None and pib is not None and selic is not None:
-    cenario_atual = detectar_cenario(ipca, pib, selic)
+if ipca is not None and pib is not None and selic is not None and dolar is not None and petroleo is not None:
+    cenario_atual = detectar_cenario(ipca, pib, selic, dolar, petroleo)
     st.sidebar.header("🌐 Cenário Macroeconômico Atual (Automático)")
     st.sidebar.write(f"Cenários detectados: {', '.join(cenario_atual)}")
 else:
@@ -142,9 +159,4 @@ if not retornos.empty:
         df = df[df["Peso (%)"] > 0.01]
         st.dataframe(df.set_index("Ativo").style.format("{:.2f}"))
 
-    exibir_pesos("HRP Puro", alocacao_hrp(retornos))
-    exibir_pesos("HRP + Sharpe", alocacao_hrp_sharpe(retornos, media_retornos, matriz_cov))
-    exibir_pesos("HRP + Maior Retorno", alocacao_hrp_maior_retorno(retornos, media_retornos, matriz_cov))
-    exibir_pesos("HRP + Menor Risco", alocacao_hrp_menor_risco(retornos, media_retornos, matriz_cov))
-else:
-    st.error("Não há dados suficientes para calcular a alocação de portfólio.")
+    exibir_pesos("HRP Puro",
