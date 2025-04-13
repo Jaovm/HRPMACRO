@@ -79,16 +79,30 @@ def filtrar_ativos_validos(carteira, cenario):
     return ativos_validos
 
 # ========= OTIMIZAÇÃO CORRIGIDA ==========
-def otimizar_carteira_sharpe(tickers, min_pct=0.05, max_pct=0.20):
-    dados_brutos = yf.download(tickers, period="3y", auto_adjust=True)
+def obter_preco_diario_ajustado(tickers):
+    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
 
-    # Corrige estrutura caso tenha apenas 1 ticker
     if isinstance(dados_brutos.columns, pd.MultiIndex):
-        dados = dados_brutos['Adj Close']
+        # Vários ativos — usa MultiIndex com 'Adj Close'
+        if 'Adj Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Adj Close']
+        elif 'Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Close']
+        else:
+            raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
     else:
-        dados = dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
+        # Apenas 1 ativo — dados_brutos tem colunas simples
+        if 'Adj Close' in dados_brutos.columns:
+            return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
+        elif 'Close' in dados_brutos.columns:
+            return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
+        else:
+            raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
+def otimizar_carteira_sharpe(tickers, min_pct=0.05, max_pct=0.20):
+    dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
+
     medias = retornos.mean() * 252
     cov = LedoitWolf().fit(retornos).covariance_
 
