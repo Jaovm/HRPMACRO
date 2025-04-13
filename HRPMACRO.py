@@ -79,7 +79,9 @@ def get_inflacao():
         if len(data) > 1:
             inflacao_data = [line.split(';') for line in data]
             try:
-                return float(inflacao_data[-1][1].replace(',', '.'))  # Última inflação
+                # Remover aspas e vírgula, depois converter para float
+                inflacao_value = inflacao_data[-1][1].replace('"', '').replace(',', '.')
+                return float(inflacao_value)  # Última inflação
             except (IndexError, ValueError) as e:
                 st.error(f"Erro ao acessar os dados de inflação: {e}")
                 return None
