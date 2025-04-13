@@ -8,51 +8,40 @@ import requests
 
 # Função para obter dados financeiros
 def obter_preco_diario_ajustado(tickers):
-    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Close']
+    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Adj Close']
     return df
 
-# Função para calcular a covariância e diagnosticar problemas
-def diagnosticar_covariancia(retornos):
-    # Verificando dados ausentes ou infinitos
-    if retornos.isnull().any().any() or np.isinf(retornos.values).any():
-        st.error("Os dados de retornos contêm valores ausentes ou infinitos.")
-        return None
+# Função para obter dados do Banco Central (BCB)
+def get_bcb(code):
+    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
+    r = requests.get(url)
+    return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
 
-    # Verificando a variabilidade dos dados (se os retornos são constantes)
-    if (retornos.std() == 0).any():
-        st.warning("Alguns ativos têm retornos constantes (sem variação). Isso pode causar problemas na otimização.")
-        return None
+# Função para obter dados macroeconômicos
+def obter_macro():
+    # Exemplo de dados fictícios, substitua com dados reais de uma API se necessário
+    return {
+        "selic": 13.75,  # Taxa de Selic
+        "ipca": 5.60,    # Inflação IPCA
+        "dolar": 5.10     # Preço do Dólar
+    }
 
-    # Calculando a covariância
-    cov = LedoitWolf().fit(retornos).covariance_
-    st.write(f"Matriz de covariância calculada:")
-    st.write(cov)
-
-    return cov
+# Função para classificar o cenário macroeconômico
+def classificar_cenario_macro(m):
+    if m['ipca'] > 5 or m['selic'] > 12:
+        return "Restritivo"
+    elif m['ipca'] < 4 and m['selic'] < 10:
+        return "Expansionista"
+    else:
+        return "Neutro"
 
 # Função para calcular o HRP (Hierarchical Risk Parity)
 def calcular_hrp(tickers, retornos):
-    # Verificando se há dados suficientes
-    if retornos.shape[0] < 2:
-        raise ValueError("Número insuficiente de observações para calcular a matriz de distâncias.")
-    
-    # Diagnóstico da covariância
-    cov = diagnosticar_covariancia(retornos)
-    if cov is None:
-        raise ValueError("A covariância não pôde ser calculada devido a problemas nos dados.")
-    
-    # Calculando a matriz de distâncias
-    try:
-        dist_matrix = sch.distance.pdist(cov)
-    except Exception as e:
-        st.error(f"Erro ao calcular a matriz de distâncias: {e}")
-        return None
+    # Calculando a matriz de covariância
+    cov = LedoitWolf().fit(retornos).covariance_
 
-    # Verificando a forma da matriz de distâncias
-    st.write(f"Matriz de distâncias calculada ({dist_matrix.shape[0]} elementos):")
-    if dist_matrix.size == 0:
-        raise ValueError("A matriz de distâncias está vazia. Verifique os dados.")
-    
+    # Aplicando cluster hierárquico para determinar a estrutura de risco
+    dist_matrix = sch.distance.pdist(cov)
     linkage = sch.linkage(dist_matrix, method='ward')
     
     # Obtendo a estrutura hierárquica
@@ -82,17 +71,8 @@ def otimizar_carteira_hrp(tickers, min_pct=0.01, max_pct=0.30, pesos_setor=None)
         st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
         return None
 
-    # Verificando se os dados de retornos são suficientes
-    if retornos.shape[0] < 2:
-        st.warning("Não há dados suficientes para calcular os retornos.")
-        return None
-
     # Aplicando o método HRP
-    try:
-        pesos = calcular_hrp(tickers, retornos)
-    except ValueError as e:
-        st.error(f"Erro na otimização: {str(e)}")
-        return None
+    pesos = calcular_hrp(tickers, retornos)
     
     # Ajustando os pesos para respeitar as restrições de alocação mínima e máxima
     pesos_ajustados = np.clip(pesos, min_pct, max_pct)
@@ -142,28 +122,30 @@ if st.button("Gerar Alocação Otimizada e Aporte"):
         # Peso de cada setor baseado no cenário macroeconômico
         pesos_setor = {setor: 1 for setor in ['Seguradoras', 'Bancos']}  # Exemplo de setores
 
-        # Otimizando a carteira com HRP
-        pesos = otimizar_carteira_hrp(tickers_validos, pesos_setor=pesos_setor)
-        
-        if pesos is not None:
-            # Calcula a nova alocação considerando o aporte
-            aporte_total = aporte_mensal
-            aporte_distribuido = pesos * aporte_total
-            
-            # Atualiza a tabela com os pesos atuais, novos e o aporte
-            df_resultado = pd.DataFrame(ativos_validos)
-            df_resultado["Alocação Atual (%)"] = 10  # Exemplo de alocação atual
-            df_resultado["Alocação Nova (%)"] = (pesos * 100).round(2)
-            df_resultado["Aporte (R$)"] = (aporte_distribuido).round(2)
-            df_resultado = df_resultado.sort_values("Alocação Nova (%)", ascending=False)
-            
-            st.success("✅ Carteira otimizada com o método HRP.")
-            st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação Atual (%)", "Alocação Nova (%)", "Aporte (R$)"]])
+        try:
+            # Otimizando a carteira com HRP
+            pesos = otimizar_carteira_hrp(tickers_validos, pesos_setor=pesos_setor)
+            if pesos is not None:
+                # Calcula a nova alocação considerando o aporte
+                aporte_total = aporte_mensal
+                aporte_distribuido = pesos * aporte_total
+                
+                # Atualiza a tabela com os pesos atuais, novos e o aporte
+                df_resultado = pd.DataFrame(ativos_validos)
+                df_resultado["Alocação Atual (%)"] = 10  # Exemplo de alocação atual
+                df_resultado["Alocação Nova (%)"] = (pesos * 100).round(2)
+                df_resultado["Aporte (R$)"] = (aporte_distribuido).round(2)
+                df_resultado = df_resultado.sort_values("Alocação Nova (%)", ascending=False)
+                
+                st.success("✅ Carteira otimizada com o método HRP.")
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação Atual (%)", "Alocação Nova (%)", "Aporte (R$)"]])
 
-            # Sugestões de compra
-            st.subheader("💡 Sugestões de Compra")
-            for ativo in ativos_validos:
-                if ativo['preco_atual'] < ativo['preco_alvo']:
-                    st.write(f"**{ativo['ticker']}** - Setor: {ativo['setor']} | Preço Atual: R$ {ativo['preco_atual']} | Preço Alvo: R$ {ativo['preco_alvo']} (Comprar!)")
-        else:
-            st.error("Falha na otimização da carteira.")
+                # Sugestões de compra
+                st.subheader("💡 Sugestões de Compra")
+                for ativo in ativos_validos:
+                    if ativo['preco_atual'] < ativo['preco_alvo']:
+                        st.write(f"**{ativo['ticker']}** - Setor: {ativo['setor']} | Preço Atual: R$ {ativo['preco_atual']} | Preço Alvo: R$ {ativo['preco_alvo']} (Comprar!)")
+            else:
+                st.error("Falha na otimização da carteira.")
+        except Exception as e:
+            st.error(f"Erro na otimização: {str(e)}")
