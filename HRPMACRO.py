@@ -143,7 +143,7 @@ def otimizar_carteira_hrp(tickers):
             j = df0.values - num_items
             sort_ix[i] = link[j, 0]
             df1 = pd.Series(link[j, 1], index=i+1)
-            sort_ix = sort_ix.append(df1)
+            sort_ix = pd.concat([sort_ix, df1])
             sort_ix = sort_ix.sort_index()
             sort_ix.index = range(sort_ix.shape[0])
         return sort_ix.tolist()
