@@ -8,7 +8,7 @@ import requests
 
 # Função para obter dados financeiros
 def obter_preco_diario_ajustado(tickers):
-    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Adj_Close']
+    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Adj Close']
     return df
 
 # Função para obter dados do Banco Central (BCB)
@@ -36,9 +36,13 @@ def classificar_cenario_macro(m):
 
 # Função para calcular o HRP (Hierarchical Risk Parity)
 def calcular_hrp(tickers, retornos):
-    # Calculando a matriz de covariância
+    # Verificar se existem retornos suficientes para calcular a matriz de covariância
+    if len(retornos) < 2:
+        raise ValueError("Não há dados suficientes para calcular a matriz de covariância.")
+    
+    # Calculando a matriz de covariância com Ledoit-Wolf para uma estimativa robusta
     cov = LedoitWolf().fit(retornos).covariance_
-
+    
     # Aplicando cluster hierárquico para determinar a estrutura de risco
     dist_matrix = sch.distance.pdist(cov)
     linkage = sch.linkage(dist_matrix, method='ward')
@@ -78,8 +82,17 @@ def otimizar_carteira_hrp(tickers, min_pct=0.01, max_pct=0.30, pesos_setor=None)
         st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
         return None
 
+    # Verificando se há dados suficientes para otimização
+    if len(retornos) < 2:
+        st.warning("Não há dados suficientes para realizar a otimização.")
+        return None
+
     # Aplicando o método HRP
-    pesos = calcular_hrp(tickers, retornos)
+    try:
+        pesos = calcular_hrp(tickers, retornos)
+    except ValueError as e:
+        st.error(str(e))
+        return None
     
     # Ajustando os pesos para respeitar as restrições de alocação mínima e máxima
     pesos_ajustados = np.clip(pesos, min_pct, max_pct)
