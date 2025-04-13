@@ -164,6 +164,18 @@ def exibir_grafico_alocacao(df_resultado):
     st.plotly_chart(fig, use_container_width=True)
 
 # ========= INTERFACE STREAMLIT ==========
+st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
+st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
+
+macro = obter_macro()
+cenario = classificar_cenario_macro(macro)
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Selic (%)", f"{macro['selic']:.2f}")
+col2.metric("Inflação IPCA (%)", f"{macro['ipca']:.2f}")
+col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
+col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
+st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
+
 st.subheader("📌 Informe sua carteira atual")
 default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
 tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
