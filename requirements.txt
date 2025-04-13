@@ -1,6 +1,8 @@
-streamlit==1.33.0
-pandas==2.2.1
-numpy>=1.26.0
-yfinance==0.2.38
-scikit-learn==1.4.1.post1
-git+https://github.com/robertmartin8/PyPortfolioOpt.git
+pandas
+numpy
+matplotlib
+yfinance
+scikit-learn
+streamlit
+PyPortfolioOpt
+pytz
