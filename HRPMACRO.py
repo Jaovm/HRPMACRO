@@ -4,34 +4,46 @@ import numpy as np
 import yfinance as yf
 import requests
 
-# Função para obter dados financeiros
+# Função para obter preços ajustados ou de fechamento
 def obter_preco_diario_ajustado(tickers):
-    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")
+    try:
+        # Baixar os dados
+        df = yf.download(tickers, start="2018-01-01", end="2025-01-01")
+        
+        # Verifica se há dados e se o dataframe tem colunas
+        if df.empty:
+            st.error("Os dados estão vazios para os tickers fornecidos.")
+            return pd.DataFrame()
+        
+        # Se a coluna 'Adj Close' existe, usa ela. Caso contrário, usa 'Close'
+        if 'Adj Close' in df.columns:
+            return df['Adj Close']
+        elif 'Close' in df.columns:
+            st.warning("A coluna 'Adj Close' não foi encontrada. Utilizando 'Close'.")
+            return df['Close']
+        else:
+            # Caso não haja nenhuma coluna válida, tenta usar a primeira coluna numérica
+            for coluna in df.columns:
+                if pd.api.types.is_numeric_dtype(df[coluna]):
+                    st.warning(f"A coluna '{coluna}' foi usada como fallback para o preço.")
+                    return df[coluna]
+        
+        st.error("Nenhuma coluna válida de preço ajustado ou fechado foi encontrada.")
+        return pd.DataFrame()
     
-    # Verificar se existe 'Adj Close', senão usar 'Close'
-    colunas_disponiveis = df.columns.tolist()
-
-    if 'Adj Close' in colunas_disponiveis:
-        return df['Adj Close']
-    elif 'Close' in colunas_disponiveis:
-        st.warning("A coluna 'Adj Close' não foi encontrada, utilizando 'Close'.")
-        return df['Close']
-    else:
-        # Caso não encontre, tenta pegar qualquer coluna numérica
-        for coluna in colunas_disponiveis:
-            if pd.api.types.is_numeric_dtype(df[coluna]):
-                st.warning(f"A coluna '{coluna}' foi usada como fallback para o preço.")
-                return df[coluna]
-
-    # Se não encontrar nenhuma coluna válida, retorna um DataFrame vazio
-    st.error("Nenhuma coluna válida de preço ajustado ou fechado foi encontrada.")
-    return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Erro ao baixar os dados de {tickers}: {e}")
+        return pd.DataFrame()
 
 # Função para obter dados do Banco Central (BCB)
 def get_bcb(code):
     url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
-    r = requests.get(url)
-    return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
+    try:
+        r = requests.get(url)
+        return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
+    except Exception as e:
+        st.error(f"Erro ao obter dados do Banco Central: {e}")
+        return None
 
 # Função para obter dados macroeconômicos
 def obter_macro():
@@ -78,20 +90,22 @@ if st.button("Gerar Alocação Otimizada e Aporte"):
     if dados.empty:
         st.warning("Os dados de preços estão vazios. Verifique os tickers ou o período.")
     else:
-        # Se o DataFrame é um MultiIndex, precisamos processá-lo de forma diferente
-        if isinstance(dados.columns, pd.MultiIndex):
-            # Se for um MultiIndex, selecionamos o nível de interesse
-            dados = dados.xs('Close', axis=1, level=0)
-            st.warning("Usando preços de fechamento após desempacotar o MultiIndex.")
-        
-        # Caso contrário, os dados são simples e já contêm os preços desejados
-        # Calculando os retornos diários
-        retornos = dados.pct_change().dropna()
+        # Verificando se a estrutura é um DataFrame e se o formato está correto
+        if isinstance(dados, pd.DataFrame):
+            # Caso os dados sejam um MultiIndex, tenta desembrulhar
+            if isinstance(dados.columns, pd.MultiIndex):
+                dados = dados.xs('Close', axis=1, level=0)
+                st.warning("Usando preços de fechamento após desempacotar o MultiIndex.")
+                
+            st.success("Dados carregados com sucesso.")
+            
+            # Calculando os retornos diários
+            retornos = dados.pct_change().dropna()
 
-        # Verificando se existem valores nulos ou infinitos nos retornos
-        if retornos.isnull().any().any() or np.isinf(retornos.values).any():
-            st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
-        else:
-            # Exemplo de exibição de retorno
-            st.success("Dados de retorno calculados com sucesso.")
-            st.dataframe(retornos.head())
+            # Verificando se existem valores nulos ou infinitos nos retornos
+            if retornos.isnull().any().any() or np.isinf(retornos.values).any():
+                st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
+            else:
+                # Exemplo de exibição de retorno
+                st.success("Dados de retorno calculados com sucesso.")
+                st.dataframe(retornos.head())
