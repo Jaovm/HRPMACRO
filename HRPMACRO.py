@@ -154,6 +154,31 @@ def otimizar_carteira_hrp(tickers):
     ivp = 1. / np.diag(cov)
     ivp /= ivp.sum()
 
+    def otimizar_carteira_sharpe(tickers):
+    dados = obter_preco_diario_ajustado(tickers)
+    retornos = dados.pct_change().dropna()
+    media_retornos = retornos.mean()
+    cov_matrix = LedoitWolf().fit(retornos).covariance_
+
+    num_ativos = len(tickers)
+    init_weights = np.array([1.0 / num_ativos] * num_ativos)
+    bounds = tuple((0, 1) for _ in range(num_ativos))
+    constraints = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+
+    def sharpe_neg(weights):
+        port_return = np.dot(weights, media_retornos)
+        port_std = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+        sharpe_ratio = port_return / port_std
+        return -sharpe_ratio
+
+    opt = minimize(sharpe_neg, init_weights, method='SLSQP', bounds=bounds, constraints=constraints)
+
+    if opt.success:
+        return opt.x
+    else:
+        return None
+
+
     def get_cluster_var(cov, cluster_items):
         cov_slice = cov[np.ix_(cluster_items, cluster_items)]
         w_ = 1. / np.diag(cov_slice)
