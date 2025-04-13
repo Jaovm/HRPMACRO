@@ -23,77 +23,91 @@ end_date = st.sidebar.date_input("Data final", pd.to_datetime("2024-12-31"))
 
 @st.cache_data
 def carregar_dados(tickers, start_date, end_date):
-    dados = yf.download(tickers, start=start_date, end=end_date)["Adj Close"]
-    dados = dados.dropna(axis=1)  # Remove colunas com NaN
-    dados = dados.fillna(method='ffill').fillna(method='bfill')  # Preenche NaNs com valores anteriores ou seguintes
-    retornos = dados.pct_change().dropna()  # Calcula os retornos percentuais
-    return dados, retornos
+    # Tentar fazer o download dos dados
+    dados = {}
+    for ticker in tickers:
+        try:
+            dados[ticker] = yf.download(ticker, start=start_date, end=end_date)["Adj Close"]
+        except Exception as e:
+            st.warning(f"Falha ao baixar dados de {ticker}: {e}")
+    
+    # Converter para DataFrame e garantir que os tickers com falha sejam removidos
+    df_dados = pd.DataFrame(dados)
+    df_dados = df_dados.dropna(axis=1)  # Remove ativos com dados ausentes
+    df_dados = df_dados.fillna(method='ffill').fillna(method='bfill')  # Preenche NaNs
+    retornos = df_dados.pct_change().dropna()  # Calcula os retornos percentuais
+    return df_dados, retornos
 
 precos, retornos = carregar_dados(tickers, start_date, end_date)
-media_retornos = mean_historical_return(precos)
+if retornos.empty:
+    st.error("Não há dados suficientes para calcular a alocação de portfólio.")
+else:
+    media_retornos = mean_historical_return(precos)
 
-# Garantir que a matriz de covariância não contenha NaN
-matriz_cov = CovarianceShrinkage(precos).ledoit_wolf()  # Cálculo da matriz de covariância
-
-# Funções de alocação
-def alocacao_hrp(returns):
-    cov = returns.cov()
-    hrp = HRPOpt(returns=returns, cov_matrix=cov)
-    pesos = hrp.optimize()
-    return pesos
-
-def alocacao_hrp_sharpe(returns, media_ret, cov_matrix):
-    hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
-    pesos_hrp = hrp.optimize()
-    tickers_hrp = list(pesos_hrp.keys())
+    # Garantir que a matriz de covariância não contenha NaN
+    try:
+        matriz_cov = CovarianceShrinkage(precos).ledoit_wolf()  # Cálculo da matriz de covariância
+    except ValueError as e:
+        st.error(f"Erro ao calcular a matriz de covariância: {e}")
     
-    # Cálculo do índice de Sharpe manualmente
-    ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
-    pesos_sharpe = ef.max_sharpe(risk_free_rate=0.03)  # Definindo uma taxa livre de risco
-    return ef.clean_weights()
+    # Funções de alocação
+    def alocacao_hrp(returns):
+        cov = returns.cov()
+        hrp = HRPOpt(returns=returns, cov_matrix=cov)
+        pesos = hrp.optimize()
+        return pesos
 
-def alocacao_hrp_maior_retorno(returns, media_ret, cov_matrix):
-    hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
-    pesos_hrp = hrp.optimize()
-    tickers_hrp = list(pesos_hrp.keys())
+    def alocacao_hrp_sharpe(returns, media_ret, cov_matrix):
+        hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
+        pesos_hrp = hrp.optimize()
+        tickers_hrp = list(pesos_hrp.keys())
+        
+        ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
+        pesos_sharpe = ef.max_sharpe(risk_free_rate=0.03)  # Definindo uma taxa livre de risco
+        return ef.clean_weights()
 
-    ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
-    ef.max_quadratic_utility()
-    return ef.clean_weights()
+    def alocacao_hrp_maior_retorno(returns, media_ret, cov_matrix):
+        hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
+        pesos_hrp = hrp.optimize()
+        tickers_hrp = list(pesos_hrp.keys())
 
-def alocacao_hrp_menor_risco(returns, media_ret, cov_matrix):
-    hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
-    pesos_hrp = hrp.optimize()
-    tickers_hrp = list(pesos_hrp.keys())
+        ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
+        ef.max_quadratic_utility()
+        return ef.clean_weights()
 
-    ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
-    ef.min_volatility()
-    return ef.clean_weights()
+    def alocacao_hrp_menor_risco(returns, media_ret, cov_matrix):
+        hrp = HRPOpt(returns=returns, cov_matrix=cov_matrix)
+        pesos_hrp = hrp.optimize()
+        tickers_hrp = list(pesos_hrp.keys())
 
-# Seção de múltiplos cenários macroeconômicos
-st.header("🌐 Cenários Macroeconômicos Atuais")
-cenarios = {
-    "Inflação em alta": ["Setores defensivos", "Utilidades públicas", "Energia"],
-    "Inflação em queda": ["Consumo discricionário", "Tecnologia"],
-    "Juros altos": ["Utilities", "Elétricas"],
-    "Juros baixos": ["Construção civil", "Financeiras"],
-    "PIB acelerando": ["Indústria", "Varejo", "Commodities"],
-    "PIB desacelerando": ["Saúde", "Serviços essenciais"]
-}
-for titulo, setores in cenarios.items():
-    st.markdown(f"**{titulo}** ➤ {', '.join(setores)}")
+        ef = EfficientFrontier(media_ret.loc[tickers_hrp], cov_matrix.loc[tickers_hrp, tickers_hrp])
+        ef.min_volatility()
+        return ef.clean_weights()
 
-# Resultado das alocações
-st.header("⚖️ Alocações Sugeridas com Base nas Estratégias")
+    # Seção de múltiplos cenários macroeconômicos
+    st.header("🌐 Cenários Macroeconômicos Atuais")
+    cenarios = {
+        "Inflação em alta": ["Setores defensivos", "Utilidades públicas", "Energia"],
+        "Inflação em queda": ["Consumo discricionário", "Tecnologia"],
+        "Juros altos": ["Utilities", "Elétricas"],
+        "Juros baixos": ["Construção civil", "Financeiras"],
+        "PIB acelerando": ["Indústria", "Varejo", "Commodities"],
+        "PIB desacelerando": ["Saúde", "Serviços essenciais"]
+    }
+    for titulo, setores in cenarios.items():
+        st.markdown(f"**{titulo}** ➤ {', '.join(setores)}")
 
-def exibir_pesos(nome_estrategia, pesos):
-    st.subheader(f"📌 {nome_estrategia}")
-    df = pd.DataFrame(pesos.items(), columns=["Ativo", "Peso (%)"])
-    df["Peso (%)"] = df["Peso (%)"] * 100
-    df = df[df["Peso (%)"] > 0.01]
-    st.dataframe(df.set_index("Ativo").style.format("{:.2f}"))
+    # Resultado das alocações
+    st.header("⚖️ Alocações Sugeridas com Base nas Estratégias")
 
-exibir_pesos("HRP Puro", alocacao_hrp(retornos))
-exibir_pesos("HRP + Sharpe", alocacao_hrp_sharpe(retornos, media_retornos, matriz_cov))
-exibir_pesos("HRP + Maior Retorno", alocacao_hrp_maior_retorno(retornos, media_retornos, matriz_cov))
-exibir_pesos("HRP + Menor Risco", alocacao_hrp_menor_risco(retornos, media_retornos, matriz_cov))
+    def exibir_pesos(nome_estrategia, pesos):
+        st.subheader(f"📌 {nome_estrategia}")
+        df = pd.DataFrame(pesos.items(), columns=["Ativo", "Peso (%)"])
+        df["Peso (%)"] = df["Peso (%)"] * 100
+        df = df[df["Peso (%)"] > 0.01]
+        st.dataframe(df.set_index("Ativo").style.format("{:.2f}"))
+
+    exibir_pesos("HRP Puro", alocacao_hrp(retornos))
+    exibir_pesos("HRP + Sharpe", alocacao_hrp_sharpe(retornos, media_retornos, matriz_cov))
+    exibir_pesos("HRP + Maior Retorno", alocacao_hrp_maior_retorno(retornos, media_retornos, matriz_cov))
+    exibir_pesos("HRP + Menor Risco", alocacao_hrp_menor_risco(retornos, media_retornos, matriz_cov))
