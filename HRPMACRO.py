@@ -1,7 +1,7 @@
 import streamlit as st
+import requests
 import pandas as pd
 import numpy as np
-import requests
 from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 import yfinance as yf
