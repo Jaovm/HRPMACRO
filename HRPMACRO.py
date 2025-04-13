@@ -86,6 +86,18 @@ def main():
     st.write(f"Taxa Selic: {selic}%")
     st.write(f"Meta de Inflação: {meta_inflacao}%")
     
+    # Analisando o cenário econômico para definir uma tendência
+    if inflacao_anual and inflacao_anual > meta_inflacao and selic >= 14.2:
+        st.write("Cenário: Alta inflação e Selic alta, tendência de recessão ou inflação controlada.")
+        cenario_macroeconomico = {
+            "setores_favorecidos": ["Energia", "Financeiro"]
+        }
+    else:
+        st.write("Cenário: Inflação controlada e Selic baixa, tendência de crescimento econômico.")
+        cenario_macroeconomico = {
+            "setores_favorecidos": ["Tecnologia", "Consumo", "Saúde"]
+        }
+
     # Definindo ativos selecionados e seus pesos atuais
     ativos_selecionados = {
         "AGRO3.SA": {"setor": "Agronegócio", "peso_atual": 0.10},
@@ -105,15 +117,12 @@ def main():
         "TAEE3.SA": {"setor": "Energia", "peso_atual": 0.05},
     }
 
-    # Simulando o cenário macroeconômico
-    cenario_macroeconomico = {
-        "setores_favorecidos": ["Energia", "Financeiro"]
-    }
-
     # Sugerindo nova alocação
     alocacao_sugerida = sugerir_alocacao_mercado(cenario_macroeconomico, pesos_atuais={}, ativos_selecionados=ativos_selecionados)
+    
     st.write("Nova alocação sugerida com base no cenário macroeconômico:")
-    st.write(alocacao_sugerida)
+    for ativo, peso in alocacao_sugerida.items():
+        st.write(f"{ativo}: {peso:.2%}")
 
 if __name__ == "__main__":
     main()
