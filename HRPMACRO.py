@@ -1,9 +1,5 @@
-import streamlit as st
-import yfinance as yf
-import numpy as np
 import requests
-import pandas as pd
-from scipy.optimize import minimize
+import streamlit as st
 
 # Função para obter os dados da taxa SELIC
 def get_selic():
@@ -13,11 +9,13 @@ def get_selic():
     if response.status_code == 200:
         data = response.text.splitlines()
         if len(data) > 1:
+            # Processando a última linha de dados (última taxa Selic disponível)
             selic_data = [line.split(';') for line in data]
-            # Retorna a última taxa Selic, convertendo corretamente para float
             selic = selic_data[-1][1].replace('"', '').replace(',', '.')
+            
+            # Tentando converter para float
             try:
-                return float(selic)  # Convertendo para float para garantir que seja numérico
+                return round(float(selic), 2)  # Converte para float e arredonda para duas casas decimais
             except ValueError:
                 st.error(f"Erro ao converter a Selic para número: {selic}")
                 return None
@@ -28,56 +26,13 @@ def get_selic():
         st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
         return None
 
-# Função para calcular a inflação anual com base nos últimos 12 meses
-def get_inflacao():
-    url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=csv'
-    response = requests.get(url)
-    
-    if response.status_code == 200:
-        data = response.text.splitlines()
-        if len(data) > 1:
-            inflacao_data = [line.split(';') for line in data]
-            
-            # Pegando os últimos 12 meses de inflação mensal
-            inflacao_mensal = [float(line[1].replace('"', '').replace(',', '.')) for line in inflacao_data[-12:]]
-            
-            # Calculando a inflação anual composta
-            inflacao_anual = np.prod([1 + (x / 100) for x in inflacao_mensal]) - 1
-            return round(inflacao_anual * 100, 2)  # Retorna a inflação anual em porcentagem
-        else:
-            st.error("Nenhum dado encontrado na resposta da API da inflação.")
-            return None
-    else:
-        st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
-        return None
-
-# Função para sugerir alocação da carteira com base no cenário macroeconômico
-def sugerir_alocacao_mercado(cenario_macroeconomico, pesos_atuais, ativos_selecionados):
-    setores_favorecidos = cenario_macroeconomico['setores_favorecidos']
-    alocacao_sugerida = pesos_atuais.copy()
-
-    for setor in setores_favorecidos:
-        # Filtrando ativos no setor favorecido
-        ativos_favorecidos = [ativo for ativo, dados in ativos_selecionados.items() if dados['setor'] == setor]
-        
-        # Atualizando o peso de ativos nos setores favorecidos
-        for ativo in ativos_favorecidos:
-            alocacao_sugerida[ativo] = pesos_atuais.get(ativo, 0) + 0.05  # Adiciona um peso extra de 5% aos setores favorecidos
-
-    # Normalizando os pesos para garantir que a soma seja 100%
-    soma_pesos = sum(alocacao_sugerida.values())
-    for ativo in alocacao_sugerida:
-        alocacao_sugerida[ativo] = alocacao_sugerida[ativo] / soma_pesos
-
-    return alocacao_sugerida
-
 # Função principal para exibir o app
 def main():
     st.title("Análise de Carteira de Investimentos e Cenário Macroeconômico")
 
     # Obter dados do cenário macroeconômico
     inflacao_anual = get_inflacao()
-    selic = get_selic()
+    selic = get_selic()  # Agora com a Selic corrigida
     meta_inflacao = 3.0  # Meta de inflação do Banco Central
 
     # Exibir cenário macroeconômico
