@@ -52,6 +52,11 @@ def carregar_dados(tickers, start_date, end_date):
         st.error("Não foi possível baixar dados para nenhum ativo.")
         return pd.DataFrame(), pd.DataFrame()
 
+    # Verificar se o dicionário de dados contém dados válidos
+    if all(v is None or len(v) == 0 for v in dados.values()):
+        st.error("Os dados baixados estão vazios. Não há informações suficientes.")
+        return pd.DataFrame(), pd.DataFrame()
+
     # Converter para DataFrame e garantir que os tickers com falha sejam removidos
     df_dados = pd.DataFrame(dados)
     if df_dados.empty:
