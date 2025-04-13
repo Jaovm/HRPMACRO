@@ -251,17 +251,17 @@ def filtrar_ativos_validos(carteira, cenario, macro):
             favorecido = setor in setores_bons
             score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro)
             ativos_validos.append({
-    "ticker": ticker,
-    "setor": setor,
-    "preco_atual": preco_atual,
-    "preco_alvo": preco_alvo,
-    "upside": (preco_alvo - preco_atual) / preco_atual,
-    "favorecido": favorecido,
-    "score": score
-})
-
+                "ticker": ticker,
+                "setor": setor,
+                "preco_atual": preco_atual,
+                "preco_alvo": preco_alvo,
+                "upside": (preco_alvo - preco_atual) / preco_atual,
+                "favorecido": favorecido,
+                "score": score
+            })
 
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
+    print("Ativos válidos:", ativos_validos)  # Verifique o conteúdo da lista
     return ativos_validos
 
 # ========= OTIMIZAÇÃO ==========
@@ -367,7 +367,7 @@ usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
 
-if ativos_validos is not None and len(ativos_validos) > 0:
+if ativos_validos:
     df_ativos = pd.DataFrame(ativos_validos)
     df_ativos['upside'] = df_ativos['upside'].apply(lambda x: f"{x:.1%}")
     df_ativos['score'] = df_ativos['score'].round(2)
@@ -380,6 +380,8 @@ if ativos_validos is not None and len(ativos_validos) > 0:
         'favorecido': 'Favorecido',
         'score': 'Score'
     })
+else:
+    print("Nenhum ativo válido encontrado.")
 
     if not ativos_validos:
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
