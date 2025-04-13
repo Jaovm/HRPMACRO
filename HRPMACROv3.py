@@ -37,66 +37,6 @@ def get_bcb(code):
 
 def obter_preco_petroleo():
     try:
-        return float(yf.Ticker("CL=F").history(period="1d")['Close'].iloc[-1])
-    except:
-        return None
-
-def obter_macro():
-    return {
-        "selic": get_bcb(432),
-        "ipca": get_bcb(433),
-        "dolar": get_bcb(1),
-        "petroleo": obter_preco_petroleo()
-    }
-
-def classificar_cenario_macro(m):
-    if m['ipca'] > 5 or m['selic'] > 12:
-        return "Restritivo"
-    elif m['ipca'] < 4 and m['selic'] < 10:
-        return "Expansionista"
-    else:
-        return "Neutro"
-
-# ========= PREÇO ALVO ==========
-import streamlit as st
-import pandas as pd
-import numpy as np
-import yfinance as yf
-import requests
-from sklearn.covariance import LedoitWolf
-from scipy.cluster.hierarchy import linkage, dendrogram
-from scipy.spatial.distance import squareform
-from scipy.optimize import minimize
-
-# ========= DICIONÁRIOS ==========
-
-setores_por_ticker = {
-    'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
-    'EGIE3.SA': 'Energia', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
-    'ABEV3.SA': 'Consumo básico', 'B3SA3.SA': 'Financeiro', 'MGLU3.SA': 'Consumo discricionário',
-    'HAPV3.SA': 'Saúde', 'RADL3.SA': 'Saúde', 'RENT3.SA': 'Consumo discricionário',
-    'VALE3.SA': 'Indústria', 'TOTS3.SA': 'Tecnologia', 'AGRO3.SA': 'Agronegócio',
-    'BBAS3.SA': 'Financeiro', 'BBSE3.SA': 'Seguradoras', 'BPAC11.SA': 'Financeiro',
-    'PRIO3.SA': 'Petróleo', 'PSSA3.SA': 'Seguradoras', 'SAPR3.SA': 'Utilidades',
-    'SBSP3.SA': 'Utilidades', 'TAEE3.SA': 'Energia'
-}
-
-setores_por_cenario = {
-    "Expansionista": ['Consumo discricionário', 'Tecnologia', 'Indústria', 'Agronegócio'],
-    "Neutro": ['Saúde', 'Financeiro', 'Utilidades', 'Varejo', 'Seguradoras'],
-    "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico', 'Petróleo']
-}
-
-empresas_exportadoras = ['AGRO3.SA', 'PRIO3.SA']
-
-# ========= MACRO ==========
-def get_bcb(code):
-    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
-    r = requests.get(url)
-    return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
-
-def obter_preco_petroleo():
-    try:
         dados = yf.Ticker("CL=F").history(period="5d")
         if not dados.empty and 'Close' in dados.columns:
             return float(dados['Close'].dropna().iloc[-1])
@@ -292,6 +232,14 @@ st.subheader("📌 Informe sua carteira atual")
 default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
 tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
+pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
+try:
+    pesos_atuais = np.array([float(p.strip()) for p in pesos_input.split(",")])
+    pesos_atuais /= pesos_atuais.sum()  # normaliza para 100%
+except:
+    st.error("Erro ao interpretar os pesos. Verifique se estão separados por vírgula e correspondem aos tickers.")
+    st.stop()
+
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
@@ -313,10 +261,30 @@ if st.button("Gerar Alocação Otimizada"):
                 df_resultado = pd.DataFrame(ativos_validos)
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
                 df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
+                # Cálculo de novos pesos considerando carteira anterior + novo aporte
+                # Filtra pesos atuais apenas para os ativos que estão na recomendação
+                tickers_resultado = df_resultado["ticker"].tolist()
+
+# Cria um dicionário de ticker -> peso original
+                pesos_dict = dict(zip(carteira, pesos_atuais))
+
+# Extrai os pesos apenas para os tickers selecionados
+                pesos_atuais_filtrados = np.array([pesos_dict[t] for t in tickers_resultado])
+
+# Continua o cálculo
+                valores_atuais = pesos_atuais_filtrados * 1000000  # exemplo: carteira anterior de 1 milhão
+
+                valores_aporte = pesos * aporte
+                valores_totais = valores_atuais + valores_aporte
+                pesos_finais = valores_totais / valores_totais.sum()
+
+                df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
+
                 df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
 
                 st.success("✅ Carteira otimizada com sucesso!")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)"]])
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
+
             else:
                 st.error("Falha na otimização da carteira.")
         except Exception as e:
