@@ -373,7 +373,7 @@ macro = obter_macro()
 cenario = classificar_cenario_macro(macro)
 
 st.subheader("📈 Cenário Macroeconômico Atual")
-st.write(f"**Selic:** {macro['selic']}% | **IPCA:** {macro['ipca']}% | **Dólar:** R${macro['dolar']} | **Petróleo:** ${macro['petroleo']}")
+st.write(f"**Selic:** {macro['selic']}% | **IPCA:** {macro['ipca']}% | **Dólar:** R${macro['dolar']} | *Petróleo:* ${macro['petroleo']}")
 st.markdown(f"**🧭 Cenário Classificado:** `{cenario}`")
 
 st.subheader("✅ Ativos com Preço-Alvo Abaixo do Atual e Favorecidos pelo Cenário")
