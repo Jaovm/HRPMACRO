@@ -147,6 +147,11 @@ else:
 # App
 st.title("Sugestão de Alocação de Aporte com HRP")
 
+# Exibir dados econômicos
+st.write(f"**Taxa SELIC atual:** {selic:.2f}%")
+st.write(f"**Inflação Anual:** {inflacao_anual:.2f}%")
+st.write(f"**Meta de Inflação:** {meta_inflacao}%")
+
 st.write(f"**Cenário Macroeconômico Atual:** {cenario}")
 st.write(f"**Setores Favorecidos:** {', '.join(setores_favorecidos)}")
 
