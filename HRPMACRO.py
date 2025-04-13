@@ -19,6 +19,7 @@ setores_por_ticker = {
     'ABCB4.SA': 'Bancos',
     'BRSR6.SA': 'Bancos',
     'BMGB4.SA': 'Bancos',
+    'BPAC11.SA': 'Bancos',
 
     # Seguradoras
     'BBSE3.SA': 'Seguradoras',
