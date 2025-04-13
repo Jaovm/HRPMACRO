@@ -57,8 +57,9 @@ def get_selic():
         if len(data) > 1:
             selic_data = [line.split(';') for line in data]
             try:
-                # Verificar se o formato está correto
-                return float(selic_data[-1][1].replace(',', '.'))  # Última taxa Selic
+                # Remover aspas da string e converter para float
+                selic_value = selic_data[-1][1].replace('"', '').replace(',', '.')
+                return float(selic_value)  # Última taxa Selic
             except (IndexError, ValueError) as e:
                 st.error(f"Erro ao acessar os dados da taxa Selic: {e}")
                 return None
