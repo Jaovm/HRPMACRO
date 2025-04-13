@@ -7,7 +7,6 @@ from sklearn.covariance import LedoitWolf
 from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
-import plotly.express as px
 
 # ========= DICIONÁRIOS ==========
 
@@ -29,21 +28,6 @@ setores_por_cenario = {
 }
 
 empresas_exportadoras = ['AGRO3.SA', 'PRIO3.SA']
-
-explicacoes_ativos = {
-    "PRIO3.SA": "Setor de petróleo, favorecido no cenário restritivo. Exportadora beneficiada pelo dólar alto e petróleo acima de US$80, o que deu bônus duplo no score. Historicamente teve bom retorno ajustado ao risco.",
-    "AGRO3.SA": "Exportadora agrícola, com bônus do dólar alto. Favorecida no cenário expansionista, mas o alto upside compensa o cenário atual. Bom Sharpe histórico.",
-    "WEGE3.SA": "Industrial que se beneficia de crescimento consistente e baixa volatilidade. Mesmo não sendo favorecida no cenário atual, tem Sharpe elevado.",
-    "SBSP3.SA": "Utilidade pública favorecida no cenário restritivo. Pode ter estabilidade e algum upside.",
-    "VIVT3.SA": "Do setor de utilidades, se beneficia de cenário restritivo. Estável e com bom histórico.",
-    "BBAS3.SA": "Banco com estabilidade e presença no setor financeiro, neutro no cenário atual.",
-    "BPAC11.SA": "Instituição financeira que pode ter alta volatilidade, mas bom retorno recente.",
-    "PSSA3.SA": "Seguradora com perfil defensivo, favorecida em cenários neutros e restritivos.",
-    "B3SA3.SA": "Do setor financeiro. Alta correlação com mercado, mas com bom desempenho histórico.",
-    "EGIE3.SA": "Empresa de energia elétrica. Estável, favorecida no cenário restritivo, mas retorno mais moderado.",
-    "BBSE3.SA": "Seguradora com perfil defensivo e retorno mais estável.",
-    "TOTS3.SA": "Tecnologia. Favorecida em cenário expansionista, mas no atual pode apresentar maior risco com menor retorno ajustado."
-}
 
 # ========= MACRO ==========
 def get_bcb(code):
@@ -88,9 +72,6 @@ def obter_preco_atual(ticker):
 
 # ========= FILTRAR AÇÕES ==========
 def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
-    if preco_atual is None or preco_alvo is None or preco_atual == 0:
-        return -np.inf  # Garante que esse ativo nunca será escolhido
-
     upside = (preco_alvo - preco_atual) / preco_atual
     bonus = 0.1 if favorecido else 0
     if ticker in empresas_exportadoras:
@@ -120,41 +101,126 @@ def filtrar_ativos_validos(carteira, cenario, macro):
                 "preco_atual": preco_atual,
                 "preco_alvo": preco_alvo,
                 "favorecido": favorecido,
-                "score": score,
-                "explicacao": explicacoes_ativos.get(ticker, "")
+                "score": score
             })
 
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
     return ativos_validos
 
-# ========= GRÁFICO DE ALOCAÇÃO ==========
-def exibir_grafico_alocacao(df_resultado):
-    fig = px.pie(
-        df_resultado,
-        names='ticker',
-        values='Alocação (%)',
-        title='Distribuição da Alocação por Ativo',
-        hole=0.4
-    )
-    fig.update_traces(textinfo='percent+label')
-    st.plotly_chart(fig, use_container_width=True)
+# ========= OTIMIZAÇÃO ==========
+def obter_preco_diario_ajustado(tickers):
+    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
 
-# ========= INTERFACE STREAMLIT ==========
-st.set_page_config(page_title="Alocação de Carteira Macro", layout="wide")
-st.title("Análise e Alocação de Carteira com Base no Cenário Macroeconômico")
-
-carteira = st.multiselect("Selecione os ativos da carteira:", list(setores_por_ticker.keys()), default=list(setores_por_ticker.keys()))
-if st.button("Analisar carteira"):
-    with st.spinner("Obtendo dados macroeconômicos e de mercado..."):
-        macro = obter_macro()
-        cenario = classificar_cenario_macro(macro)
-        st.subheader(f"Cenário Econômico Atual: {cenario}")
-        ativos_filtrados = filtrar_ativos_validos(carteira, cenario, macro)
-
-    if ativos_filtrados:
-        df_resultado = pd.DataFrame(ativos_filtrados)
-        df_resultado["Alocação (%)"] = 100 * df_resultado['score'] / df_resultado['score'].sum()
-        st.dataframe(df_resultado[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'Alocação (%)', 'explicacao']].set_index('ticker'))
-        exibir_grafico_alocacao(df_resultado)
+    if isinstance(dados_brutos.columns, pd.MultiIndex):
+        if 'Adj Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Adj Close']
+        elif 'Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Close']
+        else:
+            raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
     else:
-        st.warning("Nenhum ativo da carteira passou nos filtros de score e dados disponíveis.")
+        if 'Adj Close' in dados_brutos.columns:
+            return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
+        elif 'Close' in dados_brutos.columns:
+            return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
+        else:
+            raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
+
+def otimizar_carteira_hrp(tickers):
+    dados = obter_preco_diario_ajustado(tickers)
+    retornos = dados.pct_change().dropna()
+    dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
+    linkage_matrix = linkage(squareform(dist), method='single')
+
+    def get_quasi_diag(link):
+        link = link.astype(int)
+        sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
+        num_items = link[-1, 3]
+        while sort_ix.max() >= num_items:
+            sort_ix.index = range(0, sort_ix.shape[0]*2, 2)
+            df0 = sort_ix[sort_ix >= num_items]
+            i = df0.index
+            j = df0.values - num_items
+            sort_ix[i] = link[j, 0]
+            df1 = pd.Series(link[j, 1], index=i+1)
+            sort_ix = pd.concat([sort_ix, df1])
+            sort_ix = sort_ix.sort_index()
+            sort_ix.index = range(sort_ix.shape[0])
+        return sort_ix.tolist()
+
+    sort_ix = get_quasi_diag(linkage_matrix)
+    sorted_tickers = [retornos.columns[i] for i in sort_ix]
+    cov = LedoitWolf().fit(retornos).covariance_
+    ivp = 1. / np.diag(cov)
+    ivp /= ivp.sum()
+
+    def get_cluster_var(cov, cluster_items):
+        cov_slice = cov[np.ix_(cluster_items, cluster_items)]
+        w_ = 1. / np.diag(cov_slice)
+        w_ /= w_.sum()
+        return np.dot(w_, np.dot(cov_slice, w_))
+
+    def recursive_bisection(cov, sort_ix):
+        w = pd.Series(1, index=sort_ix)
+        cluster_items = [sort_ix]
+        while len(cluster_items) > 0:
+            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
+            for i in range(0, len(cluster_items), 2):
+                c0 = cluster_items[i]
+                c1 = cluster_items[i + 1]
+                var0 = get_cluster_var(cov, c0)
+                var1 = get_cluster_var(cov, c1)
+                alpha = 1 - var0 / (var0 + var1)
+                w[c0] *= alpha
+                w[c1] *= 1 - alpha
+        return w
+
+    hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
+    return hrp_weights.values
+
+# ========= STREAMLIT ==========
+st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
+st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
+
+macro = obter_macro()
+cenario = classificar_cenario_macro(macro)
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Selic (%)", f"{macro['selic']:.2f}")
+col2.metric("Inflação IPCA (%)", f"{macro['ipca']:.2f}")
+col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
+col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
+st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
+
+st.subheader("📌 Informe sua carteira atual")
+default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
+tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
+carteira = [t.strip() for t in tickers.split(",") if t.strip()]
+
+aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
+usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
+
+if st.button("Gerar Alocação Otimizada"):
+    ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
+
+    if not ativos_validos:
+        st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
+    else:
+        tickers_validos = [a['ticker'] for a in ativos_validos]
+        try:
+            if usar_hrp:
+                pesos = otimizar_carteira_hrp(tickers_validos)
+            else:
+                pesos = otimizar_carteira_sharpe(tickers_validos)
+
+            if pesos is not None:
+                df_resultado = pd.DataFrame(ativos_validos)
+                df_resultado["Alocação (%)"] = (pesos * 100).round(2)
+                df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
+                df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
+
+                st.success("✅ Carteira otimizada com sucesso!")
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)"]])
+            else:
+                st.error("Falha na otimização da carteira.")
+        except Exception as e:
+            st.error(f"Erro na otimização: {str(e)}")
