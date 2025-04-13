@@ -10,7 +10,7 @@ from scipy.optimize import minimize
 
 # ========= DICIONÁRIOS ==========
 
-setores_por_ticker = {
+ativos_setor = {
     # Bancos
     'ITUB4.SA': 'Bancos',
     'BBDC4.SA': 'Bancos',
@@ -347,7 +347,7 @@ col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] e
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
 st.subheader("📌 Informe sua carteira atual")
-default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
+default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB4.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE11.SA"
 tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
 pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
