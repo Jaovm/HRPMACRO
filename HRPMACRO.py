@@ -3,80 +3,72 @@ import yfinance as yf
 import pandas as pd
 import requests
 
-# --- Função para simular análise macroeconômica ---
-def analisar_cenario_macroeconomico():
-    # Aqui você pode integrar com APIs como TradingEconomics, FRED, etc.
-    # Por enquanto, vamos simular com base em dados fixos
-    dados_macro = {
-        "Selic": 10.75,
-        "Inflação (IPCA)": 4.1,
-        "PIB": 2.2,
-        "Emprego": "Estável",
-        "Cenário geral": "Neutro-positivo"
+# ========================
+# Funções auxiliares
+# ========================
+
+def obter_indicadores_macro():
+    # Simples placeholder de dados macro simulados
+    indicadores = {
+        "Taxa de Juros (Selic)": "10,75%",
+        "Inflação IPCA (12m)": "4,2%",
+        "PIB (último trimestre)": "0,7%",
+        "Dólar": "R$ 5,05",
+        "Commodity (Petróleo Brent)": "US$ 89,30"
     }
-    return dados_macro
+    return indicadores
 
-def avaliar_cenario(dados_macro):
-    if dados_macro["Selic"] < 11 and dados_macro["Inflação (IPCA)"] < 5:
-        return "positivo"
-    elif dados_macro["Selic"] > 13 or dados_macro["Inflação (IPCA)"] > 6:
-        return "negativo"
-    else:
-        return "neutro"
-
-# --- Função para obter preço atual do ativo ---
-def obter_preco_atual(ticker):
+def obter_preco_acao(ticker):
     try:
-        dados = yf.Ticker(ticker).history(period="1d")
-        preco = dados["Close"].iloc[-1]
-        return preco
-    except:
+        df = yf.Ticker(ticker).history(period="1d")
+        return df['Close'].iloc[-1]
+    except Exception:
         return None
 
-# --- Título ---
-st.title("📈 Análise Macro + Sugestões de Compra")
-
-# --- Entrada do usuário ---
-st.subheader("Carteira de Ativos")
-with st.expander("📋 Insira sua carteira e preço teto por ativo"):
-    carteira = st.text_area("Tickers (um por linha, formato: TICKER,PREÇO_TETO)", 
-                            "ITUB3.SA,32\nWEGE3.SA,40\nPRIO3.SA,48")
-    carteira_dict = {}
-    for linha in carteira.strip().split("\n"):
-        try:
-            ticker, teto = linha.split(",")
-            carteira_dict[ticker.strip().upper()] = float(teto)
-        except:
-            st.warning(f"Linha inválida: {linha}")
-
-# --- Análise macroeconômica ---
-st.subheader("🌍 Cenário Macroeconômico")
-dados_macro = analisar_cenario_macroeconomico()
-st.write(dados_macro)
-cenário = avaliar_cenario(dados_macro)
-st.markdown(f"**Cenário identificado: `{cenário.upper()}`**")
-
-# --- Sugestões de compra ---
-st.subheader("💡 Sugestões de Compra")
-if cenário == "negativo":
-    st.warning("O cenário macroeconômico atual não é favorável. Sugestão: aguardar.")
-else:
+def gerar_sugestoes(carteira, precos_teto, macro_estavel=True):
     sugestoes = []
-    for ticker, preco_teto in carteira_dict.items():
-        preco_atual = obter_preco_atual(ticker)
+    for ticker, preco_teto in precos_teto.items():
+        preco_atual = obter_preco_acao(ticker)
         if preco_atual is None:
-            st.error(f"Erro ao obter preço de {ticker}")
             continue
-        if preco_atual < preco_teto:
-            sugestoes.append((ticker, preco_atual, preco_teto))
-    
-    if sugestoes:
-        df_sugestoes = pd.DataFrame(sugestoes, columns=["Ticker", "Preço Atual", "Preço Teto"])
-        st.success("Ativos com preço abaixo do teto:")
-        st.dataframe(df_sugestoes)
-    else:
-        st.info("Nenhum ativo está abaixo do preço teto no momento.")
+        if preco_atual < preco_teto and macro_estavel:
+            sugestoes.append({
+                "Ticker": ticker,
+                "Preço Atual": round(preco_atual, 2),
+                "Preço Teto": preco_teto,
+                "Sugestão": "Comprar"
+            })
+    return pd.DataFrame(sugestoes)
 
-# --- Rodapé ---
-st.markdown("---")
-st.caption("Desenvolvido com ❤️ para investidores de longo prazo.")
+# ========================
+# App Streamlit
+# ========================
+
+st.title("📊 Análise Macroeconômica + Sugestões de Compra")
+
+st.subheader("1. Cenário Macroeconômico Atual")
+indicadores = obter_indicadores_macro()
+for nome, valor in indicadores.items():
+    st.markdown(f"- **{nome}**: {valor}")
+
+macro_estavel = st.checkbox("Considerar cenário macroeconômico estável para sugestões de compra?", value=True)
+
+st.subheader("2. Sua Carteira de Investimentos")
+carteira_input = st.text_area("Informe os tickers separados por vírgula (ex: WEGE3.SA,EGIE3.SA):")
+carteira = [ticker.strip().upper() for ticker in carteira_input.split(",") if ticker.strip()]
+
+st.subheader("3. Preços Teto dos Ativos")
+precos_teto = {}
+for ticker in carteira:
+    preco = st.number_input(f"Preço teto para {ticker}:", min_value=0.0, step=0.01)
+    precos_teto[ticker] = preco
+
+if st.button("Gerar Sugestões de Compra"):
+    with st.spinner("Analisando preços..."):
+        sugestoes_df = gerar_sugestoes(carteira, precos_teto, macro_estavel)
+    if sugestoes_df.empty:
+        st.warning("Nenhuma sugestão de compra com base nos critérios atuais.")
+    else:
+        st.success("Sugestões de compra geradas com base no cenário atual e nos preços teto.")
+        st.dataframe(sugestoes_df)
+
