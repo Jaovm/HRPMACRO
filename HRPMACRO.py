@@ -46,13 +46,21 @@ def calcular_hrp(tickers, retornos):
 
     # Calculando a matriz de covariância
     cov = LedoitWolf().fit(retornos).covariance_
-
+    
     # Verificando se a covariância é válida
     if cov.size == 0:
         raise ValueError("A matriz de covariância está vazia ou inválida.")
     
+    # Imprimindo a covariância para depuração
+    st.write(f"Matriz de covariância calculada:")
+    st.write(cov)
+    
     # Aplicando cluster hierárquico para determinar a estrutura de risco
-    dist_matrix = sch.distance.pdist(cov)
+    try:
+        dist_matrix = sch.distance.pdist(cov)
+    except Exception as e:
+        st.error(f"Erro ao calcular a matriz de distâncias: {e}")
+        return None
     
     # Verificando a forma da matriz de distâncias
     st.write(f"Matriz de distâncias calculada ({dist_matrix.shape[0]} elementos):")
