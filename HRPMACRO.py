@@ -100,28 +100,42 @@ def obter_preco_diario_ajustado(tickers):
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
 def otimizar_carteira_sharpe(tickers, min_pct=0.05, max_pct=0.20):
+    # Verifica se há dados ausentes ou inválidos nos retornos
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
 
+    # Verifica e limpa valores inválidos ou infinitos
+    if retornos.isnull().any().any() or np.isinf(retornos.values).any():
+        raise ValueError("Os dados de retornos contêm valores inválidos ou ausentes.")
+
+    # Calcula a média anualizada e a matriz de covariância com Ledoit-Wolf
     medias = retornos.mean() * 252
     cov = LedoitWolf().fit(retornos).covariance_
 
     n = len(tickers)
 
+    # Função de objetivo para maximizar o Sharpe
     def sharpe_neg(pesos):
         retorno_esperado = np.dot(pesos, medias)
         volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
         return -retorno_esperado / volatilidade
 
+    # Inicializa os pesos dentro das restrições e com a soma igual a 1
     init = np.array([1/n] * n)
-    bounds = tuple((min_pct, max_pct) for _ in range(n))
+
+    # Restrição para garantir que a soma dos pesos seja 1
     constraints = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
-    resultado = minimize(sharpe_neg, init, bounds=bounds, constraints=constraints)
+    # Restrições de alocação mínima e máxima por ativo
+    bounds = tuple((min_pct, max_pct) for _ in range(n))
+
+    # Tenta otimizar com uma abordagem mais robusta
+    resultado = minimize(sharpe_neg, init, bounds=bounds, constraints=constraints, method='SLSQP')
+
     if resultado.success:
         return resultado.x
     else:
-        raise ValueError("Otimização falhou.")
+        raise ValueError("Otimização falhou. Verifique se os dados estão corretos ou tente alterar as restrições.")
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
