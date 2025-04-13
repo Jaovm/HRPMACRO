@@ -126,37 +126,57 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_sharpe(tickers, min_pct=0.01, max_pct=0.30):
+def otimizar_carteira_hrp(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
+    dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
+    linkage_matrix = linkage(squareform(dist), method='single')
 
-    if retornos.isnull().any().any() or np.isinf(retornos.values).any():
-        st.warning("Os dados de retornos contêm valores inválidos ou ausentes.")
-        return None
+    def get_quasi_diag(link):
+        link = link.astype(int)
+        sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
+        num_items = link[-1, 3]
+        while sort_ix.max() >= num_items:
+            sort_ix.index = range(0, sort_ix.shape[0]*2, 2)
+            df0 = sort_ix[sort_ix >= num_items]
+            i = df0.index
+            j = df0.values - num_items
+            sort_ix[i] = link[j, 0]
+            df1 = pd.Series(link[j, 1], index=i+1)
+            sort_ix = sort_ix.append(df1)
+            sort_ix = sort_ix.sort_index()
+            sort_ix.index = range(sort_ix.shape[0])
+        return sort_ix.tolist()
 
-    medias = retornos.mean() * 252
+    sort_ix = get_quasi_diag(linkage_matrix)
+    sorted_tickers = [retornos.columns[i] for i in sort_ix]
     cov = LedoitWolf().fit(retornos).covariance_
-    n = len(tickers)
+    ivp = 1. / np.diag(cov)
+    ivp /= ivp.sum()
 
-    def sharpe_neg(pesos):
-        retorno_esperado = np.dot(pesos, medias)
-        volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
-        return -retorno_esperado / volatilidade
+    def get_cluster_var(cov, cluster_items):
+        cov_slice = cov[np.ix_(cluster_items, cluster_items)]
+        w_ = 1. / np.diag(cov_slice)
+        w_ /= w_.sum()
+        return np.dot(w_, np.dot(cov_slice, w_))
 
-    init = np.array([1/n] * n)
-    constraints = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
-    bounds = tuple((min_pct, max_pct) for _ in range(n))
+    def recursive_bisection(cov, sort_ix):
+        w = pd.Series(1, index=sort_ix)
+        cluster_items = [sort_ix]
+        while len(cluster_items) > 0:
+            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
+            for i in range(0, len(cluster_items), 2):
+                c0 = cluster_items[i]
+                c1 = cluster_items[i + 1]
+                var0 = get_cluster_var(cov, c0)
+                var1 = get_cluster_var(cov, c1)
+                alpha = 1 - var0 / (var0 + var1)
+                w[c0] *= alpha
+                w[c1] *= 1 - alpha
+        return w
 
-    try:
-        resultado = minimize(sharpe_neg, init, bounds=bounds, constraints=constraints, method='trust-constr')
-        if resultado.success:
-            return resultado.x
-        else:
-            st.error(f"Otimização falhou: {resultado.message}")
-            return None
-    except Exception as e:
-        st.error(f"Erro na otimização: {str(e)}")
-        return None
+    hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
+    return hrp_weights.values
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
@@ -177,6 +197,7 @@ tickers = st.text_input("Tickers separados por vírgula", default_carteira).uppe
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
+usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
@@ -186,14 +207,18 @@ if st.button("Gerar Alocação Otimizada"):
     else:
         tickers_validos = [a['ticker'] for a in ativos_validos]
         try:
-            pesos = otimizar_carteira_sharpe(tickers_validos)
+            if usar_hrp:
+                pesos = otimizar_carteira_hrp(tickers_validos)
+            else:
+                pesos = otimizar_carteira_sharpe(tickers_validos)
+
             if pesos is not None:
                 df_resultado = pd.DataFrame(ativos_validos)
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
                 df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
                 df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
 
-                st.success("✅ Carteira otimizada com Sharpe máximo e simulação de aporte mensal feita!")
+                st.success("✅ Carteira otimizada com sucesso!")
                 st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)"]])
             else:
                 st.error("Falha na otimização da carteira.")
