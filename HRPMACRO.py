@@ -14,7 +14,13 @@ def get_selic():
         data = response.text.splitlines()
         if len(data) > 1:
             selic_data = [line.split(';') for line in data]
-            return float(selic_data[-1][1].replace('"', '').replace(',', '.'))  # Última taxa Selic
+            # Retorna a última taxa Selic, convertendo corretamente para float
+            selic = selic_data[-1][1].replace('"', '').replace(',', '.')
+            try:
+                return float(selic)  # Convertendo para float para garantir que seja numérico
+            except ValueError:
+                st.error(f"Erro ao converter a Selic para número: {selic}")
+                return None
         else:
             st.error("Nenhum dado encontrado na resposta da API da SELIC.")
             return None
