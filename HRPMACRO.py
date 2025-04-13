@@ -83,43 +83,33 @@ setores_por_ticker = {
     'TAEE3.SA': 'Utilidades'
 }
 
-setores_favorecidos_restritivo = ['Utilidades', 'Energia', 'Consumo básico', 'Saúde']
+# Determinar automaticamente o cenário macroeconômico
+# Para simplificação, utilizamos dados fixos; em uma aplicação real, esses dados seriam obtidos de fontes atualizadas
+inflacao_anual = 5.48  # IPCA 12 meses até março de 2025
+selic = 14.25  # Taxa Selic atual
+meta_inflacao = 3.0  # Meta de inflação do Banco Central
+
+if inflacao_anual > meta_inflacao and selic >= 14.25:
+    cenario = 'Restritivo'
+    setores_favorecidos = ['Utilidades', 'Energia', 'Consumo básico', 'Saúde']
+elif inflacao_anual <= meta_inflacao and selic <= 10.0:
+    cenario = 'Expansivo'
+    setores_favorecidos = ['Tecnologia', 'Consumo discricionário', 'Financeiro']
+else:
+    cenario = 'Neutro'
+    setores_favorecidos = ['Indústria', 'Comunicações', 'Financeiro']
 
 # App
 st.title("Sugestão de Alocação de Aporte com HRP")
 
-cenario = st.selectbox("Cenário Macroeconômico Atual", ['Expansivo', 'Neutro', 'Restritivo'])
+st.write(f"**Cenário Macroeconômico Atual:** {cenario}")
+st.write(f"**Setores Favorecidos:** {', '.join(setores_favorecidos)}")
+
 aporte = st.number_input("Valor do novo aporte (R$)", min_value=100.0, value=5000.0, step=100.0)
 
 if st.button("Gerar sugestão de alocação"):
-    setores_favorecidos = setores_favorecidos_restritivo if cenario == 'Restritivo' else []
-
     ativos_fav = [t for t in pesos_atuais.keys() if setores_por_ticker.get(t) in setores_favorecidos]
     if not ativos_fav:
-        st.warning("Nenhum ativo da carteira pertence aos setores favorecidos no cenário atual.")
-    else:
-        st.write("Ativos favorecidos:", ativos_fav)
-
-        # Baixar dados de preço
-        df = yf.download(ativos_fav, period="1y")['Adj Close'].dropna()
-        retornos = df.pct_change().dropna()
-        corr = retornos.corr()
-        dist = correl_to_dist(corr)
-        link = linkage(squareform(dist), 'single')
-        sort_ix = get_quasi_diag(link)
-        ordered_tickers = retornos.columns[sort_ix]
-        cov = retornos.cov()
-        hrp_weights = get_recursive_bisection(cov, ordered_tickers)
-        hrp_weights /= hrp_weights.sum()
-        valores = hrp_weights * aporte
-
-        df_resultado = pd.DataFrame({
-            'Ativo': hrp_weights.index,
-            'Setor': [setores_por_ticker[t] for t in hrp_weights.index],
-            'Aporte Sugerido (R$)': valores.round(2).values
-        }).sort_values(by='Aporte Sugerido (R$)', ascending=False).reset_index(drop=True)
-
-        st.subheader("Sugestão de Aporte:")
-        st.dataframe(df_resultado)
-
-        st.bar_chart(df_resultado.set_index('Ativo')['Aporte Sugerido (R$)'])
+        st.warning("Nenhum ativo da carteira pertence aos setores favorecidos no cenário atual
+::contentReference[oaicite:9]{index=9}
+ 
