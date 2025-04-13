@@ -1,382 +1,90 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
-import yfinance as yf
-from scipy.optimize import minimize
-from sklearn.covariance import LedoitWolf
-from scipy.spatial.distance import squareform
-from scipy.cluster.hierarchy import linkage
 
-
-
-setores_por_ticker = {
-    # Bancos
-    'ITUB4.SA': 'Bancos',
-    'BBDC4.SA': 'Bancos',
-    'SANB11.SA': 'Bancos',
-    'BBAS3.SA': 'Bancos',
-    'ABCB4.SA': 'Bancos',
-    'BRSR6.SA': 'Bancos',
-    'BMGB4.SA': 'Bancos',
-    'BPAC11.SA': 'Bancos',
-
-    # Seguradoras
-    'BBSE3.SA': 'Seguradoras',
-    'PSSA3.SA': 'Seguradoras',
-    'SULA11.SA': 'Seguradoras',
-    'CXSE3.SA': 'Seguradoras',
-
-    # Bolsas e Serviços Financeiros
-    'B3SA3.SA': 'Bolsas e Serviços Financeiros',
-    'XPBR31.SA': 'Bolsas e Serviços Financeiros',
-
-    # Energia Elétrica
-    'EGIE3.SA': 'Energia Elétrica',
-    'CPLE6.SA': 'Energia Elétrica',
-    'TAEE11.SA': 'Energia Elétrica',
-    'CMIG4.SA': 'Energia Elétrica',
-    'AURE3.SA': 'Energia Elétrica',
-    'CPFE3.SA': 'Energia Elétrica',
-    'AESB3.SA': 'Energia Elétrica',
-
-    # Petróleo, Gás e Biocombustíveis
-    'PETR4.SA': 'Petróleo, Gás e Biocombustíveis',
-    'PRIO3.SA': 'Petróleo, Gás e Biocombustíveis',
-    'RECV3.SA': 'Petróleo, Gás e Biocombustíveis',
-    'RRRP3.SA': 'Petróleo, Gás e Biocombustíveis',
-    'UGPA3.SA': 'Petróleo, Gás e Biocombustíveis',
-    'VBBR3.SA': 'Petróleo, Gás e Biocombustíveis',
-
-    # Mineração e Siderurgia
-    'VALE3.SA': 'Mineração e Siderurgia',
-    'CSNA3.SA': 'Mineração e Siderurgia',
-    'GGBR4.SA': 'Mineração e Siderurgia',
-    'CMIN3.SA': 'Mineração e Siderurgia',
-    'GOAU4.SA': 'Mineração e Siderurgia',
-    'BRAP4.SA': 'Mineração e Siderurgia',
-
-    # Indústria e Bens de Capital
-    'WEGE3.SA': 'Indústria e Bens de Capital',
-    'RANI3.SA': 'Indústria e Bens de Capital',
-    'KLBN11.SA': 'Indústria e Bens de Capital',
-    'SUZB3.SA': 'Indústria e Bens de Capital',
-    'UNIP6.SA': 'Indústria e Bens de Capital',
-    'KEPL3.SA': 'Indústria e Bens de Capital',
-
-    # Agronegócio
-    'AGRO3.SA': 'Agronegócio',
-    'SLCE3.SA': 'Agronegócio',
-    'SMTO3.SA': 'Agronegócio',
-    'CAML3.SA': 'Agronegócio',
-
-    # Saúde
-    'HAPV3.SA': 'Saúde',
-    'FLRY3.SA': 'Saúde',
-    'RDOR3.SA': 'Saúde',
-    'QUAL3.SA': 'Saúde',
-    'RADL3.SA': 'Saúde',
-
-    # Tecnologia
-    'TOTS3.SA': 'Tecnologia',
-    'POSI3.SA': 'Tecnologia',
-    'LINX3.SA': 'Tecnologia',
-    'LWSA3.SA': 'Tecnologia',
-
-    # Consumo Discricionário
-    'MGLU3.SA': 'Consumo Discricionário',
-    'LREN3.SA': 'Consumo Discricionário',
-    'RENT3.SA': 'Consumo Discricionário',
-    'ARZZ3.SA': 'Consumo Discricionário',
-    'ALPA4.SA': 'Consumo Discricionário',
-
-    # Consumo Básico
-    'ABEV3.SA': 'Consumo Básico',
-    'NTCO3.SA': 'Consumo Básico',
-    'PCAR3.SA': 'Consumo Básico',
-    'MDIA3.SA': 'Consumo Básico',
-
-    # Comunicação
-    'VIVT3.SA': 'Comunicação',
-    'TIMS3.SA': 'Comunicação',
-    'OIBR3.SA': 'Comunicação',
-
-    # Utilidades Públicas
-    'SBSP3.SA': 'Utilidades Públicas',
-    'SAPR11.SA': 'Utilidades Públicas',
-    'CSMG3.SA': 'Utilidades Públicas',
-    'ALUP11.SA': 'Utilidades Públicas',
-    'CPLE6.SA': 'Utilidades Públicas',
-}
-
-
-setores_por_cenario = {
-    "Expansionista": [
-        'Consumo Discricionário',
-        'Tecnologia',
-        'Indústria e Bens de Capital',
-        'Agronegócio'
-    ],
-    "Neutro": [
-        'Saúde',
-        'Bancos',
-        'Seguradoras',
-        'Bolsas e Serviços Financeiros',
-        'Utilidades Públicas'
-    ],
-    "Restritivo": [
-        'Energia Elétrica',
-        'Petróleo, Gás e Biocombustíveis',
-        'Mineração e Siderurgia',
-        'Consumo Básico',
-        'Comunicação'
-    ]
-}
-
-empresas_exportadoras = [
-    'VALE3.SA',  # Mineração
-    'SUZB3.SA',  # Celulose
-    'KLBN11.SA', # Papel e Celulose
-    'AGRO3.SA',  # Agronegócio
-    'PRIO3.SA',  # Petróleo
-    'SLCE3.SA',  # Agronegócio
-    'SMTO3.SA',  # Açúcar e Etanol
-    'CSNA3.SA',  # Siderurgia
-    'GGBR4.SA',  # Siderurgia
-    'CMIN3.SA',  # Mineração
-]
-
-
-
-# Função para obter dados do Banco Central
-
-# Configuração da página
-st.set_page_config(page_title="Otimização de Carteira Inteligente", layout="wide", initial_sidebar_state="expanded")
-
-# ====== CABEÇALHO ======
+# Painel Principal
+st.set_page_config(page_title="Otimização de Carteira", layout="wide")
 st.title("\U0001F4C8 Otimização e Sugestão de Carteira")
+
 st.markdown("""
 Este painel permite:
 - **Análise macroeconômica automática** com dados do BCB e do mercado.
 - **Filtragem de ações** com base em cenário, preço-alvo e exportação.
 - **Otimização de carteira** via Sharpe e HRP.
+
 ---
 """)
 
-# ====== SIDEBAR ======
-with st.sidebar:
-    st.header("\U0001F9ED Navegação")
-    pagina = st.radio("Selecione a etapa:", [
-        "\U0001F4CC Introdução",
-        "\U0001F310 Análise Macroeconômica",
-        "\U0001F4C9 Otimização da Carteira",
-        "\U0001F4B5 Sugestão de Aporte",
-        "\u2705 Ranking de Ações"
-    ])
-    st.markdown("---")
-    st.caption("Desenvolvido por [Seu Nome] 💼")
+# Abas do Painel
+aba = st.sidebar.radio("Selecione uma seção:", [
+    "1. Análise Macroeconômica",
+    "2. Filtrar Ações por Cenário",
+    "3. Otimizar Carteira (Sharpe)",
+    "4. Otimizar Carteira (HRP)",
+    "5. Sugestão de Aporte"
+])
 
-# ====== FUNÇÕES AUXILIARES (Defina estas funções em outro arquivo e importe) ======
-# obter_macro()
-def get_bcb(code):
-    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
-    try:
-        r = requests.get(url)
-        if r.status_code == 200:
-            return float(r.json()[0]['valor'].replace(",", "."))
-        else:
-            st.warning(f"Não foi possível obter o dado com código {code} do BCB.")
-            return None
-    except Exception as e:
-        st.error(f"Erro ao acessar dados do BCB (código {code}): {e}")
-        return None
+if aba == "1. Análise Macroeconômica":
+    st.header("\U0001F4CA Indicadores Macroeconômicos")
+    macro = obter_macro()
+    cenario = classificar_cenario_macro(macro)
 
-# Função para obter o preço atual do barril de petróleo (WTI)
-def obter_preco_petroleo():
-    try:
-        dados = yf.Ticker("CL=F").history(period="5d")
-        if not dados.empty and 'Close' in dados.columns:
-            return float(dados['Close'].dropna().iloc[-1])
-        else:
-            return None
-    except Exception as e:
-        st.error(f"Erro ao obter preço do petróleo: {e}")
-        return None
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("SELIC (%)", f"{macro['selic']:.2f}")
+    col2.metric("IPCA (%)", f"{macro['ipca']:.2f}")
+    col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
+    col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}")
 
-# Função principal que reúne os dados macroeconômicos
-def obter_macro():
-    return {
-        "selic": get_bcb(432),       # Taxa Selic
-        "ipca": get_bcb(433),        # IPCA
-        "dolar": get_bcb(1),         # Dólar comercial
-        "petroleo": obter_preco_petroleo()  # Preço do petróleo WTI
-    }
+    st.success(f"**Cenário Macroeconômico Classificado:** {cenario}")
 
-# Função para classificar o cenário macroeconômico
-def classificar_cenario_macro(m):
-    if m['ipca'] > 5 or m['selic'] > 12:
-        return "Restritivo"
-    elif m['ipca'] < 4 and m['selic'] < 10:
-        return "Expansionista"
+elif aba == "2. Filtrar Ações por Cenário":
+    st.header("\U0001F50D Ações Interessantes para Compra")
+    tickers_input = st.text_area("Digite os tickers da sua carteira, separados por vírgula:",
+                                 value="AGRO3.SA,BBAS3.SA,BBSE3.SA,BPAC11.SA,EGIE3.SA,ITUB4.SA,PRIO3.SA,PSSA3.SA,SAPR11.SA,SBSP3.SA,VIVT3.SA,WEGE3.SA,TOTS3.SA,B3SA3.SA,TAEE11.SA")
+    tickers = [t.strip() for t in tickers_input.split(",") if t.strip() != ""]
+
+    macro = obter_macro()
+    cenario = classificar_cenario_macro(macro)
+    ativos_validos = filtrar_ativos_validos(tickers, cenario, macro)
+
+    if ativos_validos:
+        df_resultado = pd.DataFrame(ativos_validos)
+        st.dataframe(df_resultado.style.format({"preco_atual": "R$ {:.2f}", "preco_alvo": "R$ {:.2f}", "score": "{:.2%}"}))
     else:
-        return "Neutro"
+        st.warning("Nenhuma ação elegível encontrada com base no cenário atual.")
 
-def obter_preco_atual(ticker):
-    try:
-        return yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
-    except:
-        return None
+elif aba == "3. Otimizar Carteira (Sharpe)":
+    st.header("\U0001F4C9 Otimização via Índice de Sharpe")
+    tickers = st.text_input("Tickers da carteira (separados por vírgula):", value="AGRO3.SA,BBAS3.SA,PRIO3.SA,PSSA3.SA,WEGE3.SA")
+    tickers = [t.strip() for t in tickers.split(",") if t.strip() != ""]
 
+    if st.button("Otimizar"):
+        pesos = otimizar_carteira_sharpe(tickers)
+        if pesos is not None:
+            df = pd.DataFrame({"Ticker": tickers, "Peso (%)": np.round(pesos * 100, 2)})
+            st.dataframe(df)
+        else:
+            st.error("Erro na otimização da carteira.")
 
+elif aba == "4. Otimizar Carteira (HRP)":
+    st.header("\U0001F4C9 Otimização via HRP (Hierarchical Risk Parity)")
+    tickers = st.text_input("Tickers da carteira (separados por vírgula):", value="AGRO3.SA,BBAS3.SA,PRIO3.SA,PSSA3.SA,WEGE3.SA")
+    tickers = [t.strip() for t in tickers.split(",") if t.strip() != ""]
 
-# filtrar_ativos_validos(tickers, cenario, macro)
-def filtrar_ativos_validos(carteira, cenario, macro):
-    setores_bons = setores_por_cenario[cenario]
-    ativos_validos = []
+    if st.button("Rodar HRP"):
+        pesos = otimizar_carteira_hrp(tickers)
+        if pesos is not None:
+            df = pd.DataFrame({"Ticker": pesos.index, "Peso (%)": np.round(pesos.values * 100, 2)})
+            st.dataframe(df)
+        else:
+            st.error("Erro na otimização com HRP.")
 
-    for ticker in carteira:
-        setor = setores_por_ticker.get(ticker, None)
-        preco_atual = obter_preco_atual(ticker)
-        preco_alvo = obter_preco_alvo(ticker)
+elif aba == "5. Sugestão de Aporte":
+    st.header("\U0001F4B5 Sugestão de Aporte com Base no Cenário")
+    carteira_input = st.text_area("Tickers e alocações atuais (ex: AGRO3.SA:10,PRIO3.SA:15,...):",
+                                  value="AGRO3.SA:10,BBAS3.SA:1.2,BBSE3.SA:6.5,BPAC11.SA:10.6,EGIE3.SA:5,ITUB4.SA:0.5,PRIO3.SA:15,PSSA3.SA:15,SAPR11.SA:6.7,SBSP3.SA:4,VIVT3.SA:6.4,WEGE3.SA:15,TOTS3.SA:1,B3SA3.SA:0.1,TAEE11.SA:3")
 
-        if preco_atual is None or preco_alvo is None:
-            continue
-        if preco_atual < preco_alvo:
-            favorecido = setor in setores_bons
-            score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro)
-            ativos_validos.append({
-                "ticker": ticker,
-                "setor": setor,
-                "preco_atual": preco_atual,
-                "preco_alvo": preco_alvo,
-                "favorecido": favorecido,
-                "score": score
-            })
+    aporte = st.number_input("Valor do novo aporte (R$):", min_value=100.0, step=100.0)
 
-    ativos_validos.sort(key=lambda x: x['score'], reverse=True)
-    return ativos_validos
-    
-# otimizar_carteira_sharpe(tickers)
-
-def otimizar_carteira_sharpe(tickers):
-    dados = obter_preco_diario_ajustado(tickers)
-    retornos = dados.pct_change().dropna()
-    media_retorno = retornos.mean()
-    cov = LedoitWolf().fit(retornos).covariance_
-
-    def sharpe_neg(pesos):
-        retorno_esperado = np.dot(pesos, media_retorno)
-        volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
-        return -retorno_esperado / volatilidade if volatilidade != 0 else 0
-
-    n = len(tickers)
-    pesos_iniciais = np.array([1/n] * n)
-    limites = [(0, 1) for _ in range(n)]
-    restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
-
-    resultado = minimize(sharpe_neg, pesos_iniciais, method='SLSQP', bounds=limites, constraints=restricoes)
-
-    if resultado.success:
-        return resultado.x
-    else:
-        return None
-
-# otimizar_carteira_hrp(tickers)
-def otimizar_carteira_hrp(tickers):
-    dados = obter_preco_diario_ajustado(tickers)
-    retornos = dados.pct_change().dropna()
-    dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
-    linkage_matrix = linkage(squareform(dist), method='single')
-
-    def get_quasi_diag(link):
-        link = link.astype(int)
-        sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
-        num_items = link[-1, 3]
-        while sort_ix.max() >= num_items:
-            sort_ix.index = range(0, sort_ix.shape[0]*2, 2)
-            df0 = sort_ix[sort_ix >= num_items]
-            i = df0.index
-            j = df0.values - num_items
-            sort_ix[i] = link[j, 0]
-            df1 = pd.Series(link[j, 1], index=i+1)
-            sort_ix = pd.concat([sort_ix, df1])
-            sort_ix = sort_ix.sort_index()
-            sort_ix.index = range(sort_ix.shape[0])
-        return sort_ix.tolist()
-
-    sort_ix = get_quasi_diag(linkage_matrix)
-    sorted_tickers = [retornos.columns[i] for i in sort_ix]
-    cov = LedoitWolf().fit(retornos).covariance_
-    ivp = 1. / np.diag(cov)
-    ivp /= ivp.sum()
-
-# ====== FUNÇÃO PRINCIPAL ======
-def painel_inteligente():
-    if pagina == "\U0001F4CC Introdução":
-        st.subheader("Bem-vindo(a) à Otimização Inteligente de Carteira")
-        st.markdown("""
-        Este painel utiliza **dados macroeconômicos atualizados**, **preço-alvo dos analistas**, e técnicas modernas como **Hierarchical Risk Parity (HRP)** e **Otimização por Sharpe** para te ajudar a:
-
-        - **Identificar oportunidades de compra**
-        - **Sugerir alocações para novos aportes**
-        - **Otimizar sua carteira com base no cenário econômico atual**
-        ---
-        """)
-
-    elif pagina == "\U0001F310 Análise Macroeconômica":
-        st.subheader("\U0001F30E Cenário Macroeconômico Atual")
-        with st.spinner("Carregando dados macroeconômicos..."):
-            macro = obter_macro()
-            cenario = classificar_cenario_macro(macro)
-
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Selic", f"{macro['selic']:.2f}%")
-        col2.metric("IPCA", f"{macro['ipca']:.2f}%")
-        col3.metric("Dólar", f"R$ {macro['dolar']:.2f}")
-        col4.metric("Petróleo", f"US$ {macro['petroleo']:.2f}")
-
-        st.success(f"Cenário Macroeconômico Classificado como: `{cenario}`")
-
-    elif pagina == "\U0001F4C9 Otimização da Carteira":
-        st.subheader("\u2696\ufe0f Otimização com HRP")
-        carteira_usuario = st.text_input("Tickers da sua carteira (separados por vírgula):")
-        if carteira_usuario:
-            tickers = [t.strip().upper() for t in carteira_usuario.split(',')]
-            with st.spinner("Calculando alocação ideal com HRP..."):
-                pesos = otimizar_carteira_hrp(tickers)
-            if pesos is not None:
-                df = pd.DataFrame({"Ticker": pesos.index, "Peso (%)": np.round(pesos.values * 100, 2)})
-                st.dataframe(df.reset_index(drop=True))
-            else:
-                st.error("Erro na otimização da carteira.")
-
-    elif pagina == "\U0001F4B5 Sugestão de Aporte":
-        st.subheader("Sugestão de Aporte com Base no Cenário Atual")
-        carteira_input = st.text_input("Digite os tickers da sua carteira:")
-        if carteira_input:
-            tickers = [t.strip().upper() for t in carteira_input.split(',')]
-            macro = obter_macro()
-            cenario = classificar_cenario_macro(macro)
-            recomendadas = filtrar_ativos_validos(tickers, cenario, macro)
-            if recomendadas:
-                df = pd.DataFrame(recomendadas)
-                st.dataframe(df[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'favorecido', 'score']])
-            else:
-                st.warning("Nenhuma ação recomendada com base no cenário atual.")
-
-    elif pagina == "✅ Ranking de Ações":
-        st.subheader("\U0001F3C6 Ranking de Ações da sua Carteira")
-        carteira_input = st.text_input("Digite os tickers da sua carteira:")
-        if carteira_input:
-            tickers = [t.strip().upper() for t in carteira_input.split(',')]
-            macro = obter_macro()
-            cenario = classificar_cenario_macro(macro)
-            ranking = filtrar_ativos_validos(tickers, cenario, macro)
-            if ranking:
-                df_ranking = pd.DataFrame(ranking)
-                st.dataframe(df_ranking[['ticker', 'score', 'preco_atual', 'preco_alvo', 'setor', 'favorecido']])
-            else:
-                st.warning("Nenhum ativo ranqueado com os dados atuais.")
-
-# ====== EXECUÇÃO ======
-painel_inteligente()
+    if st.button("Sugerir alocação do aporte"):
+        st.info("Funcionalidade a ser integrada com algoritmo HRP, filtros de cenário e restrições.")
