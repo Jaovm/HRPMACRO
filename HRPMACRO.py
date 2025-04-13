@@ -30,46 +30,32 @@ def carregar_dados(tickers, start_date, end_date):
             data = yf.download(ticker, start=start_date, end=end_date)
             if 'Adj Close' in data.columns:
                 dados[ticker] = data['Adj Close']
-            else:
-                st.warning(f"Coluna 'Adj Close' não encontrada para {ticker}. Tentando com 'Close'.")
+            elif 'Close' in data.columns:  # Garantir que o 'Close' seja usado caso 'Adj Close' falhe
                 dados[ticker] = data['Close']
+            else:
+                st.warning(f"Não foi possível encontrar dados para {ticker}.")
+                continue
         except Exception as e:
             st.warning(f"Falha ao baixar dados de {ticker}: {e}")
-            time.sleep(2)
-            try:
-                data = yf.download(ticker, start=start_date, end=end_date)
-                if 'Adj Close' in data.columns:
-                    dados[ticker] = data['Adj Close']
-                else:
-                    dados[ticker] = data['Close']
-            except Exception as e:
-                st.warning(f"Falha ao tentar novamente baixar dados de {ticker}: {e}")
-                continue
+            continue
 
-    # Verificar se o dicionário de dados está vazio
     if not dados:
         st.error("Não foi possível baixar dados para nenhum ativo.")
         return pd.DataFrame(), pd.DataFrame()
 
-    # Garantir que todos os dados estão no formato adequado
+    # Verificar se todos os dados estão estruturados corretamente
     for ticker in dados:
-        if isinstance(dados[ticker], pd.Series):  # Caso o dado seja uma série, convertemos para uma lista
+        if isinstance(dados[ticker], pd.Series):  # Se os dados forem uma série, converte para lista
             dados[ticker] = dados[ticker].values.tolist()
 
-    # Verificar se algum valor em `dados` é válido
-    if all(v is None or len(v) == 0 for v in dados.values()):
-        st.error("Os dados baixados estão vazios. Não há informações suficientes.")
-        return pd.DataFrame(), pd.DataFrame()
-
-    # Criar o DataFrame e definir o índice com base nas datas
+    # Garantir que o DataFrame tenha um índice válido
     try:
         df_dados = pd.DataFrame(dados)
-        df_dados.index = data.index  # Usar o índice de data do último ticker como índice
+        df_dados.index = pd.to_datetime(data.index)  # Usar o índice de data do último ativo
     except Exception as e:
         st.error(f"Erro ao criar DataFrame a partir dos dados: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
-    # Verificar se o DataFrame resultante está vazio
     if df_dados.empty:
         st.error("O DataFrame resultante está vazio. Não há dados suficientes para calcular a alocação.")
         return pd.DataFrame(), pd.DataFrame()
