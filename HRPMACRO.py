@@ -128,6 +128,29 @@ def filtrar_ativos_validos(carteira, cenario, macro):
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
     return ativos_validos
 
+def otimizar_carteira_sharpe(tickers):
+    dados = obter_preco_diario_ajustado(tickers)
+    retornos = dados.pct_change().dropna()
+    media_retorno = retornos.mean()
+    cov = LedoitWolf().fit(retornos).covariance_
+
+    def sharpe_negativo(pesos):
+        retorno = np.dot(pesos, media_retorno)
+        volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+        return -retorno / volatilidade if volatilidade != 0 else 0
+
+    n = len(tickers)
+    restricoes = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
+    limites = tuple((0, 1) for _ in range(n))
+    pesos_iniciais = np.array([1. / n] * n)
+
+    resultado = minimize(sharpe_negativo, pesos_iniciais, method='SLSQP', bounds=limites, constraints=restricoes)
+
+    if resultado.success:
+        return resultado.x
+    else:
+        raise ValueError("Falha ao otimizar a carteira com base no Sharpe")
+
 # ========= GRÁFICO DE ALOCAÇÃO ==========
 def exibir_grafico_alocacao(df_resultado):
     fig = px.pie(
