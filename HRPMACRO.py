@@ -46,9 +46,18 @@ def carregar_dados(tickers, start_date, end_date):
             except Exception as e:
                 st.warning(f"Falha ao tentar novamente baixar dados de {ticker}: {e}")
                 continue
-    
+
+    # Verificar se algum dado foi baixado
+    if not dados:
+        st.error("Não foi possível baixar dados para nenhum ativo.")
+        return pd.DataFrame(), pd.DataFrame()
+
     # Converter para DataFrame e garantir que os tickers com falha sejam removidos
     df_dados = pd.DataFrame(dados)
+    if df_dados.empty:
+        st.error("Não há dados suficientes para calcular a alocação de portfólio.")
+        return pd.DataFrame(), pd.DataFrame()
+
     df_dados = df_dados.dropna(axis=1)  # Remove ativos com dados ausentes
     df_dados = df_dados.fillna(method='ffill').fillna(method='bfill')  # Preenche NaNs
     retornos = df_dados.pct_change().dropna()  # Calcula os retornos percentuais
