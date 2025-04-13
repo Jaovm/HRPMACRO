@@ -159,4 +159,9 @@ if not retornos.empty:
         df = df[df["Peso (%)"] > 0.01]
         st.dataframe(df.set_index("Ativo").style.format("{:.2f}"))
 
-    exibir_pesos("HRP Puro",
+    exibir_pesos("HRP Puro", alocacao_hrp(retornos))
+    exibir_pesos("HRP + Sharpe", alocacao_hrp_sharpe(retornos, media_retornos, matriz_cov))
+    exibir_pesos("HRP + Maior Retorno", alocacao_hrp_maior_retorno(retornos, media_retornos, matriz_cov))
+    exibir_pesos("HRP + Menor Risco", alocacao_hrp_menor_risco(retornos, media_retornos, matriz_cov))
+else:
+    st.warning("Nenhum dado encontrado para os ativos selecionados.")
