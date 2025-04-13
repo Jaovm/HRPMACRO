@@ -332,120 +332,57 @@ def otimizar_carteira_hrp(tickers):
 
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
     return hrp_weights.values
-# Painel Principal
-st.set_page_config(page_title="Otimização de Carteira", layout="wide")
-st.title("\U0001F4C8 Otimização e Sugestão de Carteira")
 
-st.markdown("""
-Este painel permite:
-- **Análise macroeconômica automática** com dados do BCB e do mercado.
-- **Filtragem de ações** com base em cenário, preço-alvo e exportação.
-- **Otimização de carteira** via Sharpe e HRP.
 
----
-""")
+# Cabeçalho
+st.title("Painel de Análise de Carteira e Sugestões de Aporte")
 
-# Abas do Painel
-with st.sidebar:
-    st.header("🧭 Navegação")
-    pagina = st.radio("Selecione a etapa:", [
-        "📌 Introdução",
-        "🌐 Análise Macroeconômica",
-        "📈 Sugestão de Aporte",
-        "⚙️ Otimização da Carteira",
-        "✅ Ranking de Ações"
-    ])
-    st.markdown("---")
-    st.caption("Desenvolvido por [Seu Nome] 💼")
+# Entrada da carteira atual
+df_input = st.text_area("Insira a carteira atual no formato TICKER:PESO (um por linha):", "AGRO3.SA:10\nBBAS3.SA:1.2\nBBSE3.SA:6.5")
 
-# ====== FUNÇÃO PRINCIPAL ======
-def painel_inteligente():
-    if pagina == "📌 Introdução":
-        st.subheader("Bem-vindo(a) à Otimização Inteligente de Carteira")
-        st.markdown("""
-        Este painel utiliza **dados macroeconômicos atualizados**, **preço-alvo dos analistas**, e técnicas modernas como **Hierarchical Risk Parity (HRP)** e **Otimização por Sharpe** para te ajudar a:
+try:
+    carteira_dict = {
+        linha.split(':')[0].strip(): float(linha.split(':')[1].strip())
+        for linha in df_input.strip().split('\n') if ':' in linha
+    }
+    carteira_tickers = list(carteira_dict.keys())
+    carteira_pesos = np.array(list(carteira_dict.values()))
+    carteira_pesos = carteira_pesos / carteira_pesos.sum()
+except:
+    st.error("Erro ao processar a carteira. Verifique o formato.")
+    st.stop()
 
-        - **Identificar oportunidades de compra**
-        - **Sugerir alocações para novos aportes**
-        - **Otimizar sua carteira com base no cenário econômico atual**
+# Seleção do valor do novo aporte
+aporte = st.number_input("Valor do novo aporte (em % sobre a carteira atual):", min_value=0.0, max_value=100.0, value=10.0)
 
-        ---
-        """)
+# Obter cenário macroeconômico
+dados_macro = obter_macro()
+cenario_macro = classificar_cenario_macro(dados_macro)
+st.metric("Cenário Macroeconômico", cenario_macro)
 
-    elif pagina == "🌐 Análise Macroeconômica":
-        st.subheader("🌎 Cenário Macroeconômico Atual")
+# Sugestão de alocação com HRP
+pesos_hrp = otimizar_carteira_hrp(carteira_tickers)
+if pesos_hrp is not None:
+    nova_aloc_hrp = pd.Series(pesos_hrp, index=carteira_tickers).sort_values(ascending=False)
+    st.subheader("Sugestão de Alocação com HRP")
+    st.dataframe(nova_aloc_hrp.apply(lambda x: f"{x*100:.2f}%"))
 
-        with st.spinner("🔄 Carregando dados macroeconômicos..."):
-            macro = obter_macro()
-            cenario = classificar_cenario_macro(macro)
+    # Simulação da carteira com e sem o aporte
+    st.subheader("Simulação Antes e Depois do Aporte")
+    df_simulacao = pd.DataFrame({
+        'Antes': carteira_pesos,
+        'Sugestão Pós-Aporte': (carteira_pesos*(100/(100+aporte)) + nova_aloc_hrp*(aporte/(100+aporte))).values
+    }, index=carteira_tickers)
+    st.dataframe(df_simulacao.applymap(lambda x: f"{x*100:.2f}%"))
+else:
+    st.warning("Não foi possível otimizar a carteira com HRP.")
 
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("📉 Selic", f"{macro['selic']:.2f}%")
-        col2.metric("📈 IPCA", f"{macro['ipca']:.2f}%")
-        col3.metric("💵 Dólar", f"R$ {macro['dolar']:.2f}")
-        col4.metric("🛢️ Petróleo (Brent)", f"US$ {macro['petroleo']:.2f}")
-
-        st.success(f"**Cenário Macroeconômico Classificado como: `{cenario}`**")
-
-        st.markdown("Com base nesse cenário, alguns setores tendem a se destacar mais que outros. Utilize essa informação para orientar seus investimentos.")
-
-    elif pagina == "📈 Sugestão de Aporte":
-        st.subheader("💡 Sugestão de Aporte com Base no Cenário Atual")
-
-        carteira_usuario = st.text_input("Digite os tickers da sua carteira separados por vírgula (ex: PETR4.SA,VALE3.SA,...):")
-        if carteira_usuario:
-            tickers = [t.strip().upper() for t in carteira_usuario.split(',')]
-
-            with st.spinner("🔍 Analisando ações..."):
-                macro = obter_macro()
-                cenario = classificar_cenario_macro(macro)
-                recomendadas = filtrar_ativos_validos(tickers, cenario, macro)
-
-            if recomendadas:
-                st.success(f"🎯 {len(recomendadas)} ações recomendadas para aporte:")
-                df_rec = pd.DataFrame(recomendadas)
-                st.dataframe(df_rec[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'favorecido', 'score']])
-            else:
-                st.warning("Nenhuma ação da sua carteira apresentou potencial interessante com base nos critérios definidos.")
-
-    elif pagina == "⚙️ Otimização da Carteira":
-        st.subheader("⚖️ Otimização com Hierarchical Risk Parity (HRP)")
-
-        carteira_usuario = st.text_input("Digite os tickers da sua carteira para otimização:", key="otimizacao")
-        if carteira_usuario:
-            tickers = [t.strip().upper() for t in carteira_usuario.split(',')]
-            try:
-                with st.spinner("📈 Calculando alocação ótima com HRP..."):
-                    pesos_otimizados = otimizar_carteira_hrp(tickers)
-
-                if pesos_otimizados is not None:
-                    df_pesos = pd.DataFrame({
-                        'Ticker': tickers,
-                        'Peso Otimizado (%)': np.round(pesos_otimizados * 100, 2)
-                    }).sort_values(by='Peso Otimizado (%)', ascending=False)
-                    st.success("✅ Otimização concluída com sucesso!")
-                    st.dataframe(df_pesos.reset_index(drop=True))
-                else:
-                    st.error("❌ Não foi possível otimizar a carteira.")
-            except Exception as e:
-                st.error(f"Erro durante a otimização: {e}")
-
-    elif pagina == "✅ Ranking de Ações":
-        st.subheader("🏆 Ranking de Ações da sua Carteira")
-        carteira_usuario = st.text_input("Digite seus tickers:", key="ranking")
-        if carteira_usuario:
-            tickers = [t.strip().upper() for t in carteira_usuario.split(',')]
-
-            with st.spinner("📊 Calculando score de cada ativo..."):
-                macro = obter_macro()
-                cenario = classificar_cenario_macro(macro)
-                ranking = filtrar_ativos_validos(tickers, cenario, macro)
-
-            if ranking:
-                df_ranking = pd.DataFrame(ranking)
-                st.dataframe(df_ranking[['ticker', 'score', 'preco_atual', 'preco_alvo', 'setor', 'favorecido']])
-            else:
-                st.warning("Nenhum ativo pôde ser ranqueado com os dados disponíveis.")
-
-# ====== EXECUÇÃO ======
-painel_inteligente()
+# Ranking de ações da carteira por oportunidade
+st.subheader("Ranking de Oportunidades na Carteira")
+ativos_rank = filtrar_ativos_validos(carteira_tickers, cenario_macro, dados_macro)
+df_ranking = pd.DataFrame(ativos_rank)
+if not df_ranking.empty:
+    df_ranking = df_ranking[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'score']].sort_values(by='score', ascending=False)
+    st.dataframe(df_ranking)
+else:
+    st.info("Nenhuma ação da carteira possui preço-alvo disponível ou está atrativa segundo os critérios definidos.")
