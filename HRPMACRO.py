@@ -1,26 +1,25 @@
 import requests
 import streamlit as st
 
-# Função para obter os dados da taxa SELIC
-def get_selic():
+# Função para obter os dados da inflação anual
+def get_inflacao():
     url = 'https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=csv'
     response = requests.get(url)
     
     if response.status_code == 200:
         data = response.text.splitlines()
         if len(data) > 1:
-            # Processando a última linha de dados (última taxa Selic disponível)
-            selic_data = [line.split(';') for line in data]
-            selic = selic_data[-1][1].replace('"', '').replace(',', '.')
-            
-            # Tentando converter para float
+            # Processando os dados da inflação (assumindo que o índice 1 é o valor da inflação)
+            inflacao_data = [line.split(';') for line in data]
             try:
-                return round(float(selic), 2)  # Converte para float e arredonda para duas casas decimais
-            except ValueError:
-                st.error(f"Erro ao converter a Selic para número: {selic}")
+                # A última inflação é a mais recente, então vamos pegar o último valor
+                inflacao = inflacao_data[-1][1].replace('"', '').replace(',', '.')
+                return round(float(inflacao), 2)  # Converte para float e arredonda para duas casas decimais
+            except ValueError as e:
+                st.error(f"Erro ao processar a inflação: {e}")
                 return None
         else:
-            st.error("Nenhum dado encontrado na resposta da API da SELIC.")
+            st.error("Nenhum dado encontrado na resposta da API de Inflação.")
             return None
     else:
         st.error(f"Erro ao acessar a API do Banco Central. Código de status: {response.status_code}")
@@ -31,14 +30,16 @@ def main():
     st.title("Análise de Carteira de Investimentos e Cenário Macroeconômico")
 
     # Obter dados do cenário macroeconômico
-    inflacao_anual = get_inflacao()
+    inflacao_anual = get_inflacao()  # Atualizado para corrigir erro de inflação
     selic = get_selic()  # Agora com a Selic corrigida
     meta_inflacao = 3.0  # Meta de inflação do Banco Central
 
     # Exibir cenário macroeconômico
     st.subheader("Cenário Macroeconômico Atual")
-    st.write(f"Inflação Anual: {inflacao_anual}%")
-    st.write(f"Taxa Selic: {selic}%")
+    if inflacao_anual:
+        st.write(f"Inflação Anual: {inflacao_anual}%")
+    if selic:
+        st.write(f"Taxa Selic: {selic}%")
     st.write(f"Meta de Inflação: {meta_inflacao}%")
     
     # Analisando o cenário econômico para definir uma tendência
