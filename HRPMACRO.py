@@ -6,7 +6,7 @@ import requests
 from sklearn.covariance import LedoitWolf
 from scipy.optimize import minimize
 
-# ========== DICIONÁRIOS ==========
+# ========= DICIONÁRIOS ==========
 setores_por_ticker = {
     'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
     'EGIE3.SA': 'Utilidades', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
@@ -21,7 +21,7 @@ setores_por_cenario = {
     "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico']
 }
 
-# ========== FUNÇÕES MACRO ==========
+# ========= MACRO ==========
 def get_bcb(code):
     url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
     r = requests.get(url)
@@ -42,7 +42,7 @@ def classificar_cenario_macro(m):
     else:
         return "Neutro"
 
-# ========== DADOS DE AÇÕES ==========
+# ========= PREÇO ALVO ==========
 def obter_preco_alvo(ticker):
     try:
         return yf.Ticker(ticker).info.get('targetMeanPrice', None)
@@ -55,7 +55,7 @@ def obter_preco_atual(ticker):
     except:
         return None
 
-# ========== SUGESTÕES ==========
+# ========= FILTRAR AÇÕES ==========
 def filtrar_ativos_validos(carteira, cenario):
     setores_bons = setores_por_cenario[cenario]
     ativos_validos = []
@@ -78,13 +78,20 @@ def filtrar_ativos_validos(carteira, cenario):
 
     return ativos_validos
 
-# ========== OTIMIZAÇÃO ==========
+# ========= OTIMIZAÇÃO CORRIGIDA ==========
 def otimizar_carteira_sharpe(tickers, min_pct=0.05, max_pct=0.20):
-    dados = yf.download(tickers, period="3y")['Adj Close']
+    dados_brutos = yf.download(tickers, period="3y", auto_adjust=True)
+
+    # Corrige estrutura caso tenha apenas 1 ticker
+    if isinstance(dados_brutos.columns, pd.MultiIndex):
+        dados = dados_brutos['Adj Close']
+    else:
+        dados = dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
+
     retornos = dados.pct_change().dropna()
     medias = retornos.mean() * 252
-
     cov = LedoitWolf().fit(retornos).covariance_
+
     n = len(tickers)
 
     def sharpe_neg(pesos):
@@ -102,7 +109,8 @@ def otimizar_carteira_sharpe(tickers, min_pct=0.05, max_pct=0.20):
     else:
         raise ValueError("Otimização falhou.")
 
-# ========== STREAMLIT ==========
+# ========= STREAMLIT ==========
+st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
 
 # MACRO
@@ -114,8 +122,8 @@ col2.metric("Inflação IPCA (%)", f"{macro['ipca']:.2f}")
 col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
-# ENTRADA
-st.subheader("📌 Informe sua carteira")
+# INPUT
+st.subheader("📌 Informe sua carteira atual")
 tickers = st.text_input("Tickers separados por vírgula", "WEGE3.SA, PETR4.SA, VIVT3.SA, TOTS3.SA").upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
 
@@ -131,7 +139,7 @@ if st.button("Gerar Alocação Otimizada"):
             df_resultado = pd.DataFrame(ativos_validos)
             df_resultado["Alocação (%)"] = (pesos * 100).round(2)
             df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
-            st.success("Carteira otimizada com Sharpe máximo (restrições padrão aplicadas).")
+            st.success("✅ Carteira otimizada com Sharpe máximo (restrições padrão: 5%-20%).")
             st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação (%)"]])
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
