@@ -8,7 +8,7 @@ import requests
 
 # Função para obter dados financeiros
 def obter_preco_diario_ajustado(tickers):
-    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Close']
+    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Adj_Close']
     return df
 
 # Função para obter dados do Banco Central (BCB)
