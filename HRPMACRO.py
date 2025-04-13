@@ -1,15 +1,32 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import scipy.cluster.hierarchy as sch
-from sklearn.covariance import LedoitWolf
 import yfinance as yf
 import requests
 
 # Função para obter dados financeiros
 def obter_preco_diario_ajustado(tickers):
-    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")['Adj Close']
-    return df
+    df = yf.download(tickers, start="2018-01-01", end="2025-01-01")
+    
+    # Verificar todas as colunas disponíveis
+    colunas_disponiveis = df.columns.tolist()
+    
+    # Preferir 'Adj Close', caso contrário, 'Close', caso contrário, qualquer coluna numérica
+    if 'Adj Close' in colunas_disponiveis:
+        return df['Adj Close']
+    elif 'Close' in colunas_disponiveis:
+        st.warning("A coluna 'Adj Close' não foi encontrada, utilizando 'Close'.")
+        return df['Close']
+    else:
+        # Procurar por uma coluna numérica que provavelmente representa os preços
+        for coluna in colunas_disponiveis:
+            if pd.api.types.is_numeric_dtype(df[coluna]):
+                st.warning(f"A coluna '{coluna}' foi usada como fallback para o preço.")
+                return df[coluna]
+
+    # Se nenhuma coluna adequada for encontrada, retornar erro
+    st.error("Nenhuma coluna válida de preço ajustado ou fechado foi encontrada.")
+    return pd.DataFrame()  # Retorna um DataFrame vazio em caso de erro
 
 # Função para obter dados do Banco Central (BCB)
 def get_bcb(code):
@@ -34,83 +51,6 @@ def classificar_cenario_macro(m):
     else:
         return "Neutro"
 
-# Função para calcular o HRP (Hierarchical Risk Parity)
-def calcular_hrp(tickers, retornos):
-    # Verificar se existem retornos suficientes para calcular a matriz de covariância
-    if len(retornos) < 2:
-        raise ValueError("Não há dados suficientes para calcular a matriz de covariância.")
-    
-    # Calculando a matriz de covariância com Ledoit-Wolf para uma estimativa robusta
-    cov = LedoitWolf().fit(retornos).covariance_
-    
-    # Aplicando cluster hierárquico para determinar a estrutura de risco
-    dist_matrix = sch.distance.pdist(cov)
-    linkage = sch.linkage(dist_matrix, method='ward')
-    
-    # Obtendo a estrutura hierárquica
-    idx = sch.dendrogram(linkage, no_plot=True)['leaves']
-    
-    # Reorganizando a covariância de acordo com a hierarquia
-    cov_sorted = cov[idx, :][:, idx]
-    
-    # Calculando os pesos
-    n = len(tickers)
-    pesos = np.ones(n) / n
-
-    # Algoritmo HRP para redistribuir os pesos com base no risco hierárquico
-    for i in range(n):
-        pesos[i] = 1 / np.sqrt(np.diagonal(cov_sorted)[i])
-
-    pesos = pesos / pesos.sum()
-    return pesos
-
-# Função para otimizar a carteira com o HRP
-def otimizar_carteira_hrp(tickers, min_pct=0.01, max_pct=0.30, pesos_setor=None):
-    # Obtendo os dados de preço ajustado
-    dados = obter_preco_diario_ajustado(tickers)
-    
-    # Verificando se os dados de retorno são válidos
-    if dados.empty:
-        st.warning("Os dados de preços estão vazios. Verifique os tickers ou o período.")
-        return None
-
-    # Calculando os retornos diários
-    retornos = dados.pct_change().dropna()
-
-    # Verificando se existem valores nulos ou infinitos nos retornos
-    if retornos.isnull().any().any() or np.isinf(retornos.values).any():
-        st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
-        return None
-
-    # Verificando se há dados suficientes para otimização
-    if len(retornos) < 2:
-        st.warning("Não há dados suficientes para realizar a otimização.")
-        return None
-
-    # Aplicando o método HRP
-    try:
-        pesos = calcular_hrp(tickers, retornos)
-    except ValueError as e:
-        st.error(str(e))
-        return None
-    
-    # Ajustando os pesos para respeitar as restrições de alocação mínima e máxima
-    pesos_ajustados = np.clip(pesos, min_pct, max_pct)
-    pesos_ajustados = pesos_ajustados / pesos_ajustados.sum()  # Normalizando a soma para 1
-    
-    return pesos_ajustados
-
-# Função para filtrar ativos válidos com base no cenário macroeconômico
-def filtrar_ativos_validos(carteira, cenario):
-    ativos_validos = []
-    for ativo in carteira:
-        # Lógica fictícia de validação de ativos com base no cenário macroeconômico
-        if cenario == "Restritivo" and ativo == 'BBSE3.SA':
-            ativos_validos.append({'ticker': ativo, 'preco_atual': 30, 'preco_alvo': 40, 'setor': 'Seguradoras'})
-        elif cenario == "Expansionista" and ativo == 'ITUB3.SA':
-            ativos_validos.append({'ticker': ativo, 'preco_atual': 45, 'preco_alvo': 50, 'setor': 'Bancos'})
-    return ativos_validos
-
 # Função de exibição do Streamlit
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
@@ -132,40 +72,20 @@ carteira = [t.strip() for t in tickers.split(",") if t.strip()]
 aporte_mensal = st.number_input("Valor do aporte mensal (R$)", min_value=0, value=500)
 
 if st.button("Gerar Alocação Otimizada e Aporte"):
-    ativos_validos = filtrar_ativos_validos(carteira, cenario)
-
-    if not ativos_validos:
-        st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
+    # Obtendo os preços ajustados de cada ativo
+    dados = obter_preco_diario_ajustado(carteira)
+    
+    # Verificando se os dados de retorno são válidos
+    if dados.empty:
+        st.warning("Os dados de preços estão vazios. Verifique os tickers ou o período.")
     else:
-        tickers_validos = [a['ticker'] for a in ativos_validos]
+        # Calculando os retornos diários
+        retornos = dados.pct_change().dropna()
 
-        # Peso de cada setor baseado no cenário macroeconômico
-        pesos_setor = {setor: 1 for setor in ['Seguradoras', 'Bancos']}  # Exemplo de setores
-
-        try:
-            # Otimizando a carteira com HRP
-            pesos = otimizar_carteira_hrp(tickers_validos, pesos_setor=pesos_setor)
-            if pesos is not None:
-                # Calcula a nova alocação considerando o aporte
-                aporte_total = aporte_mensal
-                aporte_distribuido = pesos * aporte_total
-                
-                # Atualiza a tabela com os pesos atuais, novos e o aporte
-                df_resultado = pd.DataFrame(ativos_validos)
-                df_resultado["Alocação Atual (%)"] = 10  # Exemplo de alocação atual
-                df_resultado["Alocação Nova (%)"] = (pesos * 100).round(2)
-                df_resultado["Aporte (R$)"] = (aporte_distribuido).round(2)
-                df_resultado = df_resultado.sort_values("Alocação Nova (%)", ascending=False)
-                
-                st.success("✅ Carteira otimizada com o método HRP.")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "Alocação Atual (%)", "Alocação Nova (%)", "Aporte (R$)"]])
-
-                # Sugestões de compra
-                st.subheader("💡 Sugestões de Compra")
-                for ativo in ativos_validos:
-                    if ativo['preco_atual'] < ativo['preco_alvo']:
-                        st.write(f"**{ativo['ticker']}** - Setor: {ativo['setor']} | Preço Atual: R$ {ativo['preco_atual']} | Preço Alvo: R$ {ativo['preco_alvo']} (Comprar!)")
-            else:
-                st.error("Falha na otimização da carteira.")
-        except Exception as e:
-            st.error(f"Erro na otimização: {str(e)}")
+        # Verificando se existem valores nulos ou infinitos nos retornos
+        if retornos.isnull().any().any() or np.isinf(retornos.values).any():
+            st.warning("Os dados de retornos contêm valores inválidos ou ausentes. Verifique a qualidade dos dados.")
+        else:
+            # Exemplo de exibição de retorno
+            st.success("Dados de retorno calculados com sucesso.")
+            st.dataframe(retornos.head())
