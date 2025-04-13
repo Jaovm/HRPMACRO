@@ -7,6 +7,7 @@ from sklearn.covariance import LedoitWolf
 from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
+import plotly.express as px
 
 # ========= DICIONÁRIOS ==========
 
@@ -123,4 +124,34 @@ def filtrar_ativos_validos(carteira, cenario, macro):
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
     return ativos_validos
 
-# (restante do código permanece igual)
+# ========= GRÁFICO DE ALOCAÇÃO ==========
+def exibir_grafico_alocacao(df_resultado):
+    fig = px.pie(
+        df_resultado,
+        names='ticker',
+        values='Alocação (%)',
+        title='Distribuição da Alocação por Ativo',
+        hole=0.4
+    )
+    fig.update_traces(textinfo='percent+label')
+    st.plotly_chart(fig, use_container_width=True)
+
+# ========= INTERFACE STREAMLIT ==========
+st.set_page_config(page_title="Alocação de Carteira Macro", layout="wide")
+st.title("Análise e Alocação de Carteira com Base no Cenário Macroeconômico")
+
+carteira = st.multiselect("Selecione os ativos da carteira:", list(setores_por_ticker.keys()), default=list(setores_por_ticker.keys()))
+if st.button("Analisar carteira"):
+    with st.spinner("Obtendo dados macroeconômicos e de mercado..."):
+        macro = obter_macro()
+        cenario = classificar_cenario_macro(macro)
+        st.subheader(f"Cenário Econômico Atual: {cenario}")
+        ativos_filtrados = filtrar_ativos_validos(carteira, cenario, macro)
+
+    if ativos_filtrados:
+        df_resultado = pd.DataFrame(ativos_filtrados)
+        df_resultado["Alocação (%)"] = 100 * df_resultado['score'] / df_resultado['score'].sum()
+        st.dataframe(df_resultado[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'Alocação (%)', 'explicacao']].set_index('ticker'))
+        exibir_grafico_alocacao(df_resultado)
+    else:
+        st.warning("Nenhum ativo da carteira passou nos filtros de score e dados disponíveis.")
