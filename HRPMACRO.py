@@ -367,7 +367,7 @@ def ajustar_pesos(cov, tickers, pesos_atuais=None):
         
         return novos_pesos
 
-    return hrp_weights  # Retornar os pesos do HRP sem alteração
+    return hrp_weights.values  # Retornar os pesos do HRP sem alteração
 
 
    # return hrp_weights.values
