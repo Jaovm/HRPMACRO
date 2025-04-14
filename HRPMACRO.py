@@ -332,7 +332,7 @@ def otimizar_carteira_hrp(tickers, pesos_atuais=None):
 
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
     # Se pesos_atuais for fornecido, aloque o novo aporte com base no HRP sem vender os ativos
-    if pesos_atuais is not None:
+if pesos_atuais is not None:
     pesos_atuais = np.array(pesos_atuais)
     total_atual = pesos_atuais.sum()
     total_novo = 1.0
