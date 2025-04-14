@@ -396,12 +396,11 @@ if st.button("Gerar Alocação Otimizada"):
                 valores_totais = valores_atuais + valores_aporte
                 pesos_finais = valores_totais / valores_totais.sum()
 
-                df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
+                df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
 
-                df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
+                st.subheader("📈 Ativos Recomendados para Novo Aporte")
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "favorecido", "score", "Alocação (%)", "Valor Alocado (R$)", "% na Carteira Final"]])
 
-                st.success("✅ Carteira otimizada com sucesso!")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
 
             else:
                 st.error("Falha na otimização da carteira.")
