@@ -182,6 +182,7 @@ def classificar_cenario_macro(m):
 
 # ========= PREÇO ALVO ==========
 
+# Função para obter o preço diário ajustado
 def obter_preco_diario_ajustado(tickers, periodo='7y'):
     dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
     if len(tickers) == 1:
@@ -189,7 +190,7 @@ def obter_preco_diario_ajustado(tickers, periodo='7y'):
     else:
         return dados['Adj Close']
 
-
+# Função para otimizar a carteira com base no índice de Sharpe
 def otimizar_carteira_sharpe(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
@@ -213,19 +214,21 @@ def otimizar_carteira_sharpe(tickers):
     else:
         return None
 
+# Função para obter preço-alvo dos analistas
 def obter_preco_alvo(ticker):
     try:
         return yf.Ticker(ticker).info.get('targetMeanPrice', None)
     except:
         return None
 
+# Função para obter o preço atual
 def obter_preco_atual(ticker):
     try:
         return yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
     except:
         return None
 
-# ========= FILTRAR AÇÕES ==========
+# Função para calcular o score dos ativos
 def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
     upside = (preco_alvo - preco_atual) / preco_atual
     bonus = 0.1 if favorecido else 0
@@ -236,6 +239,7 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
             bonus += 0.05
     return upside + bonus
 
+# Função para filtrar ativos válidos
 def filtrar_ativos_validos(carteira, cenario, macro):
     setores_bons = setores_por_cenario[cenario]
     ativos_validos = []
@@ -262,25 +266,7 @@ def filtrar_ativos_validos(carteira, cenario, macro):
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
     return ativos_validos
 
-# ========= OTIMIZAÇÃO ==========
-def obter_preco_diario_ajustado(tickers):
-    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
-
-    if isinstance(dados_brutos.columns, pd.MultiIndex):
-        if 'Adj Close' in dados_brutos.columns.get_level_values(0):
-            return dados_brutos['Adj Close']
-        elif 'Close' in dados_brutos.columns.get_level_values(0):
-            return dados_brutos['Close']
-        else:
-            raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
-    else:
-        if 'Adj Close' in dados_brutos.columns:
-            return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
-        elif 'Close' in dados_brutos.columns:
-            return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
-        else:
-            raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
-
+# Função para otimizar a carteira com Hierarchical Risk Parity (HRP)
 def otimizar_carteira_hrp(tickers, pesos_atuais=None):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
@@ -331,23 +317,22 @@ def otimizar_carteira_hrp(tickers, pesos_atuais=None):
         return w
 
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
-    # Se pesos_atuais for fornecido, aloque o novo aporte com base no HRP sem vender os ativos
-if pesos_atuais is not None:
-    pesos_atuais = np.array(pesos_atuais)
-    total_atual = pesos_atuais.sum()
-    total_novo = 1.0
-    aporte = total_novo - total_atual
+    
+    if pesos_atuais is not None:
+        pesos_atuais = np.array(pesos_atuais)
+        total_atual = pesos_atuais.sum()
+        total_novo = 1.0
+        aporte = total_novo - total_atual
 
-    if aporte < 0:
-        raise ValueError("O peso total atual é maior que 100% — não há aporte novo para alocar.")
+        if aporte < 0:
+            raise ValueError("O peso total atual é maior que 100% — não há aporte novo para alocar.")
 
-    # Novo capital será distribuído com base nos pesos sugeridos pelo HRP
-    novos_pesos = pesos_atuais + aporte * hrp_weights.values
-    return novos_pesos
+        novos_pesos = pesos_atuais + aporte * hrp_weights.values
+        return novos_pesos
 
     return hrp_weights.values
 
-# ========= STREAMLIT ==========
+# Função Streamlit
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
 
@@ -382,83 +367,14 @@ if st.button("Gerar Alocação Otimizada"):
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
     else:
         tickers_validos = [a['ticker'] for a in ativos_validos]
-        try:
-            if usar_hrp:
-                pesos = otimizar_carteira_hrp(tickers_validos)
-            else:
-                pesos = otimizar_carteira_sharpe(tickers_validos)
-
-                if pesos is not None:
-                    df_resultado = pd.DataFrame(ativos_validos)
-                
-                    # Cálculo da quantidade inteira de ações a comprar com base no aporte
-                    quantidades = np.floor((pesos * aporte) / df_resultado["preco_atual"])
-                    valores_alocados = quantidades * df_resultado["preco_atual"]
-                
-                    # Verifica e ajusta para ativos com valor alocado insuficiente
-                    for i in range(len(quantidades)):
-                        if quantidades[i] == 0:
-                            st.warning(f"A alocação em {df_resultado.at[i, 'ticker']} é insuficiente para comprar 1 ação. Peso será ajustado para 0.")
-                            quantidades[i] = 0
-                            valores_alocados[i] = 0.0
-                
-                    # Recalcula os pesos com base no valor efetivamente alocado
-                    total_alocado = valores_alocados.sum()
-                    pesos_reais = valores_alocados / total_alocado if total_alocado > 0 else np.zeros_like(valores_alocados)
-                
-                    df_resultado["Quantidade"] = quantidades.astype(int)
-                    df_resultado["Valor Alocado (R$)"] = valores_alocados.round(2)
-                    df_resultado["Alocação (%)"] = (pesos_reais * 100).round(2)
-                
-                    # Arredonda demais colunas para melhor visualização
-                    df_resultado["preco_atual"] = df_resultado["preco_atual"].round(2)
-                    df_resultado["preco_alvo"] = df_resultado["preco_alvo"].round(2)
-                    df_resultado["score"] = df_resultado["score"].round(2)
-                
-                    # Cálculo de novos pesos considerando carteira anterior + novo aporte
-                    tickers_resultado = df_resultado["ticker"].tolist()
-                    pesos_dict = dict(zip(carteira, pesos_atuais))
-                    pesos_atuais_filtrados = np.array([pesos_dict.get(t, 0) for t in tickers_resultado])
-                    valores_atuais = pesos_atuais_filtrados * 1000000  # Exemplo: carteira anterior de R$ 1 milhão
-                
-                    valores_totais = valores_atuais + valores_alocados
-                    pesos_finais = valores_totais / valores_totais.sum() if valores_totais.sum() > 0 else np.zeros_like(valores_totais)
-                    df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
-                
-                    df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
-                
-                    st.success("✅ Carteira otimizada com sucesso!")
-                    st.dataframe(df_resultado[[
-                        "ticker", "setor", "preco_atual", "preco_alvo", "score",
-                        "Quantidade", "Valor Alocado (R$)", "Alocação (%)", "Peso Final (%)"
-                    ]])
+        if usar_hrp:
+            pesos_novos = otimizar_carteira_hrp(tickers_validos, pesos_atuais)
+        else:
+            pesos_novos = otimizar_carteira_sharpe(tickers_validos)
+        
+        st.subheader("📈 Alocação de Ativos Sugerida:")
+        df = pd.DataFrame(ativos_validos)
+        df["Peso Final (%)"] = (pesos_novos * 100).round(2)
+        st.write(df)
 
 
-                # Cálculo de novos pesos considerando carteira anterior + novo aporte
-                # Filtra pesos atuais apenas para os ativos que estão na recomendação
-                tickers_resultado = df_resultado["ticker"].tolist()
-
-# Cria um dicionário de ticker -> peso original
-                pesos_dict = dict(zip(carteira, pesos_atuais))
-
-# Extrai os pesos apenas para os tickers selecionados
-                pesos_atuais_filtrados = np.array([pesos_dict[t] for t in tickers_resultado])
-
-# Continua o cálculo
-                valores_atuais = pesos_atuais_filtrados * 1000000  # exemplo: carteira anterior de 1 milhão
-
-                valores_aporte = pesos * aporte
-                valores_totais = valores_atuais + valores_aporte
-                pesos_finais = valores_totais / valores_totais.sum()
-
-                df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
-
-                df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
-
-                st.success("✅ Carteira otimizada com sucesso!")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
-
-          #  else:
-             #   st.error("Falha na otimização da carteira.")
-        except Exception as e:
-            st.error(f"Erro na otimização: {str(e)}")
