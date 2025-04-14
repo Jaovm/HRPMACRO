@@ -385,7 +385,11 @@ if st.button("Gerar Alocação Otimizada"):
         tickers_validos = [a['ticker'] for a in ativos_validos]
         try:
             if usar_hrp:
-                pesos = otimizar_carteira_hrp(tickers_validos)
+                pesos_series = otimizar_carteira_hrp(tickers_validos)
+
+                # Garante que todos os tickers válidos estejam representados, mesmo que com 0
+                pesos = np.array([pesos_series.get(ticker, 0.0) for ticker in tickers_validos])
+
             else:
                 pesos = otimizar_carteira_sharpe(tickers_validos)
 
