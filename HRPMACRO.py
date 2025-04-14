@@ -264,7 +264,7 @@ def filtrar_ativos_validos(carteira, cenario, macro):
 
 # ========= OTIMIZAÇÃO ==========
 def obter_preco_diario_ajustado(tickers):
-    dados_brutos = yf.download(tickers, period="5y", auto_adjust=False)
+    dados_brutos = yf.download(tickers, period="7y", auto_adjust=True)
 
     if isinstance(dados_brutos.columns, pd.MultiIndex):
         if 'Adj Close' in dados_brutos.columns.get_level_values(0):
