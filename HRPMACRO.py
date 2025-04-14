@@ -376,6 +376,14 @@ if st.button("Gerar Alocação Otimizada"):
                 pesos = otimizar_carteira_sharpe(tickers_validos)
 
             if pesos is not None:
+                tickers_completos = set(carteira)
+                tickers_usados = set(tickers_validos)
+                tickers_zerados = tickers_completos - tickers_usados
+
+                if tickers_zerados:
+                    st.subheader("📉 Ativos da carteira atual sem recomendação de aporte")
+                    st.write(", ".join(tickers_zerados))
+
                 df_resultado = pd.DataFrame(ativos_validos)
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
                 df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
@@ -399,7 +407,7 @@ if st.button("Gerar Alocação Otimizada"):
                 df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
 
                 st.subheader("📈 Ativos Recomendados para Novo Aporte")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "favorecido", "score", "Alocação (%)", "Valor Alocado (R$)", "% na Carteira Final"]])
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "% na Carteira Final"]])
 
 
             else:
