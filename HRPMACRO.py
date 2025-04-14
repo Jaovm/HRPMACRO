@@ -338,7 +338,23 @@ def otimizar_carteira_hrp(tickers, pesos_atuais=None):
         if aporte < 0:
             raise ValueError("O peso total atual é maior que 100% — não há aporte novo para alocar.")
 
-        novos_pesos = pesos_atuais + aporte * hrp_weights.values
+        if isinstance(pesos_atuais, (list, np.ndarray)):
+    pesos_atuais = np.array(pesos_atuais)
+elif isinstance(pesos_atuais, pd.Series):
+    pesos_atuais = pesos_atuais.values  # Converter para numpy array
+
+hrp_weights = np.array(hrp_weights.values)
+
+# Alinhar índices se necessário
+if isinstance(pesos_atuais, pd.Series):
+    pesos_atuais = pesos_atuais.reindex(hrp_weights.index).fillna(0).values  # Preencher NaN com 0
+
+# Verificar se os tamanhos são compatíveis
+if len(pesos_atuais) != len(hrp_weights):
+    raise ValueError("O número de elementos em pesos_atuais e hrp_weights deve ser o mesmo.")
+
+# Soma robusta
+novos_pesos = pesos_atuais + aporte * hrp_weights
         return novos_pesos
 
     return hrp_weights.values
