@@ -387,6 +387,15 @@ if st.button("Gerar Alocação Otimizada"):
                 df_resultado = pd.DataFrame(ativos_validos)
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
                 df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
+                # Calcula valor alocado bruto
+                df_resultado["Valor Alocado Bruto (R$)"] = (pesos * aporte)
+                
+                # Calcula quantidade inteira de ações possível
+                df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"]).apply(np.floor)
+                
+                # Corrige o valor alocado para refletir a quantidade inteira de ações
+                df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
+
                 # Cálculo de novos pesos considerando carteira anterior + novo aporte
                 # Filtra pesos atuais apenas para os ativos que estão na recomendação
                 tickers_resultado = df_resultado["ticker"].tolist()
@@ -407,13 +416,17 @@ if st.button("Gerar Alocação Otimizada"):
                 df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
 
                 st.subheader("📈 Ativos Recomendados para Novo Aporte")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "% na Carteira Final"]])
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações", "Valor Alocado (R$)", "% na Carteira Final"]])
                 # Calcular o valor total utilizado no aporte
                 valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
                 troco = aporte - valor_utilizado
                 
                 # Mostrar o troco abaixo da tabela
+                valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
+                troco = aporte - valor_utilizado
+                
                 st.markdown(f"**💵 Troco (valor restante do aporte): R$ {troco:,.2f}**")
+
 
 
 
