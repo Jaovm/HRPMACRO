@@ -410,12 +410,30 @@ if st.button("Gerar Alocação Otimizada"):
                 valores_totais = valores_atuais + valores_aporte
                 pesos_finais = valores_totais / valores_totais.sum()
 
-                df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
+                # Adiciona ativos da carteira original que não foram alocados
+tickers_no_resultado = df_resultado["ticker"].tolist()
+ativos_nao_alocados = [t for t in carteira if t not in tickers_no_resultado]
 
-                df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
+for ticker in ativos_nao_alocados:
+    df_resultado = pd.concat([
+        df_resultado,
+        pd.DataFrame([{
+            "ticker": ticker,
+            "setor": setores_por_ticker.get(ticker, "N/A"),
+            "preco_atual": np.nan,
+            "preco_alvo": np.nan,
+            "score": np.nan,
+            "Alocação (%)": 0.0,
+            "Valor Alocado (R$)": 0.0,
+            "Peso Final (%)": 0.0
+        }])
+    ], ignore_index=True)
 
-                st.success("✅ Carteira otimizada com sucesso!")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
+df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
+
+st.success("✅ Carteira otimizada com sucesso!")
+st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
+
 
             else:
                 st.error("Falha na otimização da carteira.")
