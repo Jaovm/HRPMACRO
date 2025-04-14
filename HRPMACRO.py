@@ -333,73 +333,77 @@ def otimizar_carteira_hrp(tickers):
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
     return hrp_weights.values
 
-# ========= SUGESTÃO DE APORTES =========
+# ========= STREAMLIT ==========
+st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
+st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
 
-def sugerir_nova_alocacao_hrp(carteira_atual, pesos_atuais, macro, aporte):
-    cenario = classificar_cenario_macro(macro)
-    ativos_sugeridos = filtrar_ativos_validos(carteira_atual, cenario, macro)
-    tickers_sugeridos = [a['ticker'] for a in ativos_sugeridos]
-
-    if not tickers_sugeridos:
-        return None, ativos_sugeridos
-
-    pesos_novos = otimizar_carteira_hrp(tickers_sugeridos)
-
-    # Ajustar aporte apenas nos ativos existentes
-    nova_alocacao = {}
-    total_atual = sum(pesos_atuais.values())
-    total_final = total_atual + aporte
-
-    for ticker in carteira_atual:
-        peso_atual = pesos_atuais.get(ticker, 0) * total_atual
-        if ticker in tickers_sugeridos:
-            idx = tickers_sugeridos.index(ticker)
-            peso_sugerido = pesos_novos[idx] * aporte
-            nova_alocacao[ticker] = (peso_atual + peso_sugerido) / total_final
-        else:
-            nova_alocacao[ticker] = peso_atual / total_final
-
-    return nova_alocacao, ativos_sugeridos
-
-# ========= STREAMLIT APP =========
-
-st.title("📊 Otimizador de Carteira com Sugestão de Aportes (HRP + Macro)")
-
-tickers_input = st.text_input("Tickers da carteira (separados por vírgula):", value="AGRO3.SA,BBAS3.SA,BBSE3.SA,BPAC11.SA,EGIE3.SA,ITUB3.SA,PRIO3.SA,PSSA3.SA,SAPR11.SA,SBSP3.SA,VIVT3.SA,WEGE3.SA,TOTS3.SA,B3SA3.SA,TAEE11.SA")
-aporte = st.number_input("Novo aporte (em R$):", min_value=0.0, value=1000.0, step=100.0)
-
-carteira = [t.strip().upper() for t in tickers_input.split(',') if t.strip()]
 macro = obter_macro()
 cenario = classificar_cenario_macro(macro)
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Selic (%)", f"{macro['selic']:.2f}")
+col2.metric("Inflação IPCA (%)", f"{macro['ipca']:.2f}")
+col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
+col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
+st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
-st.subheader("📈 Cenário Macroeconômico Atual")
-st.write(f"**Selic:** {macro['selic']}% | **IPCA:** {macro['ipca']}% | **Dólar:** R${macro['dolar']} | *Petróleo:* ${macro['petroleo']}")
-st.markdown(f"**🧭 Cenário Classificado:** `{cenario}`")
+st.subheader("📌 Informe sua carteira atual")
+default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
+tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
+carteira = [t.strip() for t in tickers.split(",") if t.strip()]
+pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
+try:
+    pesos_atuais = np.array([float(p.strip()) for p in pesos_input.split(",")])
+    pesos_atuais /= pesos_atuais.sum()  # normaliza para 100%
+except:
+    st.error("Erro ao interpretar os pesos. Verifique se estão separados por vírgula e correspondem aos tickers.")
+    st.stop()
 
-st.subheader("✅ Ativos com Preço-Alvo Abaixo do Atual e Favorecidos pelo Cenário")
 
-ativos_filtrados = filtrar_ativos_validos(carteira, cenario, macro)
-st.dataframe(pd.DataFrame(ativos_filtrados))
+aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
+usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
-# Alocação atual (supondo igualitária se não for informada)
-pesos_atuais = {ticker: 1/len(carteira) for ticker in carteira}
+if st.button("Gerar Alocação Otimizada"):
+    ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
 
-# Sugestão de nova alocação com base em HRP
-nova_alocacao, ativos_utilizados = sugerir_nova_alocacao_hrp(carteira, pesos_atuais, macro, aporte)
+    if not ativos_validos:
+        st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
+    else:
+        tickers_validos = [a['ticker'] for a in ativos_validos]
+        try:
+            if usar_hrp:
+                pesos = otimizar_carteira_hrp(tickers_validos)
+            else:
+                pesos = otimizar_carteira_sharpe(tickers_validos)
 
-if nova_alocacao:
-    st.subheader("🔁 Nova Alocação Após Aporte (HRP + Cenário Macro)")
-    df_alocacao = pd.DataFrame({
-        "Ticker": nova_alocacao.keys(),
-        "Alocação Atual (%)": [round(pesos_atuais.get(t, 0)*100, 2) for t in nova_alocacao.keys()],
-        "Alocação Sugerida (%)": [round(p*100, 2) for p in nova_alocacao.values()]
-    })
-    st.dataframe(df_alocacao)
+            if pesos is not None:
+                df_resultado = pd.DataFrame(ativos_validos)
+                df_resultado["Alocação (%)"] = (pesos * 100).round(2)
+                df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
+                # Cálculo de novos pesos considerando carteira anterior + novo aporte
+                # Filtra pesos atuais apenas para os ativos que estão na recomendação
+                tickers_resultado = df_resultado["ticker"].tolist()
 
-    st.subheader("🌟 Destaques Favoráveis ao Cenário Atual")
-    ativos_favoraveis = [a for a in ativos_utilizados if a['favorecido']]
-    st.write([a['ticker'] for a in ativos_favoraveis])
+# Cria um dicionário de ticker -> peso original
+                pesos_dict = dict(zip(carteira, pesos_atuais))
 
-else:
-    st.warning("Nenhum ativo sugerido com base nos critérios de cenário macro, preço-alvo e exportação.")
+# Extrai os pesos apenas para os tickers selecionados
+                pesos_atuais_filtrados = np.array([pesos_dict[t] for t in tickers_resultado])
 
+# Continua o cálculo
+                valores_atuais = pesos_atuais_filtrados * 1000000  # exemplo: carteira anterior de 1 milhão
+
+                valores_aporte = pesos * aporte
+                valores_totais = valores_atuais + valores_aporte
+                pesos_finais = valores_totais / valores_totais.sum()
+
+                df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
+
+                df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
+
+                st.success("✅ Carteira otimizada com sucesso!")
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
+
+            else:
+                st.error("Falha na otimização da carteira.")
+        except Exception as e:
+            st.error(f"Erro na otimização: {str(e)}")
