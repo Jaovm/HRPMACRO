@@ -370,7 +370,7 @@ def ajustar_pesos(cov, tickers, pesos_atuais=None):
     return hrp_weights  # Retornar os pesos do HRP sem alteração
 
 
-    return hrp_weights.values
+   # return hrp_weights.values
 
 # Função Streamlit
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
