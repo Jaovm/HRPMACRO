@@ -281,12 +281,9 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-from sklearn.covariance import LedoitWolf
-
-def otimizar_carteira_hrp(tickers, pesos_iniciais=None):
+def otimizar_carteira_hrp(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
-
     dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
     linkage_matrix = linkage(squareform(dist), method='single')
 
@@ -308,44 +305,33 @@ def otimizar_carteira_hrp(tickers, pesos_iniciais=None):
 
     sort_ix = get_quasi_diag(linkage_matrix)
     sorted_tickers = [retornos.columns[i] for i in sort_ix]
-
-    # Covariância robusta
-    cov = pd.DataFrame(LedoitWolf().fit(retornos).covariance_, index=tickers, columns=tickers)
+    cov = LedoitWolf().fit(retornos).covariance_
+    ivp = 1. / np.diag(cov)
+    ivp /= ivp.sum()
 
     def get_cluster_var(cov, cluster_items):
-        cov_slice = cov.loc[cluster_items, cluster_items]
+        cov_slice = cov[np.ix_(cluster_items, cluster_items)]
         w_ = 1. / np.diag(cov_slice)
         w_ /= w_.sum()
         return np.dot(w_, np.dot(cov_slice, w_))
 
     def recursive_bisection(cov, sort_ix):
-        w = pd.Series(1.0, index=sort_ix)
+        w = pd.Series(1, index=sort_ix)
         cluster_items = [sort_ix]
         while len(cluster_items) > 0:
-            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i)//2), (len(i)//2, len(i))) if len(i) > 1]
+            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
             for i in range(0, len(cluster_items), 2):
                 c0 = cluster_items[i]
                 c1 = cluster_items[i + 1]
                 var0 = get_cluster_var(cov, c0)
                 var1 = get_cluster_var(cov, c1)
-                alpha = 1.0 - var0 / (var0 + var1) if var0 + var1 > 0 else 0.5
+                alpha = 1 - var0 / (var0 + var1)
                 w[c0] *= alpha
-                w[c1] *= 1.0 - alpha
+                w[c1] *= 1 - alpha
         return w
 
-    # Calcula pesos HRP
-    hrp_weights = recursive_bisection(cov, sorted_tickers)
-    hrp_weights /= hrp_weights.sum()  # normaliza
-
-    # Ajusta para refletir os pesos da carteira atual, se fornecidos
-    if pesos_iniciais:
-        pesos_base = pd.Series(pesos_iniciais)
-        pesos_base = pesos_base / pesos_base.sum()  # normaliza
-        hrp_weights = hrp_weights.reindex(pesos_base.index).fillna(0)
-        hrp_weights *= pesos_base  # pondera por pesos atuais
-        hrp_weights /= hrp_weights.sum()  # normaliza novamente
-
-    return hrp_weights.sort_values(ascending=False)
+    hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
+    return hrp_weights.values
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
@@ -361,7 +347,7 @@ col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] e
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
 st.subheader("📌 Informe sua carteira atual")
-default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB4.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE11.SA"
+default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
 tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
 carteira = [t.strip() for t in tickers.split(",") if t.strip()]
 pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
