@@ -281,7 +281,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_hrp(tickers):
+def otimizar_carteira_hrp(tickers, pesos_atuais=None):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
     dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
@@ -331,6 +331,20 @@ def otimizar_carteira_hrp(tickers):
         return w
 
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
+    # Se pesos_atuais for fornecido, aloque o novo aporte com base no HRP sem vender os ativos
+if pesos_atuais is not None:
+    pesos_atuais = np.array(pesos_atuais)
+    total_atual = pesos_atuais.sum()
+    total_novo = 1.0
+    aporte = total_novo - total_atual
+
+    if aporte < 0:
+        raise ValueError("O peso total atual é maior que 100% — não há aporte novo para alocar.")
+
+    # Novo capital será distribuído com base nos pesos sugeridos pelo HRP
+    novos_pesos = pesos_atuais + aporte * hrp_weights.values
+    return novos_pesos
+
     return hrp_weights.values
 
 # ========= STREAMLIT ==========
@@ -378,6 +392,21 @@ if st.button("Gerar Alocação Otimizada"):
                 df_resultado = pd.DataFrame(ativos_validos)
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
                 df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
+                
+                # Verifica se o valor alocado é suficiente para comprar pelo menos 1 ação
+                for i, row in df_resultado.iterrows():
+                    preco = row["preco_atual"]
+                    valor_alocado = df_resultado.at[i, "Valor Alocado (R$)"]
+                    
+                    if valor_alocado < preco:
+                        st.warning(f"A alocação em {row['ticker']} ({valor_alocado:.2f}) é insuficiente para comprar uma ação (preço: {preco:.2f}). Peso será ajustado para 0.")
+                        pesos[i] = 0.0
+                        df_resultado.at[i, "Valor Alocado (R$)"] = 0.0
+                
+                # Recalcula os pesos após remover ativos com valor insuficiente
+                pesos /= pesos.sum()
+                df_resultado["Alocação (%)"] = (pesos * 100).round(2)
+
                 # Cálculo de novos pesos considerando carteira anterior + novo aporte
                 # Filtra pesos atuais apenas para os ativos que estão na recomendação
                 tickers_resultado = df_resultado["ticker"].tolist()
