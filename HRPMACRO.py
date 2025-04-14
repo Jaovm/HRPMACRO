@@ -408,6 +408,13 @@ if st.button("Gerar Alocação Otimizada"):
 
                 st.subheader("📈 Ativos Recomendados para Novo Aporte")
                 st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "% na Carteira Final"]])
+                # Calcular o valor total utilizado no aporte
+                valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
+                troco = aporte - valor_utilizado
+                
+                # Mostrar o troco abaixo da tabela
+                st.markdown(f"**💵 Troco (valor restante do aporte): R$ {troco:,.2f}**")
+
 
 
             else:
