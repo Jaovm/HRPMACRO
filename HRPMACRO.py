@@ -182,26 +182,14 @@ def classificar_cenario_macro(m):
 
 # ========= PREÇO ALVO ==========
 
-# Função para obter o preço diário ajustado
-def obter_preco_diario_ajustado(tickers):
-    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
-
-    if isinstance(dados_brutos.columns, pd.MultiIndex):
-        if 'Adj Close' in dados_brutos.columns.get_level_values(0):
-            return dados_brutos['Adj Close']
-        elif 'Close' in dados_brutos.columns.get_level_values(0):
-            return dados_brutos['Close']
-        else:
-            raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
+def obter_preco_diario_ajustado(tickers, periodo='7y'):
+    dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
+    if len(tickers) == 1:
+        return dados['Adj Close'].to_frame()
     else:
-        if 'Adj Close' in dados_brutos.columns:
-            return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
-        elif 'Close' in dados_brutos.columns:
-            return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
-        else:
-            raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
+        return dados['Adj Close']
 
-# Função para otimizar a carteira com base no índice de Sharpe
+
 def otimizar_carteira_sharpe(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
@@ -225,21 +213,19 @@ def otimizar_carteira_sharpe(tickers):
     else:
         return None
 
-# Função para obter preço-alvo dos analistas
 def obter_preco_alvo(ticker):
     try:
         return yf.Ticker(ticker).info.get('targetMeanPrice', None)
     except:
         return None
 
-# Função para obter o preço atual
 def obter_preco_atual(ticker):
     try:
         return yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
     except:
         return None
 
-# Função para calcular o score dos ativos
+# ========= FILTRAR AÇÕES ==========
 def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
     upside = (preco_alvo - preco_atual) / preco_atual
     bonus = 0.1 if favorecido else 0
@@ -250,7 +236,6 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
             bonus += 0.05
     return upside + bonus
 
-# Função para filtrar ativos válidos
 def filtrar_ativos_validos(carteira, cenario, macro):
     setores_bons = setores_por_cenario[cenario]
     ativos_validos = []
@@ -277,8 +262,26 @@ def filtrar_ativos_validos(carteira, cenario, macro):
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
     return ativos_validos
 
-# Função para otimizar a carteira com Hierarchical Risk Parity (HRP)
-def otimizar_carteira_hrp(tickers, pesos_atuais=None):
+# ========= OTIMIZAÇÃO ==========
+def obter_preco_diario_ajustado(tickers):
+    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
+
+    if isinstance(dados_brutos.columns, pd.MultiIndex):
+        if 'Adj Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Adj Close']
+        elif 'Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Close']
+        else:
+            raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
+    else:
+        if 'Adj Close' in dados_brutos.columns:
+            return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
+        elif 'Close' in dados_brutos.columns:
+            return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
+        else:
+            raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
+
+def otimizar_carteira_hrp(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
     dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
@@ -312,61 +315,25 @@ def otimizar_carteira_hrp(tickers, pesos_atuais=None):
         w_ /= w_.sum()
         return np.dot(w_, np.dot(cov_slice, w_))
 
-def recursive_bisection(cov, sort_ix):
-    w = pd.Series(1, index=sort_ix)
-    cluster_items = [sort_ix]
-    
-    while len(cluster_items) > 0:
-        # Dividir os clusters em dois, recursivamente
-        cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
-        
-        for i in range(0, len(cluster_items), 2):
-            c0 = cluster_items[i]
-            c1 = cluster_items[i + 1]
-            var0 = get_cluster_var(cov, c0)  # Função que deve ser definida
-            var1 = get_cluster_var(cov, c1)
-            
-            alpha = 1 - var0 / (var0 + var1)
-            w[c0] *= alpha
-            w[c1] *= 1 - alpha
-    
-    return w
+    def recursive_bisection(cov, sort_ix):
+        w = pd.Series(1, index=sort_ix)
+        cluster_items = [sort_ix]
+        while len(cluster_items) > 0:
+            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
+            for i in range(0, len(cluster_items), 2):
+                c0 = cluster_items[i]
+                c1 = cluster_items[i + 1]
+                var0 = get_cluster_var(cov, c0)
+                var1 = get_cluster_var(cov, c1)
+                alpha = 1 - var0 / (var0 + var1)
+                w[c0] *= alpha
+                w[c1] *= 1 - alpha
+        return w
 
-def ajustar_pesos(cov, tickers, pesos_atuais=None):
-    # Obter pesos do HRP
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
-    
-    # Garantir que hrp_weights seja numpy array ou pandas Series
-    if isinstance(hrp_weights, pd.Series):
-        hrp_weights = hrp_weights.values  # Converter para numpy array se necessário
-    
-    if pesos_atuais is not None:
-        # Garantir que pesos_atuais seja numpy array
-        if isinstance(pesos_atuais, (list, np.ndarray)):
-            pesos_atuais = np.array(pesos_atuais)
-        elif isinstance(pesos_atuais, pd.Series):
-            pesos_atuais = pesos_atuais.values  # Converter para numpy array
+    return hrp_weights.values
 
-        # Calcular o aporte necessário
-        total_atual = pesos_atuais.sum()
-        total_novo = 1.0
-        aporte = total_novo - total_atual
-
-        if aporte < 0:
-            raise ValueError("O peso total atual é maior que 100% — não há aporte novo para alocar.")
-        
-        # Alinhar os índices entre pesos_atuais e hrp_weights
-        if len(pesos_atuais) != len(hrp_weights):
-            raise ValueError("O número de elementos em pesos_atuais e hrp_weights deve ser o mesmo.")
-        
-        # Calcular novos pesos com o aporte
-        novos_pesos = pesos_atuais + aporte * hrp_weights
-        
-        return novos_pesos
-
-    return hrp_weights  # Retornar os pesos do HRP sem alteração
-
-# Função Streamlit
+# ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
 
@@ -391,6 +358,7 @@ except:
     st.error("Erro ao interpretar os pesos. Verifique se estão separados por vírgula e correspondem aos tickers.")
     st.stop()
 
+
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
@@ -401,18 +369,41 @@ if st.button("Gerar Alocação Otimizada"):
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
     else:
         tickers_validos = [a['ticker'] for a in ativos_validos]
-        if usar_hrp:
-            pesos_novos = otimizar_carteira_hrp(tickers_validos, pesos_atuais)
-        else:
-            pesos_novos = otimizar_carteira_sharpe(tickers_validos)
-        
-        st.subheader("📈 Alocação de Ativos Sugerida:")
-        df = pd.DataFrame(ativos_validos)
-        # Verifique se a variável 'pesos_novos' está definida corretamente
-        if pesos_novos is not None and isinstance(pesos_novos, (np.ndarray, pd.Series)):
-            # Certifique-se de que os pesos estão corretos para a multiplicação
-            df["Peso Final (%)"] = (pesos_novos * 100).round(2)
-        else:
-            raise ValueError("A variável 'pesos_novos' não está definida corretamente ou não é um tipo numérico válido.")
+        try:
+            if usar_hrp:
+                pesos = otimizar_carteira_hrp(tickers_validos)
+            else:
+                pesos = otimizar_carteira_sharpe(tickers_validos)
 
-        st.write(df)
+            if pesos is not None:
+                df_resultado = pd.DataFrame(ativos_validos)
+                df_resultado["Alocação (%)"] = (pesos * 100).round(2)
+                df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
+                # Cálculo de novos pesos considerando carteira anterior + novo aporte
+                # Filtra pesos atuais apenas para os ativos que estão na recomendação
+                tickers_resultado = df_resultado["ticker"].tolist()
+
+# Cria um dicionário de ticker -> peso original
+                pesos_dict = dict(zip(carteira, pesos_atuais))
+
+# Extrai os pesos apenas para os tickers selecionados
+                pesos_atuais_filtrados = np.array([pesos_dict[t] for t in tickers_resultado])
+
+# Continua o cálculo
+                valores_atuais = pesos_atuais_filtrados * 1000000  # exemplo: carteira anterior de 1 milhão
+
+                valores_aporte = pesos * aporte
+                valores_totais = valores_atuais + valores_aporte
+                pesos_finais = valores_totais / valores_totais.sum()
+
+                df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
+
+                df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
+
+                st.success("✅ Carteira otimizada com sucesso!")
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
+
+            else:
+                st.error("Falha na otimização da carteira.")
+        except Exception as e:
+            st.error(f"Erro na otimização: {str(e)}")
