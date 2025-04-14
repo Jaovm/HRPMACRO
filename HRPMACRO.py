@@ -411,28 +411,28 @@ if st.button("Gerar Alocação Otimizada"):
                 pesos_finais = valores_totais / valores_totais.sum()
 
                 # Adiciona ativos da carteira original que não foram alocados
-tickers_no_resultado = df_resultado["ticker"].tolist()
-ativos_nao_alocados = [t for t in carteira if t not in tickers_no_resultado]
-
-for ticker in ativos_nao_alocados:
-    df_resultado = pd.concat([
-        df_resultado,
-        pd.DataFrame([{
-            "ticker": ticker,
-            "setor": setores_por_ticker.get(ticker, "N/A"),
-            "preco_atual": np.nan,
-            "preco_alvo": np.nan,
-            "score": np.nan,
-            "Alocação (%)": 0.0,
-            "Valor Alocado (R$)": 0.0,
-            "Peso Final (%)": 0.0
-        }])
-    ], ignore_index=True)
-
-df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
-
-st.success("✅ Carteira otimizada com sucesso!")
-st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
+                tickers_no_resultado = df_resultado["ticker"].tolist()
+                ativos_nao_alocados = [t for t in carteira if t not in tickers_no_resultado]
+                
+                for ticker in ativos_nao_alocados:
+                    df_resultado = pd.concat([
+                        df_resultado,
+                        pd.DataFrame([{
+                            "ticker": ticker,
+                            "setor": setores_por_ticker.get(ticker, "N/A"),
+                            "preco_atual": np.nan,
+                            "preco_alvo": np.nan,
+                            "score": np.nan,
+                            "Alocação (%)": 0.0,
+                            "Valor Alocado (R$)": 0.0,
+                            "Peso Final (%)": 0.0
+                        }])
+                    ], ignore_index=True)
+                
+                df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
+                
+                st.success("✅ Carteira otimizada com sucesso!")
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
 
 
             else:
