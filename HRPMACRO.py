@@ -281,9 +281,12 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_hrp(tickers):
+from sklearn.covariance import LedoitWolf
+
+def otimizar_carteira_hrp(tickers, pesos_iniciais=None):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
+
     dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
     linkage_matrix = linkage(squareform(dist), method='single')
 
@@ -305,33 +308,44 @@ def otimizar_carteira_hrp(tickers):
 
     sort_ix = get_quasi_diag(linkage_matrix)
     sorted_tickers = [retornos.columns[i] for i in sort_ix]
-    cov = LedoitWolf().fit(retornos).covariance_
-    ivp = 1. / np.diag(cov)
-    ivp /= ivp.sum()
+
+    # Covariância robusta
+    cov = pd.DataFrame(LedoitWolf().fit(retornos).covariance_, index=tickers, columns=tickers)
 
     def get_cluster_var(cov, cluster_items):
-        cov_slice = cov[np.ix_(cluster_items, cluster_items)]
+        cov_slice = cov.loc[cluster_items, cluster_items]
         w_ = 1. / np.diag(cov_slice)
         w_ /= w_.sum()
         return np.dot(w_, np.dot(cov_slice, w_))
 
     def recursive_bisection(cov, sort_ix):
-        w = pd.Series(1, index=sort_ix)
+        w = pd.Series(1.0, index=sort_ix)
         cluster_items = [sort_ix]
         while len(cluster_items) > 0:
-            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
+            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i)//2), (len(i)//2, len(i))) if len(i) > 1]
             for i in range(0, len(cluster_items), 2):
                 c0 = cluster_items[i]
                 c1 = cluster_items[i + 1]
                 var0 = get_cluster_var(cov, c0)
                 var1 = get_cluster_var(cov, c1)
-                alpha = 1 - var0 / (var0 + var1)
+                alpha = 1.0 - var0 / (var0 + var1) if var0 + var1 > 0 else 0.5
                 w[c0] *= alpha
-                w[c1] *= 1 - alpha
+                w[c1] *= 1.0 - alpha
         return w
 
-    hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
-    return hrp_weights.values
+    # Calcula pesos HRP
+    hrp_weights = recursive_bisection(cov, sorted_tickers)
+    hrp_weights /= hrp_weights.sum()  # normaliza
+
+    # Ajusta para refletir os pesos da carteira atual, se fornecidos
+    if pesos_iniciais:
+        pesos_base = pd.Series(pesos_iniciais)
+        pesos_base = pesos_base / pesos_base.sum()  # normaliza
+        hrp_weights = hrp_weights.reindex(pesos_base.index).fillna(0)
+        hrp_weights *= pesos_base  # pondera por pesos atuais
+        hrp_weights /= hrp_weights.sum()  # normaliza novamente
+
+    return hrp_weights.sort_values(ascending=False)
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
