@@ -11,23 +11,141 @@ from scipy.optimize import minimize
 # ========= DICIONÁRIOS ==========
 
 setores_por_ticker = {
-    'WEGE3.SA': 'Indústria', 'PETR4.SA': 'Energia', 'VIVT3.SA': 'Utilidades',
-    'EGIE3.SA': 'Energia', 'ITUB4.SA': 'Financeiro', 'LREN3.SA': 'Consumo discricionário',
-    'ABEV3.SA': 'Consumo básico', 'B3SA3.SA': 'Financeiro', 'MGLU3.SA': 'Consumo discricionário',
-    'HAPV3.SA': 'Saúde', 'RADL3.SA': 'Saúde', 'RENT3.SA': 'Consumo discricionário',
-    'VALE3.SA': 'Indústria', 'TOTS3.SA': 'Tecnologia', 'AGRO3.SA': 'Agronegócio',
-    'BBAS3.SA': 'Financeiro', 'BBSE3.SA': 'Seguradoras', 'BPAC11.SA': 'Financeiro',
-    'PRIO3.SA': 'Petróleo', 'PSSA3.SA': 'Seguradoras', 'SAPR3.SA': 'Utilidades',
-    'SBSP3.SA': 'Utilidades', 'TAEE3.SA': 'Energia'
+    # Bancos
+    'ITUB4.SA': 'Bancos',
+    'BBDC4.SA': 'Bancos',
+    'SANB11.SA': 'Bancos',
+    'BBAS3.SA': 'Bancos',
+    'ABCB4.SA': 'Bancos',
+    'BRSR6.SA': 'Bancos',
+    'BMGB4.SA': 'Bancos',
+    'BPAC11.SA': 'Bancos',
+
+    # Seguradoras
+    'BBSE3.SA': 'Seguradoras',
+    'PSSA3.SA': 'Seguradoras',
+    'SULA11.SA': 'Seguradoras',
+    'CXSE3.SA': 'Seguradoras',
+
+    # Bolsas e Serviços Financeiros
+    'B3SA3.SA': 'Bolsas e Serviços Financeiros',
+    'XPBR31.SA': 'Bolsas e Serviços Financeiros',
+
+    # Energia Elétrica
+    'EGIE3.SA': 'Energia Elétrica',
+    'CPLE6.SA': 'Energia Elétrica',
+    'TAEE11.SA': 'Energia Elétrica',
+    'CMIG4.SA': 'Energia Elétrica',
+    'AURE3.SA': 'Energia Elétrica',
+    'CPFE3.SA': 'Energia Elétrica',
+    'AESB3.SA': 'Energia Elétrica',
+
+    # Petróleo, Gás e Biocombustíveis
+    'PETR4.SA': 'Petróleo, Gás e Biocombustíveis',
+    'PRIO3.SA': 'Petróleo, Gás e Biocombustíveis',
+    'RECV3.SA': 'Petróleo, Gás e Biocombustíveis',
+    'RRRP3.SA': 'Petróleo, Gás e Biocombustíveis',
+    'UGPA3.SA': 'Petróleo, Gás e Biocombustíveis',
+    'VBBR3.SA': 'Petróleo, Gás e Biocombustíveis',
+
+    # Mineração e Siderurgia
+    'VALE3.SA': 'Mineração e Siderurgia',
+    'CSNA3.SA': 'Mineração e Siderurgia',
+    'GGBR4.SA': 'Mineração e Siderurgia',
+    'CMIN3.SA': 'Mineração e Siderurgia',
+    'GOAU4.SA': 'Mineração e Siderurgia',
+    'BRAP4.SA': 'Mineração e Siderurgia',
+
+    # Indústria e Bens de Capital
+    'WEGE3.SA': 'Indústria e Bens de Capital',
+    'RANI3.SA': 'Indústria e Bens de Capital',
+    'KLBN11.SA': 'Indústria e Bens de Capital',
+    'SUZB3.SA': 'Indústria e Bens de Capital',
+    'UNIP6.SA': 'Indústria e Bens de Capital',
+    'KEPL3.SA': 'Indústria e Bens de Capital',
+
+    # Agronegócio
+    'AGRO3.SA': 'Agronegócio',
+    'SLCE3.SA': 'Agronegócio',
+    'SMTO3.SA': 'Agronegócio',
+    'CAML3.SA': 'Agronegócio',
+
+    # Saúde
+    'HAPV3.SA': 'Saúde',
+    'FLRY3.SA': 'Saúde',
+    'RDOR3.SA': 'Saúde',
+    'QUAL3.SA': 'Saúde',
+    'RADL3.SA': 'Saúde',
+
+    # Tecnologia
+    'TOTS3.SA': 'Tecnologia',
+    'POSI3.SA': 'Tecnologia',
+    'LINX3.SA': 'Tecnologia',
+    'LWSA3.SA': 'Tecnologia',
+
+    # Consumo Discricionário
+    'MGLU3.SA': 'Consumo Discricionário',
+    'LREN3.SA': 'Consumo Discricionário',
+    'RENT3.SA': 'Consumo Discricionário',
+    'ARZZ3.SA': 'Consumo Discricionário',
+    'ALPA4.SA': 'Consumo Discricionário',
+
+    # Consumo Básico
+    'ABEV3.SA': 'Consumo Básico',
+    'NTCO3.SA': 'Consumo Básico',
+    'PCAR3.SA': 'Consumo Básico',
+    'MDIA3.SA': 'Consumo Básico',
+
+    # Comunicação
+    'VIVT3.SA': 'Comunicação',
+    'TIMS3.SA': 'Comunicação',
+    'OIBR3.SA': 'Comunicação',
+
+    # Utilidades Públicas
+    'SBSP3.SA': 'Utilidades Públicas',
+    'SAPR11.SA': 'Utilidades Públicas',
+    'CSMG3.SA': 'Utilidades Públicas',
+    'ALUP11.SA': 'Utilidades Públicas',
+    'CPLE6.SA': 'Utilidades Públicas',
 }
+
 
 setores_por_cenario = {
-    "Expansionista": ['Consumo discricionário', 'Tecnologia', 'Indústria', 'Agronegócio'],
-    "Neutro": ['Saúde', 'Financeiro', 'Utilidades', 'Varejo', 'Seguradoras'],
-    "Restritivo": ['Utilidades', 'Energia', 'Saúde', 'Consumo básico', 'Petróleo']
+    "Expansionista": [
+        'Consumo Discricionário',
+        'Tecnologia',
+        'Indústria e Bens de Capital',
+        'Agronegócio'
+    ],
+    "Neutro": [
+        'Saúde',
+        'Bancos',
+        'Seguradoras',
+        'Bolsas e Serviços Financeiros',
+        'Utilidades Públicas'
+    ],
+    "Restritivo": [
+        'Energia Elétrica',
+        'Petróleo, Gás e Biocombustíveis',
+        'Mineração e Siderurgia',
+        'Consumo Básico',
+        'Comunicação'
+    ]
 }
 
-empresas_exportadoras = ['AGRO3.SA', 'PRIO3.SA']
+empresas_exportadoras = [
+    'VALE3.SA',  # Mineração
+    'SUZB3.SA',  # Celulose
+    'KLBN11.SA', # Papel e Celulose
+    'AGRO3.SA',  # Agronegócio
+    'PRIO3.SA',  # Petróleo
+    'SLCE3.SA',  # Agronegócio
+    'SMTO3.SA',  # Açúcar e Etanol
+    'CSNA3.SA',  # Siderurgia
+    'GGBR4.SA',  # Siderurgia
+    'CMIN3.SA',  # Mineração
+]
+
 
 # ========= MACRO ==========
 def get_bcb(code):
@@ -215,77 +333,73 @@ def otimizar_carteira_hrp(tickers):
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
     return hrp_weights.values
 
-# ========= STREAMLIT ==========
-st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
-st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
+# ========= SUGESTÃO DE APORTES =========
 
+def sugerir_nova_alocacao_hrp(carteira_atual, pesos_atuais, macro, aporte):
+    cenario = classificar_cenario_macro(macro)
+    ativos_sugeridos = filtrar_ativos_validos(carteira_atual, cenario, macro)
+    tickers_sugeridos = [a['ticker'] for a in ativos_sugeridos]
+
+    if not tickers_sugeridos:
+        return None, ativos_sugeridos
+
+    pesos_novos = otimizar_carteira_hrp(tickers_sugeridos)
+
+    # Ajustar aporte apenas nos ativos existentes
+    nova_alocacao = {}
+    total_atual = sum(pesos_atuais.values())
+    total_final = total_atual + aporte
+
+    for ticker in carteira_atual:
+        peso_atual = pesos_atuais.get(ticker, 0) * total_atual
+        if ticker in tickers_sugeridos:
+            idx = tickers_sugeridos.index(ticker)
+            peso_sugerido = pesos_novos[idx] * aporte
+            nova_alocacao[ticker] = (peso_atual + peso_sugerido) / total_final
+        else:
+            nova_alocacao[ticker] = peso_atual / total_final
+
+    return nova_alocacao, ativos_sugeridos
+
+# ========= STREAMLIT APP =========
+
+st.title("📊 Otimizador de Carteira com Sugestão de Aportes (HRP + Macro)")
+
+tickers_input = st.text_input("Tickers da carteira (separados por vírgula):", value="AGRO3.SA,BBAS3.SA,BBSE3.SA,BPAC11.SA,EGIE3.SA,ITUB3.SA,PRIO3.SA,PSSA3.SA,SAPR11.SA,SBSP3.SA,VIVT3.SA,WEGE3.SA,TOTS3.SA,B3SA3.SA,TAEE11.SA")
+aporte = st.number_input("Novo aporte (em R$):", min_value=0.0, value=1000.0, step=100.0)
+
+carteira = [t.strip().upper() for t in tickers_input.split(',') if t.strip()]
 macro = obter_macro()
 cenario = classificar_cenario_macro(macro)
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Selic (%)", f"{macro['selic']:.2f}")
-col2.metric("Inflação IPCA (%)", f"{macro['ipca']:.2f}")
-col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
-col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
-st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
-st.subheader("📌 Informe sua carteira atual")
-default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
-tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
-carteira = [t.strip() for t in tickers.split(",") if t.strip()]
-pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
-try:
-    pesos_atuais = np.array([float(p.strip()) for p in pesos_input.split(",")])
-    pesos_atuais /= pesos_atuais.sum()  # normaliza para 100%
-except:
-    st.error("Erro ao interpretar os pesos. Verifique se estão separados por vírgula e correspondem aos tickers.")
-    st.stop()
+st.subheader("📈 Cenário Macroeconômico Atual")
+st.write(f"**Selic:** {macro['selic']}% | **IPCA:** {macro['ipca']}% | **Dólar:** R${macro['dolar']} | *Petróleo:* ${macro['petroleo']}")
+st.markdown(f"**🧭 Cenário Classificado:** `{cenario}`")
 
+st.subheader("✅ Ativos com Preço-Alvo Abaixo do Atual e Favorecidos pelo Cenário")
 
-aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
-usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
+ativos_filtrados = filtrar_ativos_validos(carteira, cenario, macro)
+st.dataframe(pd.DataFrame(ativos_filtrados))
 
-if st.button("Gerar Alocação Otimizada"):
-    ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
+# Alocação atual (supondo igualitária se não for informada)
+pesos_atuais = {ticker: 1/len(carteira) for ticker in carteira}
 
-    if not ativos_validos:
-        st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
-    else:
-        tickers_validos = [a['ticker'] for a in ativos_validos]
-        try:
-            if usar_hrp:
-                pesos = otimizar_carteira_hrp(tickers_validos)
-            else:
-                pesos = otimizar_carteira_sharpe(tickers_validos)
+# Sugestão de nova alocação com base em HRP
+nova_alocacao, ativos_utilizados = sugerir_nova_alocacao_hrp(carteira, pesos_atuais, macro, aporte)
 
-            if pesos is not None:
-                df_resultado = pd.DataFrame(ativos_validos)
-                df_resultado["Alocação (%)"] = (pesos * 100).round(2)
-                df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
-                # Cálculo de novos pesos considerando carteira anterior + novo aporte
-                # Filtra pesos atuais apenas para os ativos que estão na recomendação
-                tickers_resultado = df_resultado["ticker"].tolist()
+if nova_alocacao:
+    st.subheader("🔁 Nova Alocação Após Aporte (HRP + Cenário Macro)")
+    df_alocacao = pd.DataFrame({
+        "Ticker": nova_alocacao.keys(),
+        "Alocação Atual (%)": [round(pesos_atuais.get(t, 0)*100, 2) for t in nova_alocacao.keys()],
+        "Alocação Sugerida (%)": [round(p*100, 2) for p in nova_alocacao.values()]
+    })
+    st.dataframe(df_alocacao)
 
-# Cria um dicionário de ticker -> peso original
-                pesos_dict = dict(zip(carteira, pesos_atuais))
+    st.subheader("🌟 Destaques Favoráveis ao Cenário Atual")
+    ativos_favoraveis = [a for a in ativos_utilizados if a['favorecido']]
+    st.write([a['ticker'] for a in ativos_favoraveis])
 
-# Extrai os pesos apenas para os tickers selecionados
-                pesos_atuais_filtrados = np.array([pesos_dict[t] for t in tickers_resultado])
+else:
+    st.warning("Nenhum ativo sugerido com base nos critérios de cenário macro, preço-alvo e exportação.")
 
-# Continua o cálculo
-                valores_atuais = pesos_atuais_filtrados * 1000000  # exemplo: carteira anterior de 1 milhão
-
-                valores_aporte = pesos * aporte
-                valores_totais = valores_atuais + valores_aporte
-                pesos_finais = valores_totais / valores_totais.sum()
-
-                df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
-
-                df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
-
-                st.success("✅ Carteira otimizada com sucesso!")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
-
-            else:
-                st.error("Falha na otimização da carteira.")
-        except Exception as e:
-            st.error(f"Erro na otimização: {str(e)}")
