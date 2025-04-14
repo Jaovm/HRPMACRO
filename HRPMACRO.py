@@ -347,57 +347,18 @@ col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] e
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
 st.subheader("📌 Informe sua carteira atual")
-tickers_padrao = list(setores_por_ticker.keys())
-
-st.subheader("📌 Informe sua carteira atual")
-
-# Criar DataFrame com setores e pesos iniciais
-df_default = pd.DataFrame({
-    "Ticker": tickers_padrao,
-    "Setor": [setores_por_ticker[t] for t in tickers_padrao],
-    "Peso": [round(1/len(tickers_padrao), 4)] * len(tickers_padrao)
-})
-
-# Editor dinâmico
-carteira_df = st.data_editor(
-    df_default,
-    num_rows="dynamic",
-    use_container_width=True,
-    key="carteira_editor"
-)
-
-# Limpeza e validação
-carteira_df["Ticker"] = carteira_df["Ticker"].str.upper().str.strip()
-carteira_df = carteira_df[carteira_df["Ticker"].isin(setores_por_ticker)]
-carteira_df["Setor"] = carteira_df["Ticker"].map(setores_por_ticker)
-
-# Normalização de pesos
-if not carteira_df.empty:
-    try:
-        pesos = carteira_df["Peso"].astype(float).values
-        pesos /= pesos.sum()
-        carteira_df["Peso Normalizado"] = np.round(pesos, 4)
-    except:
-        st.error("Erro ao interpretar os pesos. Verifique se são números válidos.")
-        st.stop()
-else:
-    st.warning("Nenhum ticker válido informado.")
+default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
+tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
+carteira = [t.strip() for t in tickers.split(",") if t.strip()]
+pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
+try:
+    pesos_atuais = np.array([float(p.strip()) for p in pesos_input.split(",")])
+    pesos_atuais /= pesos_atuais.sum()  # normaliza para 100%
+except:
+    st.error("Erro ao interpretar os pesos. Verifique se estão separados por vírgula e correspondem aos tickers.")
     st.stop()
 
-# Exibe resultado final
-st.markdown("### 🧾 Carteira final utilizada na análise")
-st.dataframe(carteira_df, use_container_width=True)
-
-st.markdown("""
-ℹ️ **Instruções**:
-- Edite os tickers e pesos diretamente na tabela acima.
-- Apenas tickers reconhecidos serão mantidos (com base no dicionário `setores_por_ticker`).
-- Pesos são automaticamente normalizados.
-- Você pode adicionar ou remover linhas livremente.
-""")
-
-
-#aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
+aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
 if st.button("Gerar Alocação Otimizada"):
