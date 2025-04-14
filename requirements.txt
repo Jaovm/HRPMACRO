@@ -6,3 +6,4 @@ scikit-learn
 streamlit
 PyPortfolioOpt
 pytz
+seaborn
