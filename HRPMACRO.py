@@ -388,24 +388,51 @@ if st.button("Gerar Alocação Otimizada"):
             else:
                 pesos = otimizar_carteira_sharpe(tickers_validos)
 
-            if pesos is not None:
-                df_resultado = pd.DataFrame(ativos_validos)
-                df_resultado["Alocação (%)"] = (pesos * 100).round(2)
-                df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
+                if pesos is not None:
+                    df_resultado = pd.DataFrame(ativos_validos)
                 
-                # Verifica se o valor alocado é suficiente para comprar pelo menos 1 ação
-                for i, row in df_resultado.iterrows():
-                    preco = row["preco_atual"]
-                    valor_alocado = df_resultado.at[i, "Valor Alocado (R$)"]
-                    
-                    if valor_alocado < preco:
-                        st.warning(f"A alocação em {row['ticker']} ({valor_alocado:.2f}) é insuficiente para comprar uma ação (preço: {preco:.2f}). Peso será ajustado para 0.")
-                        pesos[i] = 0.0
-                        df_resultado.at[i, "Valor Alocado (R$)"] = 0.0
+                    # Cálculo da quantidade inteira de ações a comprar com base no aporte
+                    quantidades = np.floor((pesos * aporte) / df_resultado["preco_atual"])
+                    valores_alocados = quantidades * df_resultado["preco_atual"]
                 
-                # Recalcula os pesos após remover ativos com valor insuficiente
-                pesos /= pesos.sum()
-                df_resultado["Alocação (%)"] = (pesos * 100).round(2)
+                    # Verifica e ajusta para ativos com valor alocado insuficiente
+                    for i in range(len(quantidades)):
+                        if quantidades[i] == 0:
+                            st.warning(f"A alocação em {df_resultado.at[i, 'ticker']} é insuficiente para comprar 1 ação. Peso será ajustado para 0.")
+                            quantidades[i] = 0
+                            valores_alocados[i] = 0.0
+                
+                    # Recalcula os pesos com base no valor efetivamente alocado
+                    total_alocado = valores_alocados.sum()
+                    pesos_reais = valores_alocados / total_alocado if total_alocado > 0 else np.zeros_like(valores_alocados)
+                
+                    df_resultado["Quantidade"] = quantidades.astype(int)
+                    df_resultado["Valor Alocado (R$)"] = valores_alocados.round(2)
+                    df_resultado["Alocação (%)"] = (pesos_reais * 100).round(2)
+                
+                    # Arredonda demais colunas para melhor visualização
+                    df_resultado["preco_atual"] = df_resultado["preco_atual"].round(2)
+                    df_resultado["preco_alvo"] = df_resultado["preco_alvo"].round(2)
+                    df_resultado["score"] = df_resultado["score"].round(2)
+                
+                    # Cálculo de novos pesos considerando carteira anterior + novo aporte
+                    tickers_resultado = df_resultado["ticker"].tolist()
+                    pesos_dict = dict(zip(carteira, pesos_atuais))
+                    pesos_atuais_filtrados = np.array([pesos_dict.get(t, 0) for t in tickers_resultado])
+                    valores_atuais = pesos_atuais_filtrados * 1000000  # Exemplo: carteira anterior de R$ 1 milhão
+                
+                    valores_totais = valores_atuais + valores_alocados
+                    pesos_finais = valores_totais / valores_totais.sum() if valores_totais.sum() > 0 else np.zeros_like(valores_totais)
+                    df_resultado["Peso Final (%)"] = (pesos_finais * 100).round(2)
+                
+                    df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
+                
+                    st.success("✅ Carteira otimizada com sucesso!")
+                    st.dataframe(df_resultado[[
+                        "ticker", "setor", "preco_atual", "preco_alvo", "score",
+                        "Quantidade", "Valor Alocado (R$)", "Alocação (%)", "Peso Final (%)"
+                    ]])
+
 
                 # Cálculo de novos pesos considerando carteira anterior + novo aporte
                 # Filtra pesos atuais apenas para os ativos que estão na recomendação
