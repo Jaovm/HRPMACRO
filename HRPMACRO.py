@@ -414,7 +414,13 @@ if st.button("Gerar Alocação Otimizada"):
         
         st.subheader("📈 Alocação de Ativos Sugerida:")
         df = pd.DataFrame(ativos_validos)
-        df["Peso Final (%)"] = (pesos_novos * 100).round(2)
+        # Verifique se a variável 'pesos_novos' está definida corretamente
+        if pesos_novos is not None and isinstance(pesos_novos, (np.ndarray, pd.Series)):
+            # Certifique-se de que os pesos estão corretos para a multiplicação
+            df["Peso Final (%)"] = (pesos_novos * 100).round(2)
+        else:
+            raise ValueError("A variável 'pesos_novos' não está definida corretamente ou não é um tipo numérico válido.")
+
         st.write(df)
 
 
