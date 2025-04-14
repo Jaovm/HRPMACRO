@@ -183,12 +183,23 @@ def classificar_cenario_macro(m):
 # ========= PREÇO ALVO ==========
 
 # Função para obter o preço diário ajustado
-def obter_preco_diario_ajustado(tickers, periodo='7y'):
-    dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
-    if len(tickers) == 1:
-        return dados['Adj Close'].to_frame()
+def obter_preco_diario_ajustado(tickers):
+    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
+
+    if isinstance(dados_brutos.columns, pd.MultiIndex):
+        if 'Adj Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Adj Close']
+        elif 'Close' in dados_brutos.columns.get_level_values(0):
+            return dados_brutos['Close']
+        else:
+            raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
     else:
-        return dados['Adj Close']
+        if 'Adj Close' in dados_brutos.columns:
+            return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
+        elif 'Close' in dados_brutos.columns:
+            return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
+        else:
+            raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
 # Função para otimizar a carteira com base no índice de Sharpe
 def otimizar_carteira_sharpe(tickers):
