@@ -429,7 +429,7 @@ if st.button("Gerar Alocação Otimizada"):
                 df_resultado = df_resultado.sort_values("Alocação (%)", ascending=False)
 
                 st.success("✅ Carteira otimizada com sucesso!")
-                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
+                st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]]).round(2)
 
             else:
                 st.error("Falha na otimização da carteira.")
