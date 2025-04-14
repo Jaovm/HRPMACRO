@@ -458,7 +458,7 @@ if st.button("Gerar Alocação Otimizada"):
                 st.success("✅ Carteira otimizada com sucesso!")
                 st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Alocação (%)", "Valor Alocado (R$)", "Peso Final (%)"]])
 
-            else:
-                st.error("Falha na otimização da carteira.")
+          #  else:
+             #   st.error("Falha na otimização da carteira.")
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
