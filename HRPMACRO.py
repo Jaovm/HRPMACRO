@@ -347,16 +347,35 @@ col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] e
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
 st.subheader("📌 Informe sua carteira atual")
-default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
-tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
-carteira = [t.strip() for t in tickers.split(",") if t.strip()]
-pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
-try:
-    pesos_atuais = np.array([float(p.strip()) for p in pesos_input.split(",")])
-    pesos_atuais /= pesos_atuais.sum()  # normaliza para 100%
-except:
-    st.error("Erro ao interpretar os pesos. Verifique se estão separados por vírgula e correspondem aos tickers.")
-    st.stop()
+tickers_padrao = [
+    "AGRO3.SA", "BBAS3.SA", "BBSE3.SA", "BPAC11.SA", "EGIE3.SA",
+    "ITUB3.SA", "PRIO3.SA", "PSSA3.SA", "SAPR3.SA", "SBSP3.SA",
+    "VIVT3.SA", "WEGE3.SA", "TOTS3.SA", "B3SA3.SA", "TAEE3.SA"
+]
+
+# Cria DataFrame inicial
+df_default = pd.DataFrame({
+    "Ticker": tickers_padrao,
+    "Peso": [round(1/len(tickers_padrao), 4)] * len(tickers_padrao)
+})
+
+# Permite edição da carteira com visual mais amigável
+carteira_df = st.data_editor(
+    df_default,
+    num_rows="dynamic",
+    use_container_width=True,
+    key="carteira_editor"
+)
+
+# Filtra apenas linhas válidas
+carteira_df.dropna(inplace=True)
+carteira_df["Ticker"] = carteira_df["Ticker"].str.upper().str.strip()
+carteira_df = carteira_df[carteira_df["Peso"] > 0]
+
+# Normaliza os pesos
+pesos = carteira_df["Peso"].values
+pesos /= pesos.sum()
+carteira_df["Peso Normalizado"] = pesos
 
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
