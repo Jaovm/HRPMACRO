@@ -312,50 +312,63 @@ def otimizar_carteira_hrp(tickers, pesos_atuais=None):
         w_ /= w_.sum()
         return np.dot(w_, np.dot(cov_slice, w_))
 
-    def recursive_bisection(cov, sort_ix):
-        w = pd.Series(1, index=sort_ix)
-        cluster_items = [sort_ix]
-        while len(cluster_items) > 0:
-            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
-            for i in range(0, len(cluster_items), 2):
-                c0 = cluster_items[i]
-                c1 = cluster_items[i + 1]
-                var0 = get_cluster_var(cov, c0)
-                var1 = get_cluster_var(cov, c1)
-                alpha = 1 - var0 / (var0 + var1)
-                w[c0] *= alpha
-                w[c1] *= 1 - alpha
-        return w
+def recursive_bisection(cov, sort_ix):
+    w = pd.Series(1, index=sort_ix)
+    cluster_items = [sort_ix]
+    
+    while len(cluster_items) > 0:
+        # Dividir os clusters em dois, recursivamente
+        cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
+        
+        for i in range(0, len(cluster_items), 2):
+            c0 = cluster_items[i]
+            c1 = cluster_items[i + 1]
+            var0 = get_cluster_var(cov, c0)  # Função que deve ser definida
+            var1 = get_cluster_var(cov, c1)
+            
+            alpha = 1 - var0 / (var0 + var1)
+            w[c0] *= alpha
+            w[c1] *= 1 - alpha
+    
+    return w
 
+def ajustar_pesos(cov, tickers, pesos_atuais=None):
+    # Obter pesos do HRP
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
     
     if pesos_atuais is not None:
-        pesos_atuais = np.array(pesos_atuais)
+        # Garantir que pesos_atuais seja numpy array
+        if isinstance(pesos_atuais, (list, np.ndarray)):
+            pesos_atuais = np.array(pesos_atuais)
+        elif isinstance(pesos_atuais, pd.Series):
+            pesos_atuais = pesos_atuais.values  # Converter para numpy array
+
+        # Calcular o aporte necessário
         total_atual = pesos_atuais.sum()
         total_novo = 1.0
         aporte = total_novo - total_atual
 
         if aporte < 0:
             raise ValueError("O peso total atual é maior que 100% — não há aporte novo para alocar.")
+        
+        # Garantir que hrp_weights seja um numpy array
+        hrp_weights = np.array(hrp_weights)
+        
+        # Alinhar os índices entre pesos_atuais e hrp_weights, caso pesos_atuais seja uma pandas.Series
+        if isinstance(pesos_atuais, pd.Series):
+            pesos_atuais = pesos_atuais.reindex(hrp_weights.index).fillna(0).values  # Preencher NaN com 0
 
-        if isinstance(pesos_atuais, (list, np.ndarray)):
-    pesos_atuais = np.array(pesos_atuais)
-elif isinstance(pesos_atuais, pd.Series):
-    pesos_atuais = pesos_atuais.values  # Converter para numpy array
+        # Verificar se os tamanhos são compatíveis
+        if len(pesos_atuais) != len(hrp_weights):
+            raise ValueError("O número de elementos em pesos_atuais e hrp_weights deve ser o mesmo.")
 
-hrp_weights = np.array(hrp_weights.values)
-
-# Alinhar índices se necessário
-if isinstance(pesos_atuais, pd.Series):
-    pesos_atuais = pesos_atuais.reindex(hrp_weights.index).fillna(0).values  # Preencher NaN com 0
-
-# Verificar se os tamanhos são compatíveis
-if len(pesos_atuais) != len(hrp_weights):
-    raise ValueError("O número de elementos em pesos_atuais e hrp_weights deve ser o mesmo.")
-
-# Soma robusta
-novos_pesos = pesos_atuais + aporte * hrp_weights
+        # Calcular novos pesos com o aporte
+        novos_pesos = pesos_atuais + aporte * hrp_weights
+        
         return novos_pesos
+
+    return hrp_weights  # Retornar os pesos do HRP sem alteração
+
 
     return hrp_weights.values
 
