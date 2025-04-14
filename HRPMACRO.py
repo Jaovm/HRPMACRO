@@ -336,6 +336,10 @@ def ajustar_pesos(cov, tickers, pesos_atuais=None):
     # Obter pesos do HRP
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
     
+    # Garantir que hrp_weights seja numpy array ou pandas Series
+    if isinstance(hrp_weights, pd.Series):
+        hrp_weights = hrp_weights.values  # Converter para numpy array se necessário
+    
     if pesos_atuais is not None:
         # Garantir que pesos_atuais seja numpy array
         if isinstance(pesos_atuais, (list, np.ndarray)):
@@ -351,26 +355,16 @@ def ajustar_pesos(cov, tickers, pesos_atuais=None):
         if aporte < 0:
             raise ValueError("O peso total atual é maior que 100% — não há aporte novo para alocar.")
         
-        # Garantir que hrp_weights seja um numpy array
-        hrp_weights = np.array(hrp_weights)
-        
-        # Alinhar os índices entre pesos_atuais e hrp_weights, caso pesos_atuais seja uma pandas.Series
-        if isinstance(pesos_atuais, pd.Series):
-            pesos_atuais = pesos_atuais.reindex(hrp_weights.index).fillna(0).values  # Preencher NaN com 0
-
-        # Verificar se os tamanhos são compatíveis
+        # Alinhar os índices entre pesos_atuais e hrp_weights
         if len(pesos_atuais) != len(hrp_weights):
             raise ValueError("O número de elementos em pesos_atuais e hrp_weights deve ser o mesmo.")
-
+        
         # Calcular novos pesos com o aporte
         novos_pesos = pesos_atuais + aporte * hrp_weights
         
         return novos_pesos
 
-    return hrp_weights.values  # Retornar os pesos do HRP sem alteração
-
-
-   # return hrp_weights.values
+    return hrp_weights  # Retornar os pesos do HRP sem alteração
 
 # Função Streamlit
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
@@ -422,5 +416,3 @@ if st.button("Gerar Alocação Otimizada"):
             raise ValueError("A variável 'pesos_novos' não está definida corretamente ou não é um tipo numérico válido.")
 
         st.write(df)
-
-
