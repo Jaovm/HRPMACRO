@@ -282,7 +282,6 @@ sensibilidade_setorial = {
     'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
 }
 
-
 def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
     upside = (preco_alvo - preco_atual) / preco_atual
     bonus = 0.1 if favorecido else 0
@@ -322,9 +321,7 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
 
 def filtrar_ativos_validos(carteira, cenario, macro):
     setores_bons = setores_por_cenario[cenario]
-    ativos_validos = filtrar_ativos_validos(list(pesos_atuais.keys()), cenario_macro, macro)
-    pesos_sugeridos = calcular_pesos_sugeridos(ativos_validos, pesos_atuais)
-
+    ativos_validos = []
 
     for ticker in carteira:
         setor = setores_por_ticker.get(ticker, None)
@@ -350,7 +347,7 @@ def filtrar_ativos_validos(carteira, cenario, macro):
 
 # ========= OTIMIZAÇÃO ==========
 def obter_preco_diario_ajustado(tickers):
-    dados_brutos = yf.download(tickers, period="7y", auto_adjust=False)
+    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
 
     if isinstance(dados_brutos.columns, pd.MultiIndex):
         if 'Adj Close' in dados_brutos.columns.get_level_values(0):
@@ -367,7 +364,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_hrp(tickers, pesos_atuais):
+def otimizar_carteira_hrp(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
     dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
@@ -391,9 +388,9 @@ def otimizar_carteira_hrp(tickers, pesos_atuais):
 
     sort_ix = get_quasi_diag(linkage_matrix)
     sorted_tickers = [retornos.columns[i] for i in sort_ix]
-    tickers_indices = {ticker: i for i, ticker in enumerate(retornos.columns)}
-    sorted_indices = [tickers_indices[t] for t in sorted_tickers]
     cov = LedoitWolf().fit(retornos).covariance_
+    ivp = 1. / np.diag(cov)
+    ivp /= ivp.sum()
 
     def get_cluster_var(cov, cluster_items):
         cov_slice = cov[np.ix_(cluster_items, cluster_items)]
@@ -402,7 +399,7 @@ def otimizar_carteira_hrp(tickers, pesos_atuais):
         return np.dot(w_, np.dot(cov_slice, w_))
 
     def recursive_bisection(cov, sort_ix):
-        w = pd.Series(1.0, index=sort_ix)
+        w = pd.Series(1, index=sort_ix)
         cluster_items = [sort_ix]
         while len(cluster_items) > 0:
             cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
@@ -416,27 +413,14 @@ def otimizar_carteira_hrp(tickers, pesos_atuais):
                 w[c1] *= 1 - alpha
         return w
 
-    # Obter os pesos relativos via HRP dentro dos clusters
-    pesos_hrp = recursive_bisection(cov, sorted_indices)
-    pesos_hrp.index = [retornos.columns[i] for i in pesos_hrp.index]
-
-    # Aplicar os pesos informados como base
-    pesos_base = pd.Series(pesos_atuais)
-    pesos_base = pesos_base / pesos_base.sum()
-
-    pesos_finais = pesos_base * pesos_hrp
-    pesos_finais /= pesos_finais.sum()  # Normaliza para somar 1
-    return pesos_finais
-
+    hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
+    return hrp_weights.values
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
 
 macro = obter_macro()
-if not isinstance(macro, dict):
-    st.error("Erro ao obter dados macroeconômicos. Retorno inválido de 'obter_macro()'.")
-    st.stop()
 cenario = classificar_cenario_macro(macro)
 score_macro = pontuar_macro(macro)
 st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_macro})")
