@@ -205,17 +205,67 @@ def obter_macro():
 def pontuar_macro(m):
     print(f"Pontuando macro: {m}")
     score = 0
-    score += 1 if m.get('selic', 0) < 10 else -1
-    score += 1 if m.get('ipca', 0) < 4 else -1
-    score += 1 if m.get('dolar', 0) < 5.80 else -1
-    score += 1 if m.get('pib', 0) > 0 else -1
+
+    # Selic
+    if m.get('selic') is not None:
+        if m['selic'] < 9:
+            score += 2  # cenário expansionista
+        elif m['selic'] <= 11:
+            score += 1
+        elif m['selic'] <= 13:
+            score += 0
+        else:
+            score -= 1  # cenário restritivo
+
+    # IPCA (assumindo anualizado)
+    if m.get('ipca') is not None:
+        if m['ipca'] < 3:
+            score += 1
+        elif m['ipca'] <= 5:
+            score += 0
+        else:
+            score -= 1
+
+    # Dólar
+    if m.get('dolar') is not None:
+        if m['dolar'] < 4.8:
+            score += 1
+        elif m['dolar'] <= 5.3:
+            score += 0
+        else:
+            score -= 1
+
+    # PIB
+    if m.get('pib') is not None:
+        if m['pib'] > 2:
+            score += 2
+        elif m['pib'] > 0:
+            score += 1
+        else:
+            score -= 1
+
+    # Soja e Milho (valores em R$/saca 60kg, convertido se necessário)
     if m.get('soja') and m.get('milho'):
         media_agro = (m['soja'] / 1000 + m['milho'] / 1000) / 2
-        score += 1 if media_agro > 1 else -1
-    if m.get('minerio'):
-        score += 1 if m['minerio'] > 100 else -1
+        if media_agro > 1.3:
+            score += 1
+        elif media_agro > 1.0:
+            score += 0
+        else:
+            score -= 1
+
+    # Minério de ferro (TIO=F, referência em USD/ton)
+    if m.get('minerio') is not None:
+        if m['minerio'] > 120:
+            score += 1
+        elif m['minerio'] >= 90:
+            score += 0
+        else:
+            score -= 1
+
     print(f"Score macro calculado: {score}")
     return score
+
 
 
 def classificar_cenario_macro(m):
