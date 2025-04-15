@@ -187,7 +187,7 @@ def obter_macro():
         "dolar": get_bcb(1),
         "pib": get_bcb(7326),  # PIB trimestral
         "petroleo": obter_preco_petroleo(),
-        "minerio": obter_preco_commodity("TIO=F", "Minério de Ferro (proxy)"),
+        "minerio": obter_preco_commodity("TIO=1F", "Minério de Ferro (proxy)"),
         "soja": obter_preco_commodity("ZS=F", "Soja"),
         "milho": obter_preco_commodity("ZC=F", "Milho")
     }
