@@ -540,6 +540,8 @@ with st.sidebar:
         st.error("A soma dos pesos deve ser maior que 0.")
         st.stop()
 
+# Constrói a carteira com os tickers e pesos normalizados
+carteira = dict(zip(tickers, pesos_atuais))
 
 
 
