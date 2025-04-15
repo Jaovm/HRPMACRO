@@ -154,17 +154,19 @@ def get_bcb(code):
     r = requests.get(url)
     return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
 
-def obter_preco_commodity(ticker, nome=""):
+def obter_preco_commodity(ticker, nome="Commodity"):
     try:
-        dados = yf.download(ticker, period="5d", interval="1d", progress=False)
-        if not dados.empty and 'Adj Close' in dados.columns:
-            return float(dados['Adj Close'].dropna().iloc[-1])
+        dados = yf.Ticker(ticker).history(period="5d")
+        if not dados.empty and 'Close' in dados.columns:
+            preco = dados['Close'].dropna().iloc[-1]
+            return float(preco)
         else:
-            st.warning(f"Preço indisponível para {nome or ticker}.")
+            st.warning(f"Preço indisponível para {nome}.")
             return None
     except Exception as e:
-        st.warning(f"Erro ao obter preço de {nome or ticker}: {e}")
+        st.error(f"Erro ao obter preço para {nome} ({ticker}): {e}")
         return None
+
 
 def obter_preco_petroleo():
     try:
@@ -184,7 +186,7 @@ def obter_macro():
         "dolar": get_bcb(1),
         "pib": get_bcb(7326),  # PIB trimestral
         "petroleo": obter_preco_petroleo(),
-        "minerio": obter_preco_commodity("SCO=F", "Minério de Ferro (proxy)"),
+        "minerio": obter_preco_commodity("TIOc1", "Minério de Ferro (proxy)"),
         "soja": obter_preco_commodity("ZS=F", "Soja"),
         "milho": obter_preco_commodity("ZC=F", "Milho")
     }
