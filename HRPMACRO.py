@@ -193,6 +193,7 @@ def obter_macro():
     }
 
 def pontuar_macro(m):
+    print(f"Pontuando macro: {m}")
     score = 0
     score += 1 if m.get('selic', 0) < 10 else -1
     score += 1 if m.get('ipca', 0) < 4 else -1
@@ -203,7 +204,9 @@ def pontuar_macro(m):
         score += 1 if media_agro > 1 else -1
     if m.get('minerio'):
         score += 1 if m['minerio'] > 100 else -1
+    print(f"Score macro calculado: {score}")
     return score
+
 
 def classificar_cenario_macro(m):
     score = pontuar_macro(m)
