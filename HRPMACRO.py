@@ -364,7 +364,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_hrp(tickers):
+def otimizar_carteira_hrp(tickers, pesos_atuais):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
     dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
@@ -388,9 +388,9 @@ def otimizar_carteira_hrp(tickers):
 
     sort_ix = get_quasi_diag(linkage_matrix)
     sorted_tickers = [retornos.columns[i] for i in sort_ix]
+    tickers_indices = {ticker: i for i, ticker in enumerate(retornos.columns)}
+    sorted_indices = [tickers_indices[t] for t in sorted_tickers]
     cov = LedoitWolf().fit(retornos).covariance_
-    ivp = 1. / np.diag(cov)
-    ivp /= ivp.sum()
 
     def get_cluster_var(cov, cluster_items):
         cov_slice = cov[np.ix_(cluster_items, cluster_items)]
@@ -399,7 +399,7 @@ def otimizar_carteira_hrp(tickers):
         return np.dot(w_, np.dot(cov_slice, w_))
 
     def recursive_bisection(cov, sort_ix):
-        w = pd.Series(1, index=sort_ix)
+        w = pd.Series(1.0, index=sort_ix)
         cluster_items = [sort_ix]
         while len(cluster_items) > 0:
             cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
@@ -413,8 +413,18 @@ def otimizar_carteira_hrp(tickers):
                 w[c1] *= 1 - alpha
         return w
 
-    hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
-    return hrp_weights.values
+    # Obter os pesos relativos via HRP dentro dos clusters
+    pesos_hrp = recursive_bisection(cov, sorted_indices)
+    pesos_hrp.index = [retornos.columns[i] for i in pesos_hrp.index]
+
+    # Aplicar os pesos informados como base
+    pesos_base = pd.Series(pesos_atuais)
+    pesos_base = pesos_base / pesos_base.sum()
+
+    pesos_finais = pesos_base * pesos_hrp
+    pesos_finais /= pesos_finais.sum()  # Normaliza para somar 1
+    return pesos_finais
+
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
