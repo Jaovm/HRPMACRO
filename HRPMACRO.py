@@ -226,15 +226,48 @@ def obter_preco_atual(ticker):
         return None
 
 # ========= FILTRAR AÇÕES ==========
+sensibilidade_setorial = {
+    'Bancos':                          {'juros': 1,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities': 1},
+    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities': 0},
+    'Bolsas e Serviços Financeiros':  {'juros': 1,  'inflação': 0,  'cambio': 0,  'pib': 2,  'commodities': 0},
+    'Energia Elétrica':               {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities': -1},
+    'Petróleo, Gás e Biocombustíveis':{'juros': 0,  'inflação': 0,  'cambio': 2,  'pib': 1,  'commodities': 2},
+    'Mineração e Siderurgia':         {'juros': 0,  'inflação': 0,  'cambio': 2,  'pib': 1,  'commodities': 2},
+    'Indústria e Bens de Capital':    {'juros': -1, 'inflação': -1, 'cambio': -1, 'pib': 2,  'commodities': 0},
+    'Agronegócio':                    {'juros': 0,  'inflação': -1, 'cambio': 2,  'pib': 1,  'commodities': 2},
+    'Saúde':                          {'juros': 0,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities': 0},
+    'Tecnologia':                     {'juros': -2, 'inflação': 0,  'cambio': 0,  'pib': 2,  'commodities': -1},
+    'Consumo Discricionário':         {'juros': -2, 'inflação': -1, 'cambio': -1, 'pib': 2,  'commodities': -1},
+    'Consumo Básico':                 {'juros': 1,  'inflação': -2, 'cambio': -1, 'pib': 1,  'commodities': -1},
+    'Comunicação':                    {'juros': 0,  'inflação': 0,  'cambio': -1, 'pib': 1,  'commodities': 0},
+    'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities': -1}
+}
+
 def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
     upside = (preco_alvo - preco_atual) / preco_atual
     bonus = 0.1 if favorecido else 0
+
+    setor = setores_por_ticker.get(ticker)
+    score_macro = 0
+
+    if setor in sensibilidade_setorial:
+        s = sensibilidade_setorial[setor]
+        if macro['selic']:     score_macro += s['juros'] * (1 if macro['selic'] > 10 else -1)
+        if macro['ipca']:      score_macro += s['inflação'] * (1 if macro['ipca'] > 5 else -1)
+        if macro['dolar']:     score_macro += s['cambio'] * (1 if macro['dolar'] > 5 else -1)
+        if macro['petroleo']:  score_macro += s['commodities'] * (1 if macro['petroleo'] > 80 else -1)
+        # PIB não tem fonte direta no app, mas pode ser simulado ou adicionado depois
+        # score_macro += s['pib'] * (1 if pib > valor_base else -1)
+
     if ticker in empresas_exportadoras:
         if macro['dolar'] and macro['dolar'] > 5:
             bonus += 0.05
         if macro['petroleo'] and macro['petroleo'] > 80:
             bonus += 0.05
-    return upside + bonus
+
+    score_total = upside + bonus + 0.01 * score_macro
+    return score_total
+
 
 def filtrar_ativos_validos(carteira, cenario, macro):
     setores_bons = setores_por_cenario[cenario]
