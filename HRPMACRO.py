@@ -170,7 +170,7 @@ def obter_macro():
         "ipca": get_bcb(433),
         "dolar": get_bcb(1),
         "pib": get_bcb(7326),  # PIB trimestral
-        "petroleo": obter_preco_petroleo()
+        "petroleo": obter_preco_petroleo(),
         "minerio": obter_preco_commodity("TIOc1"),
         "soja": obter_preco_commodity("ZS=F"),
         "milho": obter_preco_commodity("ZC=F")
