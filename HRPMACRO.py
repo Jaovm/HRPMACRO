@@ -153,6 +153,18 @@ def get_bcb(code):
     r = requests.get(url)
     return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
 
+def obter_preco_commodity(ticker, nome=""):
+    try:
+        dados = yf.download(ticker, period="5d", interval="1d", progress=False)
+        if not dados.empty and 'Adj Close' in dados.columns:
+            return float(dados['Adj Close'].dropna().iloc[-1])
+        else:
+            st.warning(f"Preço indisponível para {nome or ticker}.")
+            return None
+    except Exception as e:
+        st.warning(f"Erro ao obter preço de {nome or ticker}: {e}")
+        return None
+
 def obter_preco_petroleo():
     try:
         dados = yf.Ticker("CL=F").history(period="5d")
@@ -171,10 +183,9 @@ def obter_macro():
         "dolar": get_bcb(1),
         "pib": get_bcb(7326),  # PIB trimestral
         "petroleo": obter_preco_petroleo(),
-        "minerio": obter_preco_commodity("TIOc1"),
-        "soja": obter_preco_commodity("ZS=F"),
-        "milho": obter_preco_commodity("ZC=F")
-        
+        "minerio": obter_preco_commodity("SCO=F", "Minério de Ferro (proxy)"),
+        "soja": obter_preco_commodity("ZS=F", "Soja"),
+        "milho": obter_preco_commodity("ZC=F", "Milho")
     }
 
 def classificar_cenario_macro(m):
