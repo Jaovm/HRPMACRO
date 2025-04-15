@@ -454,6 +454,9 @@ aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, va
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 usar_pesos_macroeconomicos = st.checkbox('Usar pesos macroeconômicos', value=True)
 
+print(f"Pontuando macro: {m}")
+print(f"Score macro calculado: {score}")
+
 # Utilize o valor selecionado na otimização e filtragem de ativos
 ativos_validos = filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=usar_pesos_macroeconomicos)
 
