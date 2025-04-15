@@ -548,8 +548,6 @@ def otimizar_carteira_hrp(tickers):
     sort_ix = get_quasi_diag(linkage_matrix)
     sorted_tickers = [retornos.columns[i] for i in sort_ix]
     cov = LedoitWolf().fit(retornos).covariance_
-    ivp = 1. / np.diag(cov)
-    ivp /= ivp.sum()
 
     def get_cluster_var(cov, cluster_items):
         cov_slice = cov[np.ix_(cluster_items, cluster_items)]
@@ -558,10 +556,10 @@ def otimizar_carteira_hrp(tickers):
         return np.dot(w_, np.dot(cov_slice, w_))
 
     def recursive_bisection(cov, sort_ix):
-        w = pd.Series(1, index=sort_ix)
+        w = pd.Series(1.0, index=sort_ix)
         cluster_items = [sort_ix]
         while len(cluster_items) > 0:
-            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
+            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i)//2), (len(i)//2, len(i))) if len(i) > 1]
             for i in range(0, len(cluster_items), 2):
                 c0 = cluster_items[i]
                 c1 = cluster_items[i + 1]
@@ -572,8 +570,14 @@ def otimizar_carteira_hrp(tickers):
                 w[c1] *= 1 - alpha
         return w
 
-    hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
-    return hrp_weights.values
+    # Aplica HRP nos índices ordenados
+    indices_ordenados = [retornos.columns.get_loc(tkr) for tkr in sorted_tickers]
+    pesos = recursive_bisection(cov, indices_ordenados)
+
+    # Retorna como Series com tickers
+    pesos.index = [retornos.columns[i] for i in pesos.index]
+    return pesos
+
 
 
 
