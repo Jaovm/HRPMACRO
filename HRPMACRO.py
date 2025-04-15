@@ -191,10 +191,15 @@ def obter_macro():
 def classificar_cenario_macro(m):
     if m['ipca'] > 5 or m['selic'] > 12:
         return "Restritivo"
-    elif m['ipca'] < 4 and m['selic'] < 10:
+    elif m['ipca'] < 4 and m['selic'] < 10 and m['pib'] > 0 and (
+        (m['soja'] and m['soja'] > 1350) or 
+        (m['milho'] and m['milho'] > 550) or 
+        (m['minerio'] and m['minerio'] > 100)
+    ):
         return "Expansionista"
     else:
         return "Neutro"
+
 
 # ========= PREÇO ALVO ==========
 
@@ -269,27 +274,23 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
 
     if setor in sensibilidade_setorial:
         s = sensibilidade_setorial[setor]
-        # Juros (selic)
+
         if macro['selic'] is not None:
             score_macro += s['juros'] * (1 if macro['selic'] > 10 else -1)
-        # Inflação
         if macro['ipca'] is not None:
             score_macro += s['inflação'] * (1 if macro['ipca'] > 5 else -1)
-        # Câmbio
         if macro['dolar'] is not None:
             score_macro += s['cambio'] * (1 if macro['dolar'] > 5 else -1)
-        # PIB
         if macro['pib'] is not None:
             score_macro += s['pib'] * (1 if macro['pib'] > 0 else -1)
-        # Commodities - Agro
-        if macro['soja'] is not None and macro['milho'] is not None:
-            agro_ok = macro['soja'] > 1300 or macro['milho'] > 500
-            score_macro += s['commodities_agro'] * (1 if agro_ok else -1)
-        # Commodities - Minério
-        if macro['minerio'] is not None:
-            score_macro += s['commodities_minerio'] * (1 if macro['minerio'] > 110 else -1)
 
-    # Bônus para exportadoras com dólar alto e petróleo valorizado
+        if macro['soja'] is not None and macro['milho'] is not None:
+            media_agro = (macro['soja'] / 1000 + macro['milho'] / 1000) / 2
+            score_macro += s.get('commodities_agro', 0) * (1 if media_agro > 1 else -1)
+
+        if macro['minerio'] is not None:
+            score_macro += s.get('commodities_minerio', 0) * (1 if macro['minerio'] > 100 else -1)
+
     if ticker in empresas_exportadoras:
         if macro['dolar'] and macro['dolar'] > 5:
             bonus += 0.05
@@ -298,6 +299,7 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
 
     score_total = upside + bonus + 0.01 * score_macro
     return score_total
+
 
 
 def filtrar_ativos_validos(carteira, cenario, macro):
