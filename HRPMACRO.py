@@ -195,7 +195,7 @@ def obter_macro():
         "selic": get_bcb(432),
         "ipca": get_ipca_anualizado(),
         "dolar": get_bcb(1),
-        "pib": get_bcb(7326),  # PIB trimestral
+        "pib": get_bcb(4380),  # PIB anual
         "petroleo": obter_preco_petroleo(),
         "minerio": obter_preco_commodity("TIO=F", "Minério de Ferro (proxy)"),
         "soja": obter_preco_commodity("ZS=F", "Soja"),
