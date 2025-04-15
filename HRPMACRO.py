@@ -598,9 +598,21 @@ with st.sidebar:
     st.header("Parâmetros")
     st.markdown("### Dados dos Ativos")
 
+    # Tickers e pesos default
+    tickers_default = [
+        "AGRO3.SA", "BBAS3.SA", "BBSE3.SA", "BPAC11.SA", "EGIE3.SA",
+        "ITUB3.SA", "PRIO3.SA", "PSSA3.SA", "SAPR3.SA", "SBSP3.SA",
+        "VIVT3.SA", "WEGE3.SA", "TOTS3.SA", "B3SA3.SA", "TAEE3.SA"
+    ]
+    pesos_default = [
+        0.10, 0.012, 0.065, 0.106, 0.05,
+        0.005, 0.15, 0.15, 0.067, 0.04,
+        0.064, 0.15, 0.01, 0.001, 0.03
+    ]
+
     # Número de ativos controlado por estado da sessão
     if "num_ativos" not in st.session_state:
-        st.session_state.num_ativos = 4  # valor inicial
+        st.session_state.num_ativos = len(tickers_default)
 
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -614,13 +626,14 @@ with st.sidebar:
     tickers = []
     pesos = []
 
-    # Inputs lado a lado
     for i in range(st.session_state.num_ativos):
         col1, col2 = st.columns(2)
         with col1:
-            ticker = st.text_input(f"Ticker do Ativo {i+1}", key=f"ticker_{i}").upper()
+            ticker_default = tickers_default[i] if i < len(tickers_default) else ""
+            ticker = st.text_input(f"Ticker do Ativo {i+1}", value=ticker_default, key=f"ticker_{i}").upper()
         with col2:
-            peso = st.number_input(f"Peso do Ativo {i+1}", min_value=0.0, step=0.01, value=1.0, key=f"peso_{i}")
+            peso_default = pesos_default[i] if i < len(pesos_default) else 1.0
+            peso = st.number_input(f"Peso do Ativo {i+1}", min_value=0.0, step=0.01, value=peso_default, key=f"peso_{i}")
         if ticker:
             tickers.append(ticker)
             pesos.append(peso)
