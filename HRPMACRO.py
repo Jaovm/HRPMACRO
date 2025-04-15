@@ -105,8 +105,8 @@ setores_por_ticker = {
 
     # Utilidades Públicas
     'SBSP3.SA': 'Utilidades Públicas',
-    'SAPR11.SA': 'Utilidades Públicas'
-    'SAPR3.SA': 'Utilidades Públicas'
+    'SAPR11.SA': 'Utilidades Públicas',
+    'SAPR3.SA': 'Utilidades Públicas',
     'SAPR4.SA': 'Utilidades Públicas',
     'CSMG3.SA': 'Utilidades Públicas',
     'ALUP11.SA': 'Utilidades Públicas',
