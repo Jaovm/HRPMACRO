@@ -169,7 +169,12 @@ def obter_macro():
         "selic": get_bcb(432),
         "ipca": get_bcb(433),
         "dolar": get_bcb(1),
+        "pib": get_bcb(7326),  # PIB trimestral
         "petroleo": obter_preco_petroleo()
+        "minerio": obter_preco_commodity("TIOc1"),
+        "soja": obter_preco_commodity("ZS=F"),
+        "milho": obter_preco_commodity("ZC=F")
+        
     }
 
 def classificar_cenario_macro(m):
@@ -226,21 +231,22 @@ def obter_preco_atual(ticker):
         return None
 
 # ========= FILTRAR AÇÕES ==========
+# Novo modelo com commodities separadas
 sensibilidade_setorial = {
-    'Bancos':                          {'juros': 1,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities': 1},
-    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities': 0},
-    'Bolsas e Serviços Financeiros':  {'juros': 1,  'inflação': 0,  'cambio': 0,  'pib': 2,  'commodities': 0},
-    'Energia Elétrica':               {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities': -1},
-    'Petróleo, Gás e Biocombustíveis':{'juros': 0,  'inflação': 0,  'cambio': 2,  'pib': 1,  'commodities': 2},
-    'Mineração e Siderurgia':         {'juros': 0,  'inflação': 0,  'cambio': 2,  'pib': 1,  'commodities': 2},
-    'Indústria e Bens de Capital':    {'juros': -1, 'inflação': -1, 'cambio': -1, 'pib': 2,  'commodities': 0},
-    'Agronegócio':                    {'juros': 0,  'inflação': -1, 'cambio': 2,  'pib': 1,  'commodities': 2},
-    'Saúde':                          {'juros': 0,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities': 0},
-    'Tecnologia':                     {'juros': -2, 'inflação': 0,  'cambio': 0,  'pib': 2,  'commodities': -1},
-    'Consumo Discricionário':         {'juros': -2, 'inflação': -1, 'cambio': -1, 'pib': 2,  'commodities': -1},
-    'Consumo Básico':                 {'juros': 1,  'inflação': -2, 'cambio': -1, 'pib': 1,  'commodities': -1},
-    'Comunicação':                    {'juros': 0,  'inflação': 0,  'cambio': -1, 'pib': 1,  'commodities': 0},
-    'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities': -1}
+    'Bancos':                          {'juros': 1,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities_agro': 1, 'commodities_minerio': 1},
+    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities_agro': 0, 'commodities_minerio': 0},
+    'Bolsas e Serviços Financeiros':  {'juros': 1,  'inflação': 0,  'cambio': 0,  'pib': 2,  'commodities_agro': 0, 'commodities_minerio': 0},
+    'Energia Elétrica':               {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1},
+    'Petróleo, Gás e Biocombustíveis':{'juros': 0,  'inflação': 0,  'cambio': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Mineração e Siderurgia':         {'juros': 0,  'inflação': 0,  'cambio': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 2},
+    'Indústria e Bens de Capital':    {'juros': -1, 'inflação': -1, 'cambio': -1, 'pib': 2,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Agronegócio':                    {'juros': 0,  'inflação': -1, 'cambio': 2,  'pib': 1,  'commodities_agro': 2,  'commodities_minerio': 0},
+    'Saúde':                          {'juros': 0,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Tecnologia':                     {'juros': -2, 'inflação': 0,  'cambio': 0,  'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
+    'Consumo Discricionário':         {'juros': -2, 'inflação': -1, 'cambio': -1, 'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
+    'Consumo Básico':                 {'juros': 1,  'inflação': -2, 'cambio': -1, 'pib': 1,  'commodities_agro': -1, 'commodities_minerio': -1},
+    'Comunicação':                    {'juros': 0,  'inflação': 0,  'cambio': -1, 'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
 }
 
 def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
@@ -252,13 +258,27 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
 
     if setor in sensibilidade_setorial:
         s = sensibilidade_setorial[setor]
-        if macro['selic']:     score_macro += s['juros'] * (1 if macro['selic'] > 10 else -1)
-        if macro['ipca']:      score_macro += s['inflação'] * (1 if macro['ipca'] > 5 else -1)
-        if macro['dolar']:     score_macro += s['cambio'] * (1 if macro['dolar'] > 5 else -1)
-        if macro['petroleo']:  score_macro += s['commodities'] * (1 if macro['petroleo'] > 80 else -1)
-        # PIB não tem fonte direta no app, mas pode ser simulado ou adicionado depois
-        # score_macro += s['pib'] * (1 if pib > valor_base else -1)
+        # Juros (selic)
+        if macro['selic'] is not None:
+            score_macro += s['juros'] * (1 if macro['selic'] > 10 else -1)
+        # Inflação
+        if macro['ipca'] is not None:
+            score_macro += s['inflação'] * (1 if macro['ipca'] > 5 else -1)
+        # Câmbio
+        if macro['dolar'] is not None:
+            score_macro += s['cambio'] * (1 if macro['dolar'] > 5 else -1)
+        # PIB
+        if macro['pib'] is not None:
+            score_macro += s['pib'] * (1 if macro['pib'] > 0 else -1)
+        # Commodities - Agro
+        if macro['soja'] is not None and macro['milho'] is not None:
+            agro_ok = macro['soja'] > 1300 or macro['milho'] > 500
+            score_macro += s['commodities_agro'] * (1 if agro_ok else -1)
+        # Commodities - Minério
+        if macro['minerio'] is not None:
+            score_macro += s['commodities_minerio'] * (1 if macro['minerio'] > 110 else -1)
 
+    # Bônus para exportadoras com dólar alto e petróleo valorizado
     if ticker in empresas_exportadoras:
         if macro['dolar'] and macro['dolar'] > 5:
             bonus += 0.05
