@@ -204,7 +204,6 @@ setores_por_ticker = {
 }
 
 
-
 setores_por_cenario = {
     "Expansão Forte": [
         'Consumo Discricionário', 'Tecnologia',
