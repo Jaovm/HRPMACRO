@@ -322,7 +322,9 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
 
 def filtrar_ativos_validos(carteira, cenario, macro):
     setores_bons = setores_por_cenario[cenario]
-    ativos_validos = []
+    ativos_validos = filtrar_ativos_validos(list(pesos_atuais.keys()), cenario_macro, macro)
+    pesos_sugeridos = calcular_pesos_sugeridos(ativos_validos, pesos_atuais)
+
 
     for ticker in carteira:
         setor = setores_por_ticker.get(ticker, None)
