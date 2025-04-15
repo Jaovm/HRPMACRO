@@ -8,11 +8,6 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
 
-# Escolha do método de otimização
-metodo_otimizacao = st.radio("Escolha o método de otimização:", ["HRP", "Sharpe"])
-
-# Escolha do uso dos pesos ajustados pelo cenário macroeconômico
-usar_pesos_macro = st.checkbox("Ajustar pesos com base no cenário macroeconômico?", value=True)
 
 # ========= DICIONÁRIOS ==========
 
@@ -288,14 +283,14 @@ sensibilidade_setorial = {
     'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
 }
 
-def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
+def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macroeconomicos=True):
     upside = (preco_alvo - preco_atual) / preco_atual
     bonus = 0.1 if favorecido else 0
 
     setor = setores_por_ticker.get(ticker)
     score_macro = 0
 
-    if setor in sensibilidade_setorial:
+    if setor in sensibilidade_setorial and usar_pesos_macroeconomicos:  # Verifique se devemos usar os pesos macroeconômicos
         s = sensibilidade_setorial[setor]
 
         if macro['selic'] is not None:
@@ -324,8 +319,7 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
     return score_total
 
 
-
-def filtrar_ativos_validos(carteira, cenario, macro):
+def filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=True):
     setores_bons = setores_por_cenario[cenario]
     ativos_validos = []
 
@@ -338,7 +332,7 @@ def filtrar_ativos_validos(carteira, cenario, macro):
             continue
         if preco_atual < preco_alvo:
             favorecido = setor in setores_bons
-            score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro)
+            score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macroeconomicos)
             ativos_validos.append({
                 "ticker": ticker,
                 "setor": setor,
@@ -350,6 +344,7 @@ def filtrar_ativos_validos(carteira, cenario, macro):
 
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
     return ativos_validos
+
 
 # ========= OTIMIZAÇÃO ==========
 def obter_preco_diario_ajustado(tickers):
@@ -454,6 +449,11 @@ except:
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
+usar_pesos_macroeconomicos = st.checkbox('Usar pesos macroeconômicos', value=True)
+
+# Utilize o valor selecionado na otimização e filtragem de ativos
+ativos_validos = filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=usar_pesos_macroeconomicos)
+
 
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
