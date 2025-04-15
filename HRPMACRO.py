@@ -498,16 +498,43 @@ col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] e
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
 st.subheader("📌 Informe sua carteira atual")
-default_carteira = "AGRO3.SA, BBAS3.SA, BBSE3.SA, BPAC11.SA, EGIE3.SA, ITUB3.SA, PRIO3.SA, PSSA3.SA, SAPR3.SA, SBSP3.SA, VIVT3.SA, WEGE3.SA, TOTS3.SA, B3SA3.SA, TAEE3.SA"
-tickers = st.text_input("Tickers separados por vírgula", default_carteira).upper()
-carteira = [t.strip() for t in tickers.split(",") if t.strip()]
-pesos_input = st.text_input("Pesos atuais da carteira (mesma ordem dos tickers, separados por vírgula)", value=", ".join(["{:.2f}".format(1/len(carteira))]*len(carteira)))
-try:
-    pesos_atuais = np.array([float(p.strip()) for p in pesos_input.split(",")])
-    pesos_atuais /= pesos_atuais.sum()  # normaliza para 100%
-except:
-    st.error("Erro ao interpretar os pesos. Verifique se estão separados por vírgula e correspondem aos tickers.")
+st.markdown("### Dados dos Ativos")
+
+# Número de ativos (mantido com estado da sessão)
+num_ativos = st.session_state.get("num_ativos", 4)
+
+col1, col2 = st.columns([1, 1])
+with col1:
+    if st.button("( + )"):
+        num_ativos += 1
+with col2:
+    if st.button("( - )") and num_ativos > 1:
+        num_ativos -= 1
+
+st.session_state["num_ativos"] = num_ativos
+
+# Inputs dinâmicos para cada ativo
+tickers = []
+pesos = []
+
+for i in range(num_ativos):
+    col1, col2 = st.columns(2)
+    with col1:
+        ticker = st.text_input(f"Ticker do Ativo {i+1}", key=f"ticker_{i}").upper()
+    with col2:
+        peso = st.number_input(f"Peso do Ativo {i+1}", min_value=0.0, step=0.01, value=1.0, key=f"peso_{i}")
+    if ticker:
+        tickers.append(ticker)
+        pesos.append(peso)
+
+# Normalização dos pesos
+pesos_array = np.array(pesos)
+if pesos_array.sum() > 0:
+    pesos_atuais = pesos_array / pesos_array.sum()
+else:
+    st.error("A soma dos pesos deve ser maior que 0.")
     st.stop()
+
 
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
