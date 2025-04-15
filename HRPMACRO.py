@@ -188,17 +188,31 @@ def obter_macro():
         "milho": obter_preco_commodity("ZC=F", "Milho")
     }
 
+def pontuar_macro(m):
+    score = 0
+    score += 1 if m.get('selic', 0) < 10 else -1
+    score += 1 if m.get('ipca', 0) < 4 else -1
+    score += 1 if m.get('dolar', 0) < 5 else -1
+    score += 1 if m.get('pib', 0) > 0 else -1
+    if m.get('soja') and m.get('milho'):
+        media_agro = (m['soja'] / 1000 + m['milho'] / 1000) / 2
+        score += 1 if media_agro > 1 else -1
+    if m.get('minerio'):
+        score += 1 if m['minerio'] > 100 else -1
+    return score
+
 def classificar_cenario_macro(m):
-    if m['ipca'] > 5 or m['selic'] > 12:
-        return "Restritivo"
-    elif m['ipca'] < 4 and m['selic'] < 10 and m['pib'] > 0 and (
-        (m['soja'] and m['soja'] > 1350) or 
-        (m['milho'] and m['milho'] > 550) or 
-        (m['minerio'] and m['minerio'] > 100)
-    ):
-        return "Expansionista"
+    score = pontuar_macro(m)
+    if score >= 5:
+        return "Expansão Forte"
+    elif score >= 3:
+        return "Expansão Moderada"
+    elif score >= 0:
+        return "Estável"
+    elif score >= -2:
+        return "Contração Moderada"
     else:
-        return "Neutro"
+        return "Contração Forte"
 
 
 # ========= PREÇO ALVO ==========
@@ -405,6 +419,8 @@ st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroec
 
 macro = obter_macro()
 cenario = classificar_cenario_macro(macro)
+score_macro = pontuar_macro(macro)
+st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_macro})")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Selic (%)", f"{macro['selic']:.2f}")
 col2.metric("Inflação IPCA (%)", f"{macro['ipca']:.2f}")
