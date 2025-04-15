@@ -111,27 +111,28 @@ setores_por_ticker = {
 
 
 setores_por_cenario = {
-    "Expansionista": [
-        'Consumo Discricionário',
-        'Tecnologia',
-        'Indústria e Bens de Capital',
-        'Agronegócio'
+    "Expansão Forte": [
+        'Consumo Discricionário', 'Tecnologia',
+        'Indústria e Bens de Capital', 'Agronegócio'
     ],
-    "Neutro": [
-        'Saúde',
-        'Bancos',
-        'Seguradoras',
-        'Bolsas e Serviços Financeiros',
-        'Utilidades Públicas'
+    "Expansão Moderada": [
+        'Consumo Discricionário', 'Tecnologia',
+        'Indústria e Bens de Capital', 'Agronegócio', 'Saúde'
     ],
-    "Restritivo": [
-        'Energia Elétrica',
-        'Petróleo, Gás e Biocombustíveis',
-        'Mineração e Siderurgia',
-        'Consumo Básico',
-        'Comunicação'
+    "Estável": [
+        'Saúde', 'Bancos', 'Seguradoras',
+        'Bolsas e Serviços Financeiros', 'Utilidades Públicas'
+    ],
+    "Contração Moderada": [
+        'Energia Elétrica', 'Petróleo, Gás e Biocombustíveis',
+        'Mineração e Siderurgia', 'Consumo Básico', 'Comunicação'
+    ],
+    "Contração Forte": [
+        'Energia Elétrica', 'Petróleo, Gás e Biocombustíveis',
+        'Mineração e Siderurgia', 'Consumo Básico'
     ]
 }
+
 
 empresas_exportadoras = [
     'VALE3.SA',  # Mineração
