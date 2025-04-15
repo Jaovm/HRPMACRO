@@ -721,6 +721,10 @@ if st.button("Gerar Alocação Otimizada"):
 
                 st.subheader("📈 Ativos Recomendados para Novo Aporte")
                 st.dataframe(df_resultado[["ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações", "Valor Alocado (R$)", "% na Carteira Final"]])
+                pesos_hrp = otimizar_carteira_hrp(list(carteira.keys()))
+                st.dataframe(pesos_hrp.rename("Peso HRP"))
+
+                
                 # Calcular o valor total utilizado no aporte
                 valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
                 troco = aporte - valor_utilizado
