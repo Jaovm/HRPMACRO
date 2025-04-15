@@ -497,43 +497,49 @@ col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
 col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
-st.subheader("📌 Informe sua carteira atual")
-st.markdown("### Dados dos Ativos")
+import streamlit as st
+import numpy as np
 
-# Número de ativos (mantido com estado da sessão)
-num_ativos = st.session_state.get("num_ativos", 4)
+# --- SIDEBAR ---
+with st.sidebar:
+    st.header("Parâmetros")
+    st.markdown("### Dados dos Ativos")
 
-col1, col2 = st.columns([1, 1])
-with col1:
-    if st.button("( + )"):
-        num_ativos += 1
-with col2:
-    if st.button("( - )") and num_ativos > 1:
-        num_ativos -= 1
+    # Número de ativos controlado por estado da sessão
+    if "num_ativos" not in st.session_state:
+        st.session_state.num_ativos = 4  # valor inicial
 
-st.session_state["num_ativos"] = num_ativos
-
-# Inputs dinâmicos para cada ativo
-tickers = []
-pesos = []
-
-for i in range(num_ativos):
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1, 1])
     with col1:
-        ticker = st.text_input(f"Ticker do Ativo {i+1}", key=f"ticker_{i}").upper()
+        if st.button("( + )", key="add_ativo"):
+            st.session_state.num_ativos += 1
     with col2:
-        peso = st.number_input(f"Peso do Ativo {i+1}", min_value=0.0, step=0.01, value=1.0, key=f"peso_{i}")
-    if ticker:
-        tickers.append(ticker)
-        pesos.append(peso)
+        if st.button("( - )", key="remove_ativo") and st.session_state.num_ativos > 1:
+            st.session_state.num_ativos -= 1
 
-# Normalização dos pesos
-pesos_array = np.array(pesos)
-if pesos_array.sum() > 0:
-    pesos_atuais = pesos_array / pesos_array.sum()
-else:
-    st.error("A soma dos pesos deve ser maior que 0.")
-    st.stop()
+    # Lista para armazenar inputs
+    tickers = []
+    pesos = []
+
+    # Inputs lado a lado
+    for i in range(st.session_state.num_ativos):
+        col1, col2 = st.columns(2)
+        with col1:
+            ticker = st.text_input(f"Ticker do Ativo {i+1}", key=f"ticker_{i}").upper()
+        with col2:
+            peso = st.number_input(f"Peso do Ativo {i+1}", min_value=0.0, step=0.01, value=1.0, key=f"peso_{i}")
+        if ticker:
+            tickers.append(ticker)
+            pesos.append(peso)
+
+    # Normalização
+    pesos_array = np.array(pesos)
+    if pesos_array.sum() > 0:
+        pesos_atuais = pesos_array / pesos_array.sum()
+    else:
+        st.error("A soma dos pesos deve ser maior que 0.")
+        st.stop()
+
 
 
 
