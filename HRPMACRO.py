@@ -155,6 +155,16 @@ def get_bcb(code):
     r = requests.get(url)
     return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
 
+def get_ipca_anualizado():
+    url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/12?formato=json"
+    r = requests.get(url)
+    if r.status_code == 200:
+        dados = r.json()
+        valores = [float(d['valor'].replace(",", ".")) for d in dados]
+        return sum(valores)
+    return None
+
+
 def obter_preco_commodity(ticker, nome="Commodity"):
     try:
         dados = yf.Ticker(ticker).history(period="5d")
@@ -183,7 +193,7 @@ def obter_preco_petroleo():
 def obter_macro():
     return {
         "selic": get_bcb(432),
-        "ipca": get_bcb(433),
+        "ipca": get_ipca_anualizado(),
         "dolar": get_bcb(1),
         "pib": get_bcb(7326),  # PIB trimestral
         "petroleo": obter_preco_petroleo(),
@@ -197,7 +207,7 @@ def pontuar_macro(m):
     score = 0
     score += 1 if m.get('selic', 0) < 10 else -1
     score += 1 if m.get('ipca', 0) < 4 else -1
-    score += 1 if m.get('dolar', 0) < 5 else -1
+    score += 1 if m.get('dolar', 0) < 5.80 else -1
     score += 1 if m.get('pib', 0) > 0 else -1
     if m.get('soja') and m.get('milho'):
         media_agro = (m['soja'] / 1000 + m['milho'] / 1000) / 2
