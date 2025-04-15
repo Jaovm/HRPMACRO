@@ -8,6 +8,12 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
 
+# Escolha do método de otimização
+metodo_otimizacao = st.radio("Escolha o método de otimização:", ["HRP", "Sharpe"])
+
+# Escolha do uso dos pesos ajustados pelo cenário macroeconômico
+usar_pesos_macro = st.checkbox("Ajustar pesos com base no cenário macroeconômico?", value=True)
+
 # ========= DICIONÁRIOS ==========
 
 setores_por_ticker = {
@@ -415,6 +421,8 @@ def otimizar_carteira_hrp(tickers):
 
     hrp_weights = recursive_bisection(cov, list(range(len(tickers))))
     return hrp_weights.values
+
+
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
