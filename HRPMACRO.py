@@ -186,7 +186,7 @@ def obter_macro():
         "dolar": get_bcb(1),
         "pib": get_bcb(7326),  # PIB trimestral
         "petroleo": obter_preco_petroleo(),
-        "minerio": obter_preco_commodity("TIOc1", "Minério de Ferro (proxy)"),
+        "minerio": obter_preco_commodity("TIO=F", "Minério de Ferro (proxy)"),
         "soja": obter_preco_commodity("ZS=F", "Soja"),
         "milho": obter_preco_commodity("ZC=F", "Milho")
     }
@@ -281,6 +281,7 @@ sensibilidade_setorial = {
     'Comunicação':                    {'juros': 0,  'inflação': 0,  'cambio': -1, 'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
     'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
 }
+
 
 def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro):
     upside = (preco_alvo - preco_atual) / preco_atual
@@ -431,6 +432,9 @@ st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
 
 macro = obter_macro()
+if not isinstance(macro, dict):
+    st.error("Erro ao obter dados macroeconômicos. Retorno inválido de 'obter_macro()'.")
+    st.stop()
 cenario = classificar_cenario_macro(macro)
 score_macro = pontuar_macro(macro)
 st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_macro})")
