@@ -528,11 +528,18 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
+from scipy.cluster.hierarchy import linkage
+from scipy.spatial.distance import squareform
+
 def otimizar_carteira_hrp(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
-    dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
-    linkage_matrix = linkage(squareform(dist), method='single')
+    correlacao = retornos.corr()
+    dist = np.sqrt((1 - correlacao) / 2)
+
+    # Convertendo a matriz de distâncias para o formato vetorial condensado
+    dist_condensada = squareform(dist.values, checks=False)
+    linkage_matrix = linkage(dist_condensada, method='single')
 
     def get_quasi_diag(link):
         link = link.astype(int)
@@ -544,44 +551,31 @@ def otimizar_carteira_hrp(tickers):
             i = df0.index
             j = df0.values - num_items
             sort_ix[i] = link[j, 0]
-            df1 = pd.Series(link[j, 1], index=i+1)
+            df1 = pd.Series(link[j, 1], index=i + 1)
             sort_ix = pd.concat([sort_ix, df1])
             sort_ix = sort_ix.sort_index()
-            sort_ix.index = range(sort_ix.shape[0])
         return sort_ix.tolist()
 
-    sort_ix = get_quasi_diag(linkage_matrix)
-    sorted_tickers = [retornos.columns[i] for i in sort_ix]
-    cov = LedoitWolf().fit(retornos).covariance_
-
-    def get_cluster_var(cov, cluster_items):
-        cov_slice = cov.loc[cluster_items, cluster_items]
-        w_ = 1. / np.diag(cov_slice)
-        w_ /= w_.sum()
-        return np.dot(w_, np.dot(cov_slice, w_))
-
-    def recursive_bisection(cov, sort_ix):
-        w = pd.Series(1.0, index=sort_ix)
+    def get_recursive_bisection(cov, sort_ix):
+        w = pd.Series(1, index=sort_ix)
         cluster_items = [sort_ix]
+
         while len(cluster_items) > 0:
-            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i)//2), (len(i)//2, len(i))) if len(i) > 1]
-            for i in range(0, len(cluster_items), 2):
-                c0 = cluster_items[i]
-                c1 = cluster_items[i + 1]
-                var0 = get_cluster_var(cov, c0)
-                var1 = get_cluster_var(cov, c1)
-                alpha = 1 - var0 / (var0 + var1)
-                w[c0] *= alpha
-                w[c1] *= 1 - alpha
-        return w
+            cluster_items = [i[j:k] for i in cluster_items for j, k in ((0, len(i) // 2), (len(i) // 2, len(i))) if len(i) > 1]
+            for cluster in cluster_items:
+                c_items = cluster
+                c_var = cov.loc[c_items, c_items].values
+                inv_diag = 1. / np.diag(c_var)
+                parity_w = inv_diag / inv_diag.sum()
+                alloc = parity_w.sum()
+                w[c_items] *= parity_w * alloc
+        return w / w.sum()
 
-    # Aplica HRP nos índices ordenados
-    pesos = recursive_bisection(cov, sorted_tickers)
-
-    # Retorna como Series com tickers
-    pesos.index = [retornos.columns[i] for i in pesos.index]
-    return pesos
-
+    cov_matrix = LedoitWolf().fit(retornos).covariance_
+    cov_df = pd.DataFrame(cov_matrix, index=retornos.columns, columns=retornos.columns)
+    sort_ix = get_quasi_diag(linkage_matrix)
+    hrp_weights = get_recursive_bisection(cov_df, [retornos.columns[i] for i in sort_ix])
+    return hrp_weights
 
 
 
