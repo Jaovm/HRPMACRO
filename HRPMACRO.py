@@ -411,7 +411,7 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
     n = len(tickers_validos)
     pesos_iniciais = np.array([pesos[ticker] for ticker in tickers_validos if ticker in pesos])
         # Normaliza os pesos para somarem 1 (evita erro na otimização)
-        if pesos_iniciais.sum() > 0:
+    if pesos_iniciais.sum() > 0:
             pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()
         else:
             st.error("Todos os pesos informados foram filtrados. Verifique os dados.")
