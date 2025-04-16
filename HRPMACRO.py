@@ -710,9 +710,10 @@ if st.button("Gerar Alocação Otimizada"):
         tickers_validos = [a['ticker'] for a in ativos_validos]
         try:
             if usar_hrp:
-                pesos = otimizar_carteira_hrp(tickers_validos)
+                pesos = otimizar_carteira_hrp(tickers_validos, carteira)
+
             else:
-                pesos = otimizar_carteira_sharpe(tickers_validos)
+                pesos = otimizar_carteira_sharpe(tickers_validos, carteira)
 
             if pesos is not None:
                 tickers_completos = set(carteira)
@@ -769,7 +770,7 @@ if st.button("Gerar Alocação Otimizada"):
             ]])
             
             # Mostra pesos da HRP como comparação
-            pesos_hrp = otimizar_carteira_hrp(todos_os_tickers)
+            pesos_hrp = otimizar_carteira_hrp(todos_os_tickers, carteira)
             st.dataframe(pesos_hrp.rename("Peso HRP"))
             
             # Troco do aporte
