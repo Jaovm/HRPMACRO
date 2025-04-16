@@ -392,9 +392,12 @@ def completar_pesos(tickers_originais, pesos_calculados):
 
 
 
-def otimizar_carteira_sharpe(tickers, pesos_informados={}):
+def otimizar_carteira_sharpe(tickers, carteira_atual):
+    """
+    Otimiza a carteira com base no índice de Sharpe, usando a alocação atual como ponto de partida.
+    """
     dados = obter_preco_diario_ajustado(tickers)
-    dados = dados.dropna(axis=1, how='any')  # Remove colunas com dados ausentes
+    dados = dados.dropna(axis=1, how='any')
     retornos = dados.pct_change().dropna()
 
     tickers_validos = retornos.columns.tolist()
@@ -402,25 +405,20 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
 
     if n == 0:
         st.error("Nenhum dado de retorno válido disponível para os ativos selecionados.")
-        return pd.Series(0.0, index=tickers)  # Retorna pesos zero
+        return pd.Series(0.0, index=tickers)
 
     media_retorno = retornos.mean()
-    cov_matrix = LedoitWolf().fit(retornos)
-    cov = pd.DataFrame(cov_matrix.covariance_, index=retornos.columns, columns=retornos.columns)
+    cov_matrix = LedoitWolf().fit(retornos).covariance_
+    cov = pd.DataFrame(cov_matrix, index=retornos.columns, columns=retornos.columns)
 
     def sharpe_neg(pesos):
         retorno_esperado = np.dot(pesos, media_retorno)
         volatilidade = np.sqrt(pesos @ cov.values @ pesos.T)
         return -retorno_esperado / volatilidade if volatilidade != 0 else 0
 
-    if pesos_informados:
-        pesos_iniciais = np.array([pesos_informados.get(ticker, 0.0) for ticker in tickers_validos])
-        if pesos_iniciais.sum() == 0:
-            pesos_iniciais = np.ones(n) / n
-        else:
-            pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()
-    else:
-        pesos_iniciais = np.ones(n) / n
+    # Usa a alocação atual como pesos iniciais (normalizados)
+    pesos_iniciais = np.array([carteira_atual.get(t, 0.0) for t in tickers_validos])
+    pesos_iniciais = pesos_iniciais / pesos_iniciais.sum() if pesos_iniciais.sum() > 0 else np.ones(n) / n
 
     limites = [(0, 1) for _ in range(n)]
     restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
@@ -433,6 +431,7 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
     else:
         st.error(f"Erro na otimização: {resultado.message}")
         return pd.Series(0.0, index=tickers)
+
 
 
         
@@ -555,9 +554,12 @@ def obter_preco_diario_ajustado(tickers):
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
 
-def otimizar_carteira_hrp(tickers):
+def otimizar_carteira_hrp(tickers, carteira_atual):
+    """
+    Otimiza a carteira com HRP, ajustando os pesos finais com base nos ativos válidos.
+    """
     dados = obter_preco_diario_ajustado(tickers)
-    dados = dados.dropna(axis=1, how='any')  # Remove colunas com dados ausentes
+    dados = dados.dropna(axis=1, how='any')
     tickers_validos = dados.columns.tolist()
 
     if len(tickers_validos) < 2:
@@ -605,9 +607,10 @@ def otimizar_carteira_hrp(tickers):
     cov_df = pd.DataFrame(cov_matrix, index=retornos.columns, columns=retornos.columns)
     sort_ix = get_quasi_diag(linkage_matrix)
     ordered_tickers = [retornos.columns[i] for i in sort_ix]
-    hrp_weights = get_recursive_bisection(cov_df, ordered_tickers)
+    pesos_hrp = get_recursive_bisection(cov_df, ordered_tickers)
 
-    return completar_pesos(tickers, hrp_weights)
+    return completar_pesos(tickers, pesos_hrp)
+
 
 
 
