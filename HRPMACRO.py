@@ -379,7 +379,7 @@ def classificar_cenario_macro(m):
 
 # ========= PREÇO ALVO ==========
 
-def obter_preco_diario_ajustado(tickers, periodo='7y'):
+def obter_preco_diario_ajustado(tickers, periodo='5y'):
     dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
     if len(tickers) == 1:
         return dados['Adj Close'].to_frame()
@@ -511,7 +511,7 @@ def filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=
 
 # ========= OTIMIZAÇÃO ==========
 def obter_preco_diario_ajustado(tickers):
-    dados_brutos = yf.download(tickers, period="3y", auto_adjust=False)
+    dados_brutos = yf.download(tickers, period="5y", auto_adjust=False)
 
     if isinstance(dados_brutos.columns, pd.MultiIndex):
         if 'Adj Close' in dados_brutos.columns.get_level_values(0):
