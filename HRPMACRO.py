@@ -390,7 +390,7 @@ def completar_pesos(tickers_originais, pesos_calculados):
 
 # ========= PREÇO ALVO ==========
 
-def obter_preco_diario_ajustado(tickers, periodo='5y'):
+def obter_preco_diario_ajustado(tickers, periodo='7y'):
     dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
     if len(tickers) == 1:
         return dados['Adj Close'].to_frame()
@@ -427,7 +427,18 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
         return completar_pesos(tickers, pesos_otimizados)
     else:
         return None
+        
+def obter_preco_alvo(ticker):
+    try:
+        return yf.Ticker(ticker).info.get('targetMeanPrice', None)
+    except:
+        return None
 
+def obter_preco_atual(ticker):
+    try:
+        return yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
+    except:
+        return None
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
@@ -513,7 +524,7 @@ def filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=
 
 # ========= OTIMIZAÇÃO ==========
 def obter_preco_diario_ajustado(tickers):
-    dados_brutos = yf.download(tickers, period="5y", auto_adjust=False)
+    dados_brutos = yf.download(tickers, period="7y", auto_adjust=False)
 
     if isinstance(dados_brutos.columns, pd.MultiIndex):
         if 'Adj Close' in dados_brutos.columns.get_level_values(0):
