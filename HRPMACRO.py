@@ -394,6 +394,7 @@ def completar_pesos(tickers_originais, pesos_calculados):
 
 def otimizar_carteira_sharpe(tickers, pesos_informados={}):
     dados = obter_preco_diario_ajustado(tickers)
+    dados = dados.dropna(axis=1, how='any')  # Remove colunas com dados ausentes
     retornos = dados.pct_change().dropna()
 
     tickers_validos = retornos.columns.tolist()
@@ -401,7 +402,7 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
 
     if n == 0:
         st.error("Nenhum dado de retorno válido disponível para os ativos selecionados.")
-        return None
+        return pd.Series(0.0, index=tickers)  # Retorna pesos zero
 
     media_retorno = retornos.mean()
     cov_matrix = LedoitWolf().fit(retornos)
@@ -412,7 +413,6 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
         volatilidade = np.sqrt(pesos @ cov.values @ pesos.T)
         return -retorno_esperado / volatilidade if volatilidade != 0 else 0
 
-    # Criação de pesos iniciais com fallback para uniforme
     if pesos_informados:
         pesos_iniciais = np.array([pesos_informados.get(ticker, 0.0) for ticker in tickers_validos])
         if pesos_iniciais.sum() == 0:
@@ -432,7 +432,8 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
         return completar_pesos(tickers, pesos_otimizados)
     else:
         st.error(f"Erro na otimização: {resultado.message}")
-        return None
+        return pd.Series(0.0, index=tickers)
+
 
         
 def obter_preco_alvo(ticker):
@@ -560,7 +561,8 @@ def otimizar_carteira_hrp(tickers):
     tickers_validos = dados.columns.tolist()
 
     if len(tickers_validos) < 2:
-        raise ValueError("Número insuficiente de ativos com dados válidos para otimização.")
+        st.error("Número insuficiente de ativos com dados válidos para otimização.")
+        return pd.Series(0.0, index=tickers)
 
     retornos = dados.pct_change().dropna()
     correlacao = retornos.corr()
