@@ -525,7 +525,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_hrp(tickers)
+def otimizar_carteira_hrp(tickers):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
     dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
