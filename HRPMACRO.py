@@ -528,8 +528,6 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-from scipy.cluster.hierarchy import linkage
-from scipy.spatial.distance import squareform
 
 def otimizar_carteira_hrp(tickers):
     dados = obter_preco_diario_ajustado(tickers)
