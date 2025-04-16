@@ -645,7 +645,7 @@ with st.sidebar:
     pesos_default = [
         0.1, 0.1, 0.1, 0.1, 0.1,
         0.1, 0.1, 0.1, 0.1, 0.1,
-        0.1, 0.1, 0.1, 0.1, .01
+        0.1, 0.1, 0.1, 0.1, 0.1
     ]
 
     # Número de ativos controlado por estado da sessão
