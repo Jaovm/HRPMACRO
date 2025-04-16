@@ -552,7 +552,7 @@ def otimizar_carteira_hrp(tickers):
     cov = LedoitWolf().fit(retornos).covariance_
 
     def get_cluster_var(cov, cluster_items):
-        cov_slice = cov[np.ix_(cluster_items, cluster_items)]
+        cov_slice = cov.loc[cluster_items, cluster_items]
         w_ = 1. / np.diag(cov_slice)
         w_ /= w_.sum()
         return np.dot(w_, np.dot(cov_slice, w_))
