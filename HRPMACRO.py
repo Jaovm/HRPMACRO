@@ -776,9 +776,7 @@ if st.button("Gerar Alocação Otimizada"):
             st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
 
-
-
-            else:
+        else:
                 st.error("Falha na otimização da carteira.")
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
