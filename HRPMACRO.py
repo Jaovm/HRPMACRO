@@ -390,12 +390,6 @@ def completar_pesos(tickers_originais, pesos_calculados):
 
 # ========= PREÇO ALVO ==========
 
-def obter_preco_diario_ajustado(tickers, periodo='7y'):
-    dados = yf.download(tickers, period=periodo, group_by='ticker', auto_adjust=True)
-    if len(tickers) == 1:
-        return dados['Adj Close'].to_frame()
-    else:
-        return dados['Adj Close']
 
 
 def otimizar_carteira_sharpe(tickers, pesos_informados={}):
