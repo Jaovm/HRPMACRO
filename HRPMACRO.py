@@ -396,8 +396,12 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
 
-    # Filtrar tickers com dados válidos
     tickers_validos = retornos.columns.tolist()
+    n = len(tickers_validos)
+
+    if n == 0:
+        st.error("Nenhum dado de retorno válido disponível para os ativos selecionados.")
+        return None
 
     media_retorno = retornos.mean()
     cov_matrix = LedoitWolf().fit(retornos)
@@ -408,14 +412,16 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
         volatilidade = np.sqrt(pesos @ cov.values @ pesos.T)
         return -retorno_esperado / volatilidade if volatilidade != 0 else 0
 
-    n = len(tickers_validos)
-    pesos_iniciais = np.array([pesos[ticker] for ticker in tickers_validos if ticker in pesos])
-        # Normaliza os pesos para somarem 1 (evita erro na otimização)
-    if pesos_iniciais.sum() > 0:
-        pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()
+    # Criação de pesos iniciais com fallback para uniforme
+    if pesos_informados:
+        pesos_iniciais = np.array([pesos_informados.get(ticker, 0.0) for ticker in tickers_validos])
+        if pesos_iniciais.sum() == 0:
+            pesos_iniciais = np.ones(n) / n
+        else:
+            pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()
     else:
-        st.error("Todos os pesos informados foram filtrados. Verifique os dados.")
-    pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()
+        pesos_iniciais = np.ones(n) / n
+
     limites = [(0, 1) for _ in range(n)]
     restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
@@ -425,7 +431,9 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
         pesos_otimizados = pd.Series(resultado.x, index=tickers_validos)
         return completar_pesos(tickers, pesos_otimizados)
     else:
+        st.error(f"Erro na otimização: {resultado.message}")
         return None
+
         
 def obter_preco_alvo(ticker):
     try:
