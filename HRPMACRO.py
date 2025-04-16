@@ -684,7 +684,35 @@ if st.button("Gerar Alocação Otimizada"):
                     st.subheader("📉 Ativos da carteira atual sem recomendação de aporte")
                     st.write(", ".join(tickers_zerados))
 
-                df_resultado = pd.DataFrame(ativos_validos)
+                # Cria DataFrame com todos os tickers da carteira original
+                todos_os_tickers = list(carteira.keys())
+                df_resultado_completo = pd.DataFrame({'ticker': todos_os_tickers})
+                
+                # Junta com os dados dos ativos válidos (os que passaram nos filtros)
+                df_validos = pd.DataFrame(ativos_validos)
+                df_resultado = df_resultado_completo.merge(df_validos, on='ticker', how='left')
+                
+                # Preenche colunas faltantes para os ativos zerados
+                df_resultado["preco_atual"] = df_resultado["preco_atual"].fillna(0)
+                df_resultado["preco_alvo"] = df_resultado["preco_alvo"].fillna(0)
+                df_resultado["score"] = df_resultado["score"].fillna(0)
+                df_resultado["setor"] = df_resultado["setor"].fillna("Não recomendado")
+                
+                # Mapeia os pesos calculados para os tickers (os ausentes recebem 0)
+                df_resultado["peso_otimizado"] = df_resultado["ticker"].map(dict(zip(tickers_validos, pesos))).fillna(0)
+                
+                # Calcula valor alocado bruto e quantidade de ações
+                df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
+                df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"]).replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
+                df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
+                
+                # Calcular % na carteira final (considerando aporte + carteira anterior)
+                valores_atuais = np.array([carteira[t] for t in df_resultado["ticker"]]) * 1000000
+                valores_aporte = df_resultado["Valor Alocado (R$)"].fillna(0).to_numpy()
+                valores_totais = valores_atuais + valores_aporte
+                pesos_finais = valores_totais / valores_totais.sum()
+                df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
+
                 df_resultado["Alocação (%)"] = (pesos * 100).round(2)
                 df_resultado["Valor Alocado (R$)"] = (pesos * aporte).round(2)
                 # Calcula valor alocado bruto
