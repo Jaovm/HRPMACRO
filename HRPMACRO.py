@@ -387,11 +387,12 @@ def obter_preco_diario_ajustado(tickers, periodo='7y'):
         return dados['Adj Close']
 
 
-def otimizar_carteira_sharpe(tickers):
+def otimizar_carteira_sharpe(tickers, pesos_informados={}):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
     media_retorno = retornos.mean()
-    cov = LedoitWolf().fit(retornos).covariance_
+    cov = pd.DataFrame(LedoitWolf().fit(retornos).covariance_, index=retornos.columns, columns=retornos.columns)
+
 
     def sharpe_neg(pesos):
         retorno_esperado = np.dot(pesos, media_retorno)
@@ -399,7 +400,8 @@ def otimizar_carteira_sharpe(tickers):
         return -retorno_esperado / volatilidade if volatilidade != 0 else 0
 
     n = len(tickers)
-    pesos_iniciais = np.array([1/n] * n)
+    pesos_iniciais = np.array([pesos_informados.get(ticker, 1/n) for ticker in tickers])
+    pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()  # Normaliza para somar 1
     limites = [(0, 1) for _ in range(n)]
     restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
@@ -523,7 +525,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
-def otimizar_carteira_hrp(tickers):
+def otimizar_carteira_hrp(tickers)
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
     dist = np.sqrt(((1 - retornos.corr()) / 2).fillna(0))
@@ -571,8 +573,7 @@ def otimizar_carteira_hrp(tickers):
         return w
 
     # Aplica HRP nos índices ordenados
-    indices_ordenados = [retornos.columns.get_loc(tkr) for tkr in sorted_tickers]
-    pesos = recursive_bisection(cov, indices_ordenados)
+    pesos = recursive_bisection(cov, sorted_tickers)
 
     # Retorna como Series com tickers
     pesos.index = [retornos.columns[i] for i in pesos.index]
