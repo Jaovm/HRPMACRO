@@ -533,6 +533,10 @@ def filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=
 def obter_preco_diario_ajustado(tickers):
     dados_brutos = yf.download(tickers, period="7y", auto_adjust=False)
 
+    # Forçar tickers a ser lista, mesmo se for string
+    if isinstance(tickers, str):
+        tickers = [tickers]
+
     if isinstance(dados_brutos.columns, pd.MultiIndex):
         if 'Adj Close' in dados_brutos.columns.get_level_values(0):
             return dados_brutos['Adj Close']
@@ -541,6 +545,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Colunas 'Adj Close' ou 'Close' não encontradas nos dados.")
     else:
+        # Apenas um ticker e colunas simples
         if 'Adj Close' in dados_brutos.columns:
             return dados_brutos[['Adj Close']].rename(columns={'Adj Close': tickers[0]})
         elif 'Close' in dados_brutos.columns:
