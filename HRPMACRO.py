@@ -531,11 +531,16 @@ def obter_preco_diario_ajustado(tickers):
 
 def otimizar_carteira_hrp(tickers):
     dados = obter_preco_diario_ajustado(tickers)
+    dados = dados.dropna(axis=1, how='any')  # Remove colunas com dados ausentes
+    tickers_validos = dados.columns.tolist()
+
+    if len(tickers_validos) < 2:
+        raise ValueError("Número insuficiente de ativos com dados válidos para otimização.")
+
     retornos = dados.pct_change().dropna()
     correlacao = retornos.corr()
     dist = np.sqrt((1 - correlacao) / 2)
 
-    # Convertendo a matriz de distâncias para o formato vetorial condensado
     dist_condensada = squareform(dist.values, checks=False)
     linkage_matrix = linkage(dist_condensada, method='single')
 
@@ -572,8 +577,11 @@ def otimizar_carteira_hrp(tickers):
     cov_matrix = LedoitWolf().fit(retornos).covariance_
     cov_df = pd.DataFrame(cov_matrix, index=retornos.columns, columns=retornos.columns)
     sort_ix = get_quasi_diag(linkage_matrix)
-    hrp_weights = get_recursive_bisection(cov_df, [retornos.columns[i] for i in sort_ix])
+    ordered_tickers = [retornos.columns[i] for i in sort_ix]
+    hrp_weights = get_recursive_bisection(cov_df, ordered_tickers)
+
     return hrp_weights
+
 
 
 
