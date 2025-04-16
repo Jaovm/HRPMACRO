@@ -391,7 +391,9 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
     media_retorno = retornos.mean()
-    cov = pd.DataFrame(LedoitWolf().fit(retornos).covariance_, index=retornos.columns, columns=retornos.columns)
+    cov_matrix = LedoitWolf().fit(retornos)
+    cov = pd.DataFrame(cov_matrix.covariance_, index=retornos.columns, columns=retornos.columns)
+
 
 
     def sharpe_neg(pesos):
