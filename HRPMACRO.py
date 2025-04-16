@@ -398,8 +398,9 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
 
     def sharpe_neg(pesos):
         retorno_esperado = np.dot(pesos, media_retorno)
-        volatilidade = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+        volatilidade = np.sqrt(pesos @ cov.values @ pesos.T)
         return -retorno_esperado / volatilidade if volatilidade != 0 else 0
+
 
     n = len(tickers)
     pesos_iniciais = np.array([pesos_informados.get(ticker, 1/n) for ticker in tickers])
