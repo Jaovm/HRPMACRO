@@ -377,6 +377,17 @@ def classificar_cenario_macro(m):
         return "Contração Forte"
 
 
+#===========PESOS FALTANTES======
+def completar_pesos(tickers_originais, pesos_calculados):
+    """
+    Garante que todos os ativos originais estejam presentes nos pesos finais,
+    atribuindo 0 para os que foram excluídos na otimização.
+    """
+    pesos_completos = pd.Series(0.0, index=tickers_originais)
+    for ticker in pesos_calculados.index:
+        pesos_completos[ticker] = pesos_calculados[ticker]
+    return pesos_completos
+
 # ========= PREÇO ALVO ==========
 
 def obter_preco_diario_ajustado(tickers, periodo='5y'):
@@ -390,42 +401,33 @@ def obter_preco_diario_ajustado(tickers, periodo='5y'):
 def otimizar_carteira_sharpe(tickers, pesos_informados={}):
     dados = obter_preco_diario_ajustado(tickers)
     retornos = dados.pct_change().dropna()
+
+    # Filtrar tickers com dados válidos
+    tickers_validos = retornos.columns.tolist()
+
     media_retorno = retornos.mean()
     cov_matrix = LedoitWolf().fit(retornos)
     cov = pd.DataFrame(cov_matrix.covariance_, index=retornos.columns, columns=retornos.columns)
-
-
 
     def sharpe_neg(pesos):
         retorno_esperado = np.dot(pesos, media_retorno)
         volatilidade = np.sqrt(pesos @ cov.values @ pesos.T)
         return -retorno_esperado / volatilidade if volatilidade != 0 else 0
 
-
-    n = len(tickers)
-    pesos_iniciais = np.array([pesos_informados.get(ticker, 1/n) for ticker in tickers])
-    pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()  # Normaliza para somar 1
+    n = len(tickers_validos)
+    pesos_iniciais = np.array([pesos_informados.get(ticker, 1/n) for ticker in tickers_validos])
+    pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()
     limites = [(0, 1) for _ in range(n)]
     restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
     resultado = minimize(sharpe_neg, pesos_iniciais, method='SLSQP', bounds=limites, constraints=restricoes)
 
     if resultado.success:
-        return resultado.x
+        pesos_otimizados = pd.Series(resultado.x, index=tickers_validos)
+        return completar_pesos(tickers, pesos_otimizados)
     else:
         return None
 
-def obter_preco_alvo(ticker):
-    try:
-        return yf.Ticker(ticker).info.get('targetMeanPrice', None)
-    except:
-        return None
-
-def obter_preco_atual(ticker):
-    try:
-        return yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
-    except:
-        return None
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
@@ -580,7 +582,8 @@ def otimizar_carteira_hrp(tickers):
     ordered_tickers = [retornos.columns[i] for i in sort_ix]
     hrp_weights = get_recursive_bisection(cov_df, ordered_tickers)
 
-    return hrp_weights
+    return completar_pesos(tickers, hrp_weights)
+
 
 
 
