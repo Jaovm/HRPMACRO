@@ -409,7 +409,12 @@ def otimizar_carteira_sharpe(tickers, pesos_informados={}):
         return -retorno_esperado / volatilidade if volatilidade != 0 else 0
 
     n = len(tickers_validos)
-    pesos_iniciais = np.array([pesos_informados.get(ticker, 1/n) for ticker in tickers_validos])
+    pesos_iniciais = np.array([pesos[ticker] for ticker in tickers_validos if ticker in pesos])
+        # Normaliza os pesos para somarem 1 (evita erro na otimização)
+        if pesos_iniciais.sum() > 0:
+            pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()
+        else:
+            st.error("Todos os pesos informados foram filtrados. Verifique os dados.")
     pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()
     limites = [(0, 1) for _ in range(n)]
     restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
