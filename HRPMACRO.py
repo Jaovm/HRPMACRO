@@ -514,7 +514,7 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_peso
    #     preco_alvo = obter_preco_alvo(ticker)
 
     #    if preco_atual is None or preco_alvo is None:
-            continue
+         #   continue
   #      if preco_atual < preco_alvo:
    #         favorecido = setor in setores_bons
    *#         score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macroeconomicos)
