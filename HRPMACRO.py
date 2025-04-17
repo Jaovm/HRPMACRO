@@ -392,16 +392,15 @@ def completar_pesos(tickers_originais, pesos_calculados):
 
 
 
-def otimizar_carteira_sharpe(tickers, carteira_atual):
+def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001):
     """
-    Otimiza a carteira com base no índice de Sharpe, usando a alocação atual como ponto de partida.
+    Otimiza a carteira com base no índice de Sharpe, com melhorias de robustez e controle de concentração.
     """
     dados = obter_preco_diario_ajustado(tickers)
     dados = dados.ffill().bfill()  # Preenche valores faltantes
-    retornos = dados.pct_change().dropna()
 
-
-
+    # Retornos logarítmicos
+    retornos = np.log(dados / dados.shift(1)).dropna()
     tickers_validos = retornos.columns.tolist()
     n = len(tickers_validos)
 
@@ -414,25 +413,37 @@ def otimizar_carteira_sharpe(tickers, carteira_atual):
     cov = pd.DataFrame(cov_matrix, index=retornos.columns, columns=retornos.columns)
 
     def sharpe_neg(pesos):
-        retorno_esperado = np.dot(pesos, media_retorno)
+        retorno_esperado = np.dot(pesos, media_retorno) - taxa_risco_livre
         volatilidade = np.sqrt(pesos @ cov.values @ pesos.T)
         return -retorno_esperado / volatilidade if volatilidade != 0 else 0
 
-    # Usa a alocação atual como pesos iniciais (normalizados)
+    # Pesos iniciais baseados na carteira atual
     pesos_iniciais = np.array([carteira_atual.get(t, 0.0) for t in tickers_validos])
     pesos_iniciais = pesos_iniciais / pesos_iniciais.sum() if pesos_iniciais.sum() > 0 else np.ones(n) / n
 
-    limites = [(0, 1) for _ in range(n)]
+    # Limites por ativo: mínimo de 1%, máximo de 20%
+    limites = [(0.01, 0.20) for _ in range(n)]
+
+    # Restrição: soma dos pesos = 1
     restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
-    resultado = minimize(sharpe_neg, pesos_iniciais, method='SLSQP', bounds=limites, constraints=restricoes)
+    # Otimização com método robusto
+    resultado = minimize(
+        sharpe_neg,
+        pesos_iniciais,
+        method='SLSQP',
+        bounds=limites,
+        constraints=restricoes,
+        options={'disp': False, 'maxiter': 1000}
+    )
 
-    if resultado.success:
+    if resultado.success and not np.isnan(resultado.fun):
         pesos_otimizados = pd.Series(resultado.x, index=tickers_validos)
         return completar_pesos(tickers, pesos_otimizados)
     else:
-        st.error(f"Erro na otimização: {resultado.message}")
-        return pd.Series(0.0, index=tickers)
+        st.warning("Otimização falhou ou retornou valor inválido. Usando pesos uniformes.")
+        pesos_uniformes = pd.Series(np.ones(n) / n, index=tickers_validos)
+        return completar_pesos(tickers, pesos_uniformes)
 
 
 
