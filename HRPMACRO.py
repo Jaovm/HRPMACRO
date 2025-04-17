@@ -397,8 +397,10 @@ def otimizar_carteira_sharpe(tickers, carteira_atual):
     Otimiza a carteira com base no índice de Sharpe, usando a alocação atual como ponto de partida.
     """
     dados = obter_preco_diario_ajustado(tickers)
-    dados = dados.dropna(axis=1, how='any')
-    retornos = dados.pct_change().dropna()
+    # Mantém ativos com ao menos 95% dos dados
+    dados = dados.loc[:, dados.isnull().mean() < 0.05]
+    dados = dados.dropna()
+
 
     tickers_validos = retornos.columns.tolist()
     n = len(tickers_validos)
