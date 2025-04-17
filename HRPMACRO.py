@@ -504,31 +504,6 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_peso
     return score_total
 
 
-#def filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=True):
-  #  setores_bons = setores_por_cenario[cenario]
-#    ativos_validos = []
-
-#    for ticker in carteira:
-  #      setor = setores_por_ticker.get(ticker, None)
-   #     preco_atual = obter_preco_atual(ticker)
-   #     preco_alvo = obter_preco_alvo(ticker)
-
-    #    if preco_atual is None or preco_alvo is None:
-         #   continue
-  #      if preco_atual < preco_alvo:
-   #         favorecido = setor in setores_bons
-   *#         score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macroeconomicos)
- #  *         ativos_validos.append({
-# *               "ticker": ticker,
- #               "setor": setor,
- #               "preco_atual": preco_atual,
-#                "preco_alvo": preco_alvo,
-  #              "favorecido": favorecido,
-   #             "score": score
- #           })
-
-#    ativos_validos.sort(key=lambda x: x['score'], reverse=True)
-#    return ativos_validos
 
 def filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=True):
     setores_bons = setores_por_cenario[cenario]
