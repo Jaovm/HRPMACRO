@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import requests
+from datetime import datetime
 from sklearn.covariance import LedoitWolf
 from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
@@ -205,6 +206,18 @@ setores_por_ticker = {
     'USIM5.SA': 'Mineração e Siderurgia',
 }
 
+empresas_exportadoras = [
+    'VALE3.SA',  # Mineração
+    'SUZB3.SA',  # Celulose
+    'KLBN11.SA', # Papel e Celulose
+    'AGRO3.SA',  # Agronegócio
+    'PRIO3.SA',  # Petróleo
+    'SLCE3.SA',  # Agronegócio
+    'SMTO3.SA',  # Açúcar e Etanol
+    'CSNA3.SA',  # Siderurgia
+    'GGBR4.SA',  # Siderurgia
+    'CMIN3.SA',  # Mineração
+]
 
 setores_por_cenario = {
     "Expansão Forte": [
@@ -230,49 +243,51 @@ setores_por_cenario = {
 }
 
 
-empresas_exportadoras = [
-    'VALE3.SA',  # Mineração
-    'SUZB3.SA',  # Celulose
-    'KLBN11.SA', # Papel e Celulose
-    'AGRO3.SA',  # Agronegócio
-    'PRIO3.SA',  # Petróleo
-    'SLCE3.SA',  # Agronegócio
-    'SMTO3.SA',  # Açúcar e Etanol
-    'CSNA3.SA',  # Siderurgia
-    'GGBR4.SA',  # Siderurgia
-    'CMIN3.SA',  # Mineração
-]
-
 
 # ========= MACRO ==========
 
 # Funções para obter dados do BCB
 
-def get_bcb(code):
-    try:
-        url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
-        r = requests.get(url, timeout=5)
-        r.raise_for_status()
-        return float(r.json()[0]['valor'].replace(",", "."))
-    except Exception as e:
-        st.warning(f"Erro ao buscar dado do BCB (código {code}): {e}")
-        return None
+def buscar_projecoes_focus():
+    base_url = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
+    endpoints = {
+        "ipca": "ExpectativaMercadoAnual",
+        "selic": "ExpectativaMercadoAnual",
+        "pib": "ExpectativaMercadoAnual",
+        "cambio": "ExpectativaMercadoAnual"
+    }
+    indicadores = {
+        "ipca": "IPCA",
+        "selic": "SELIC",
+        "pib": "PIB",
+        "cambio": "Câmbio"
+    }
 
-def get_ipca_anualizado():
-    try:
-        url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/12?formato=json"
-        r = requests.get(url, timeout=5)
-        r.raise_for_status()
-        dados = r.json()
-        if isinstance(dados, list) and dados:
-            valores = [float(d['valor'].replace(",", ".")) for d in dados]
-            return sum(valores)
-        else:
-            st.warning("Não foi possível obter os dados de IPCA.")
-            return None
-    except Exception as e:
-        st.warning(f"Erro ao buscar IPCA: {e}")
-        return None
+    ano_atual = datetime.now().year
+    macro = {}
+
+    for nome, endpoint in endpoints.items():
+        indicador = indicadores[nome]
+        url = (
+            f"{base_url}{endpoint}"
+            f"?$top=1"
+            f"&$filter=Indicador%20eq%20'{indicador}'%20and%20Ano%20eq%20{ano_atual}"
+            f"&$orderby=Data%20desc"
+            "&$format=json"
+        )
+        try:
+            r = requests.get(url)
+            r.raise_for_status()
+            data = r.json().get("value", [])
+            if data:
+                macro[nome] = round(data[0].get("Mediana", 0), 2)
+            else:
+                macro[nome] = None
+        except Exception as e:
+            print(f"Erro ao buscar {nome} no Boletim Focus: {e}")
+            macro[nome] = None
+
+    return macro
 
 # Função genérica para obter preços via yfinance
 
@@ -361,13 +376,13 @@ def pontuar_minerio(preco_minerio):
 def pontuar_macro(m):
     score = 0
     if m.get('selic') is not None:
-        score += pontuar_selic(m['selic'])
+        score += 2 if m['selic'] < 9 else 1 if m['selic'] <= 11 else 0 if m['selic'] <= 13 else -1
     if m.get('ipca') is not None:
-        score += pontuar_ipca(m['ipca'])
-    if m.get('dolar') is not None:
-        score += pontuar_dolar(m['dolar'])
+        score += 2 if m['ipca'] < 3 else 1 if m['ipca'] <= 5 else 0 if m['ipca'] <= 7 else -1
+    if m.get('cambio') is not None:
+        score += 1 if m['cambio'] < 4.8 else 0 if m['cambio'] <= 5.2 else -1
     if m.get('pib') is not None:
-        score += pontuar_pib(m['pib'])
+        score += 2 if m['pib'] > 2 else 1 if m['pib'] > 1 else 0 if m['pib'] > 0 else -1
     score += pontuar_soja_milho(m.get('soja'), m.get('milho'))
     score += pontuar_minerio(m.get('minerio'))
     return score
@@ -391,6 +406,18 @@ def obter_preco_atual(ticker):
     return None
 
 
+def classificar_cenario_macro(score_macro):
+    if score_macro >= 7:
+        return "Expansão Forte"
+    elif score_macro >= 4:
+        return "Expansão Moderada"
+    elif score_macro >= 1:
+        return "Estável"
+    elif score_macro >= -2:
+        return "Contração Moderada"
+    else:
+        return "Contração Forte"
+
 
 #===========PESOS FALTANTES======
 def completar_pesos(tickers_originais, pesos_calculados):
@@ -402,65 +429,6 @@ def completar_pesos(tickers_originais, pesos_calculados):
     for ticker in pesos_calculados.index:
         pesos_completos[ticker] = pesos_calculados[ticker]
     return pesos_completos
-
-# ========= PREÇO ALVO ==========
-
-
-
-def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001):
-    """
-    Otimiza a carteira com base no índice de Sharpe, com melhorias de robustez e controle de concentração.
-    """
-    dados = obter_preco_diario_ajustado(tickers)
-    dados = dados.ffill().bfill()  # Preenche valores faltantes
-
-    # Retornos logarítmicos
-    retornos = np.log(dados / dados.shift(1)).dropna()
-    tickers_validos = retornos.columns.tolist()
-    n = len(tickers_validos)
-
-    if n == 0:
-        st.error("Nenhum dado de retorno válido disponível para os ativos selecionados.")
-        return pd.Series(0.0, index=tickers)
-
-    media_retorno = retornos.mean()
-    cov_matrix = LedoitWolf().fit(retornos).covariance_
-    cov = pd.DataFrame(cov_matrix, index=retornos.columns, columns=retornos.columns)
-
-    def sharpe_neg(pesos):
-        retorno_esperado = np.dot(pesos, media_retorno) - taxa_risco_livre
-        volatilidade = np.sqrt(pesos @ cov.values @ pesos.T)
-        return -retorno_esperado / volatilidade if volatilidade != 0 else 0
-
-    # Pesos iniciais baseados na carteira atual
-    pesos_iniciais = np.array([carteira_atual.get(t, 0.0) for t in tickers_validos])
-    pesos_iniciais = pesos_iniciais / pesos_iniciais.sum() if pesos_iniciais.sum() > 0 else np.ones(n) / n
-
-    # Limites por ativo: mínimo de 1%, máximo de 20%
-    limites = [(0.01, 0.20) for _ in range(n)]
-
-    # Restrição: soma dos pesos = 1
-    restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
-
-    # Otimização com método robusto
-    resultado = minimize(
-        sharpe_neg,
-        pesos_iniciais,
-        method='SLSQP',
-        bounds=limites,
-        constraints=restricoes,
-        options={'disp': False, 'maxiter': 1000}
-    )
-
-    if resultado.success and not np.isnan(resultado.fun):
-        pesos_otimizados = pd.Series(resultado.x, index=tickers_validos)
-        return completar_pesos(tickers, pesos_otimizados)
-    else:
-        st.warning("Otimização falhou ou retornou valor inválido. Usando pesos uniformes.")
-        pesos_uniformes = pd.Series(np.ones(n) / n, index=tickers_validos)
-        return completar_pesos(tickers, pesos_uniformes)
-
-
 
         
 
@@ -520,36 +488,40 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_peso
 
 
 
-def filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=True):
-    setores_bons = setores_por_cenario[cenario]
-    ativos_validos = []
+def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score):
+    score_macro = pontuar_macro(macro)
+    cenario = classificar_cenario(score_macro)
+    setores_favorecidos = setores_por_cenario.get(cenario, [])
 
+    ativos_validos = []
     for ticker in carteira:
         setor = setores_por_ticker.get(ticker, None)
         preco_atual = obter_preco_atual(ticker)
         preco_alvo = obter_preco_alvo(ticker)
 
-        # Garantir que ambos os preços existam
         if preco_atual is None or preco_alvo is None:
             continue
 
-        favorecido = setor in setores_bons
-        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macroeconomicos)
+        favorecido = setor in setores_favorecidos
+        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro)
 
         ativos_validos.append({
             "ticker": ticker,
             "setor": setor,
+            "cenario": cenario,
             "preco_atual": preco_atual,
             "preco_alvo": preco_alvo,
-            "favorecido": favorecido,
-            "score": score
+            "score": score,
+            "favorecido": favorecido
         })
 
-    # Ordenar por score, maior primeiro
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
     return ativos_validos
 
 # ========= OTIMIZAÇÃO ==========
+
+
+
 def obter_preco_diario_ajustado(tickers):
     dados_brutos = yf.download(tickers, period="7y", auto_adjust=False)
 
@@ -572,6 +544,62 @@ def obter_preco_diario_ajustado(tickers):
             return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
+
+
+def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001):
+    """
+    Otimiza a carteira com base no índice de Sharpe, com melhorias de robustez e controle de concentração.
+    """
+    dados = obter_preco_diario_ajustado(tickers)
+    dados = dados.ffill().bfill()  # Preenche valores faltantes
+
+    # Retornos logarítmicos
+    retornos = np.log(dados / dados.shift(1)).dropna()
+    tickers_validos = retornos.columns.tolist()
+    n = len(tickers_validos)
+
+    if n == 0:
+        st.error("Nenhum dado de retorno válido disponível para os ativos selecionados.")
+        return pd.Series(0.0, index=tickers)
+
+    media_retorno = retornos.mean()
+    cov_matrix = LedoitWolf().fit(retornos).covariance_
+    cov = pd.DataFrame(cov_matrix, index=retornos.columns, columns=retornos.columns)
+
+    def sharpe_neg(pesos):
+        retorno_esperado = np.dot(pesos, media_retorno) - taxa_risco_livre
+        volatilidade = np.sqrt(pesos @ cov.values @ pesos.T)
+        return -retorno_esperado / volatilidade if volatilidade != 0 else 0
+
+    # Pesos iniciais baseados na carteira atual
+    pesos_iniciais = np.array([carteira_atual.get(t, 0.0) for t in tickers_validos])
+    pesos_iniciais = pesos_iniciais / pesos_iniciais.sum() if pesos_iniciais.sum() > 0 else np.ones(n) / n
+
+    # Limites por ativo: mínimo de 1%, máximo de 20%
+    limites = [(0.01, 0.20) for _ in range(n)]
+
+    # Restrição: soma dos pesos = 1
+    restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
+
+    # Otimização com método robusto
+    resultado = minimize(
+        sharpe_neg,
+        pesos_iniciais,
+        method='SLSQP',
+        bounds=limites,
+        constraints=restricoes,
+        options={'disp': False, 'maxiter': 1000}
+    )
+
+    if resultado.success and not np.isnan(resultado.fun):
+        pesos_otimizados = pd.Series(resultado.x, index=tickers_validos)
+        return completar_pesos(tickers, pesos_otimizados)
+    else:
+        st.warning("Otimização falhou ou retornou valor inválido. Usando pesos uniformes.")
+        pesos_uniformes = pd.Series(np.ones(n) / n, index=tickers_validos)
+        return completar_pesos(tickers, pesos_uniformes)
+
+
 
 
 def otimizar_carteira_hrp(tickers, carteira_atual):
@@ -651,8 +679,6 @@ col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
 col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
 st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
 
-import streamlit as st
-import numpy as np
 
 # --- SIDEBAR ---
 with st.sidebar:
