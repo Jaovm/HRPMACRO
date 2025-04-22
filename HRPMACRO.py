@@ -248,43 +248,29 @@ setores_por_cenario = {
 
 # Funções para obter dados do BCB
 
-def buscar_projecoes_focus():
-    base_url = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
-    endpoint = "ExpectativasMercadoAnual"
-    ano_atual = datetime.now().year
+def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
+    url = (
+        f"https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
+        f"ExpectativasMercadoAnuais?$top=1&$filter=Indicador eq '{indicador}' and Ano eq {ano}"
+        f"&$orderby=Data desc&$format=json"
+    )
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        valor = data['value'][0]['Mediana']
+        return valor
+    except Exception as e:
+        print(f"Erro ao buscar {indicador} no Boletim Focus: {e}")
+        return None
 
-    indicadores = {
-        "ipca": "IPCA",
-        "selic": "SELIC",
-        "pib": "PIB",
-        "cambio": "Câmbio"
+def obter_macro():
+    return {
+        "ipca": buscar_projecoes_focus("IPCA"),
+        "selic": buscar_projecoes_focus("SELIC"),
+        "pib": buscar_projecoes_focus("PIB"),
+        "cambio": buscar_projecoes_focus("Câmbio")
     }
-
-    macro = {}
-
-    for nome, indicador in indicadores.items():
-        url = (
-            f"{base_url}{endpoint}"
-            f"?$top=1"
-            f"&$filter=Indicador eq '{indicador}' and Ano eq {ano_atual} and DataReferencia eq {ano_atual}"
-            f"&$orderby=Data desc"
-            f"&$format=json"
-        )
-        try:
-            r = requests.get(url)
-            r.raise_for_status()
-            dados = r.json().get("value", [])
-            if dados:
-                mediana = dados[0].get("Mediana", None)
-                macro[nome] = round(mediana, 2) if mediana is not None else None
-            else:
-                macro[nome] = None
-        except Exception as e:
-            print(f"Erro ao buscar {nome} no Boletim Focus: {e}")
-            macro[nome] = None
-
-    return macro
-
 # Função genérica para obter preços via yfinance
 
 def obter_preco_yf(ticker, nome="Ativo"):
