@@ -265,12 +265,20 @@ def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
         return None
 
 def obter_macro():
-    return {
+    macro = {
         "ipca": buscar_projecoes_focus("IPCA"),
         "selic": buscar_projecoes_focus("SELIC"),
         "pib": buscar_projecoes_focus("PIB"),
         "cambio": buscar_projecoes_focus("Câmbio")
     }
+
+    # Preços de commodities
+    macro["soja"] = obter_preco_commodity("ZS=F", nome="Soja")
+    macro["milho"] = obter_preco_commodity("ZC=F", nome="Milho")
+    macro["minerio"] = obter_preco_commodity("BZ=F", nome="Minério de Ferro")  # Verifique se o ticker está correto
+
+    return macro
+
 # Função genérica para obter preços via yfinance
 
 def obter_preco_yf(ticker, nome="Ativo"):
@@ -370,20 +378,7 @@ def pontuar_macro(m):
     return score
 
 
-def obter_macro():
-    macro = buscar_projecoes_focus()
 
-    # Preços de commodities
-    preco_soja = obter_preco_commodity("ZS=F", nome="Soja")
-    preco_milho = obter_preco_commodity("ZC=F", nome="Milho")
-    preco_minerio = obter_preco_commodity("BZ=F", nome="Minério de Ferro")  # Verifique se o ticker está correto
-
-    # Adiciona ao dicionário principal
-    macro['soja'] = preco_soja
-    macro['milho'] = preco_milho
-    macro['minerio'] = preco_minerio
-
-    return macro
 # Funções para preço-alvo e preço atual
 
 def obter_preco_alvo(ticker):
