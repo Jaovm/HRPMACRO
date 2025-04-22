@@ -666,9 +666,9 @@ with st.sidebar:
         "VIVT3.SA", "WEGE3.SA", "TOTS3.SA", "B3SA3.SA", "TAEE11.SA"
     ]
     pesos_default = [
-        0.1, 0.1, 0.1, 0.1, 0.1,
-        0.1, 0.1, 0.1, 0.1, 0.1,
-        0.1, 0.1, 0.1, 0.1, 0.1
+        0.07, 0.06, 0.07, 0.07, 0.08,
+        0.07, 0.12, 0.09, 0.06, 0.04,
+        0.1, 0.18, 0.04, 0.01, 0.2
     ]
 
     # Número de ativos controlado por estado da sessão
