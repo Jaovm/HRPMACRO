@@ -245,136 +245,151 @@ empresas_exportadoras = [
 
 
 # ========= MACRO ==========
+
+# Funções para obter dados do BCB
+
 def get_bcb(code):
-    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
-    r = requests.get(url)
-    return float(r.json()[0]['valor'].replace(",", ".")) if r.status_code == 200 else None
+    try:
+        url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1?formato=json"
+        r = requests.get(url, timeout=5)
+        r.raise_for_status()
+        return float(r.json()[0]['valor'].replace(",", "."))
+    except Exception as e:
+        st.warning(f"Erro ao buscar dado do BCB (código {code}): {e}")
+        return None
 
 def get_ipca_anualizado():
-    url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/12?formato=json"
-    r = requests.get(url)
-    if r.status_code == 200:
+    try:
+        url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados/ultimos/12?formato=json"
+        r = requests.get(url, timeout=5)
+        r.raise_for_status()
         dados = r.json()
-        valores = [float(d['valor'].replace(",", ".")) for d in dados]
-        return sum(valores)
-    return None
+        if isinstance(dados, list) and dados:
+            valores = [float(d['valor'].replace(",", ".")) for d in dados]
+            return sum(valores)
+        else:
+            st.warning("Não foi possível obter os dados de IPCA.")
+            return None
+    except Exception as e:
+        st.warning(f"Erro ao buscar IPCA: {e}")
+        return None
 
+# Função genérica para obter preços via yfinance
 
-def obter_preco_commodity(ticker, nome="Commodity"):
+def obter_preco_yf(ticker, nome="Ativo"):
     try:
         dados = yf.Ticker(ticker).history(period="5d")
         if not dados.empty and 'Close' in dados.columns:
-            preco = dados['Close'].dropna().iloc[-1]
-            return float(preco)
+            return float(dados['Close'].dropna().iloc[-1])
         else:
             st.warning(f"Preço indisponível para {nome}.")
             return None
     except Exception as e:
-        st.error(f"Erro ao obter preço para {nome} ({ticker}): {e}")
+        st.error(f"Erro ao obter preço de {nome} ({ticker}): {e}")
         return None
 
+def obter_preco_commodity(ticker, nome="Commodity"):
+    return obter_preco_yf(ticker, nome)
 
 def obter_preco_petroleo():
-    try:
-        dados = yf.Ticker("CL=F").history(period="5d")
-        if not dados.empty and 'Close' in dados.columns:
-            return float(dados['Close'].dropna().iloc[-1])
-        else:
-            return None
-    except Exception as e:
-        st.error(f"Erro ao obter preço do petróleo: {e}")
-        return None
+    return obter_preco_yf("CL=F", "Petróleo")
 
-def obter_macro():
-    return {
-        "selic": get_bcb(432),
-        "ipca": get_ipca_anualizado(),
-        "dolar": get_bcb(1),
-        "pib": get_bcb(4380),  # PIB anual
-        "petroleo": obter_preco_petroleo(),
-        "minerio": obter_preco_commodity("TIO=F", "Minério de Ferro (proxy)"),
-        "soja": obter_preco_commodity("ZS=F", "Soja"),
-        "milho": obter_preco_commodity("ZC=F", "Milho")
-    }
+# Funções de pontuação individual
+
+def pontuar_selic(selic):
+    if selic < 9:
+        return 2
+    elif selic <= 11:
+        return 1
+    elif selic <= 13:
+        return 0
+    else:
+        return -1
+
+def pontuar_ipca(ipca):
+    if ipca < 3:
+        return 2
+    elif ipca <= 5:
+        return 1
+    elif ipca <= 7:
+        return 0
+    else:
+        return -1
+
+def pontuar_dolar(dolar):
+    if dolar < 4.8:
+        return 1
+    elif dolar <= 5.2:
+        return 0
+    else:
+        return -1
+
+def pontuar_pib(pib):
+    if pib > 2:
+        return 2
+    elif pib > 1:
+        return 1
+    elif pib > 0:
+        return 0
+    else:
+        return -1
+
+def pontuar_soja_milho(preco_soja, preco_milho):
+    if preco_soja is not None and preco_milho is not None:
+        if preco_soja > 12 and preco_milho > 5:
+            return 2
+        elif preco_soja > 11 and preco_milho > 4:
+            return 1
+        elif preco_soja > 10 and preco_milho > 3:
+            return 0
+        else:
+            return -1
+    return 0
+
+def pontuar_minerio(preco_minerio):
+    if preco_minerio is not None:
+        if preco_minerio > 120:
+            return 2
+        elif preco_minerio > 100:
+            return 1
+        elif preco_minerio > 80:
+            return 0
+        else:
+            return -1
+    return 0
 
 def pontuar_macro(m):
-    print(f"Pontuando macro: {m}")
     score = 0
-
-    # Selic
     if m.get('selic') is not None:
-        if m['selic'] < 9:
-            score += 2  # cenário expansionista
-        elif m['selic'] <= 11:
-            score += 1
-        elif m['selic'] <= 13:
-            score += 0
-        else:
-            score -= 1  # cenário restritivo
-
-    # IPCA (assumindo anualizado)
+        score += pontuar_selic(m['selic'])
     if m.get('ipca') is not None:
-        if m['ipca'] < 3:
-            score += 1
-        elif m['ipca'] <= 5:
-            score += 0
-        else:
-            score -= 1
-
-    # Dólar
+        score += pontuar_ipca(m['ipca'])
     if m.get('dolar') is not None:
-        if m['dolar'] < 4.8:
-            score += 1
-        elif m['dolar'] <= 5.3:
-            score += 0
-        else:
-            score -= 1
-
-    # PIB
+        score += pontuar_dolar(m['dolar'])
     if m.get('pib') is not None:
-        if m['pib'] > 2:
-            score += 2
-        elif m['pib'] > 0:
-            score += 1
-        else:
-            score -= 1
-
-    # Soja e Milho (valores em R$/saca 60kg, convertido se necessário)
-    if m.get('soja') and m.get('milho'):
-        media_agro = (m['soja'] / 1000 + m['milho'] / 1000) / 2
-        if media_agro > 1.3:
-            score += 1
-        elif media_agro > 1.0:
-            score += 0
-        else:
-            score -= 1
-
-    # Minério de ferro (TIO=F, referência em USD/ton)
-    if m.get('minerio') is not None:
-        if m['minerio'] > 120:
-            score += 1
-        elif m['minerio'] >= 90:
-            score += 0
-        else:
-            score -= 1
-
-    print(f"Score macro calculado: {score}")
+        score += pontuar_pib(m['pib'])
+    score += pontuar_soja_milho(m.get('soja'), m.get('milho'))
+    score += pontuar_minerio(m.get('minerio'))
     return score
 
+# Funções para preço-alvo e preço atual
 
+def obter_preco_alvo(ticker):
+    try:
+        return yf.Ticker(ticker).info.get('targetMeanPrice', None)
+    except Exception as e:
+        st.warning(f"Erro ao obter preço-alvo de {ticker}: {e}")
+        return None
 
-def classificar_cenario_macro(m):
-    score = pontuar_macro(m)
-    if score >= 5:
-        return "Expansão Forte"
-    elif score >= 3:
-        return "Expansão Moderada"
-    elif score >= 0:
-        return "Estável"
-    elif score >= -2:
-        return "Contração Moderada"
-    else:
-        return "Contração Forte"
+def obter_preco_atual(ticker):
+    try:
+        dados = yf.Ticker(ticker).history(period="1d")
+        if not dados.empty:
+            return dados['Close'].iloc[-1]
+    except Exception as e:
+        st.warning(f"Erro ao obter preço atual de {ticker}: {e}")
+    return None
+
 
 
 #===========PESOS FALTANTES======
@@ -448,17 +463,6 @@ def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001):
 
 
         
-def obter_preco_alvo(ticker):
-    try:
-        return yf.Ticker(ticker).info.get('targetMeanPrice', None)
-    except:
-        return None
-
-def obter_preco_atual(ticker):
-    try:
-        return yf.Ticker(ticker).history(period="1d")['Close'].iloc[-1]
-    except:
-        return None
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
