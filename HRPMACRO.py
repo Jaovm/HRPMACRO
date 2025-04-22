@@ -250,12 +250,9 @@ setores_por_cenario = {
 
 def buscar_projecoes_focus():
     base_url = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
-    endpoints = {
-        "ipca": "ExpectativaMercadoAnual",
-        "selic": "ExpectativaMercadoAnual",
-        "pib": "ExpectativaMercadoAnual",
-        "cambio": "ExpectativaMercadoAnual"
-    }
+    endpoint = "ExpectativasMercadoAnual"
+    ano_atual = datetime.now().year
+
     indicadores = {
         "ipca": "IPCA",
         "selic": "SELIC",
@@ -263,24 +260,23 @@ def buscar_projecoes_focus():
         "cambio": "Câmbio"
     }
 
-    ano_atual = datetime.now().year
     macro = {}
 
-    for nome, endpoint in endpoints.items():
-        indicador = indicadores[nome]
+    for nome, indicador in indicadores.items():
         url = (
             f"{base_url}{endpoint}"
             f"?$top=1"
-            f"&$filter=Indicador%20eq%20'{indicador}'%20and%20Ano%20eq%20{ano_atual}"
-            f"&$orderby=Data%20desc"
-            "&$format=json"
+            f"&$filter=Indicador eq '{indicador}' and Ano eq {ano_atual} and DataReferencia eq {ano_atual}"
+            f"&$orderby=Data desc"
+            f"&$format=json"
         )
         try:
             r = requests.get(url)
             r.raise_for_status()
-            data = r.json().get("value", [])
-            if data:
-                macro[nome] = round(data[0].get("Mediana", 0), 2)
+            dados = r.json().get("value", [])
+            if dados:
+                mediana = dados[0].get("Mediana", None)
+                macro[nome] = round(mediana, 2) if mediana is not None else None
             else:
                 macro[nome] = None
         except Exception as e:
