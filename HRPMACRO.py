@@ -376,16 +376,17 @@ def pontuar_minerio(preco_minerio):
 def pontuar_macro(m):
     score = 0
     if m.get('selic') is not None:
-        score += 2 if m['selic'] < 9 else 1 if m['selic'] <= 11 else 0 if m['selic'] <= 13 else -1
+        score += pontuar_selic(m['selic'])
     if m.get('ipca') is not None:
-        score += 2 if m['ipca'] < 3 else 1 if m['ipca'] <= 5 else 0 if m['ipca'] <= 7 else -1
+        score += pontuar_ipca(m['ipca'])
     if m.get('cambio') is not None:
-        score += 1 if m['cambio'] < 4.8 else 0 if m['cambio'] <= 5.2 else -1
+        score += pontuar_dolar(m['cambio'])
     if m.get('pib') is not None:
-        score += 2 if m['pib'] > 2 else 1 if m['pib'] > 1 else 0 if m['pib'] > 0 else -1
+        score += pontuar_pib(m['pib'])
     score += pontuar_soja_milho(m.get('soja'), m.get('milho'))
     score += pontuar_minerio(m.get('minerio'))
     return score
+
 
 # Funções para preço-alvo e preço atual
 
