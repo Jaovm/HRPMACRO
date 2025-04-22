@@ -388,6 +388,20 @@ def pontuar_macro(m):
     return score
 
 
+def obter_macro():
+    macro = buscar_projecoes_focus()
+
+    # Preços de commodities
+    preco_soja = obter_preco_commodity("ZS=F", nome="Soja")
+    preco_milho = obter_preco_commodity("ZC=F", nome="Milho")
+    preco_minerio = obter_preco_commodity("BZ=F", nome="Minério de Ferro")  # Verifique se o ticker está correto
+
+    # Adiciona ao dicionário principal
+    macro['soja'] = preco_soja
+    macro['milho'] = preco_milho
+    macro['minerio'] = preco_minerio
+
+    return macro
 # Funções para preço-alvo e preço atual
 
 def obter_preco_alvo(ticker):
