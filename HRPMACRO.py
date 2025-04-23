@@ -1129,7 +1129,11 @@ if st.button("Gerar Alocação Otimizada"):
             st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
             st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
             
-            st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
+            
+                    except Exception as e:
+                        st.error(f"Erro na otimização: {str(e)}")
+
+                        st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
 
             if historico_7anos.empty:
                 st.info("Sem dados históricos para exibir. Rode o app novamente, ou confira conexão.")
@@ -1149,10 +1153,6 @@ if st.button("Gerar Alocação Otimizada"):
                         .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
                     )
                     st.dataframe(destaque.head(5), use_container_width=True)
-            
-                    except Exception as e:
-                        st.error(f"Erro na otimização: {str(e)}")
-            
 
             
 with st.expander("ℹ️ Como funciona a sugestão"):
