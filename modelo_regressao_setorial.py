@@ -43,7 +43,34 @@ def gerar_dados_simulados(tickers, periodos=24):
     return pd.DataFrame(dados_simulados, index=datas)
 
 
+def testar_yfinance(tickers):
+    """Testa como o yfinance está retornando os dados e exibe os resultados."""
+    st.info("🔍 Testando retorno do yfinance para os tickers...")
+    try:
+        dados = baixar_dados_com_retentativa(tickers, period="2y", interval="1mo")
+        st.write("=== Dados Retornados ===")
+        st.write(dados)
+
+        # Verificando se 'Adj Close' ou 'Close' estão presentes
+        if isinstance(dados.columns, pd.MultiIndex):
+            st.write("=== Colunas Disponíveis ===")
+            st.write(dados.columns.get_level_values(0).unique())
+        else:
+            st.write("=== Colunas Disponíveis ===")
+            st.write(dados.columns)
+
+        # Exibindo as primeiras linhas para inspecionar o formato
+        st.write("=== Primeiras Linhas ===")
+        st.write(dados.head())
+    except Exception as e:
+        st.error(f"Erro ao testar retorno do yfinance: {e}")
+
+
 def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salvar_csv=False):
+    # Testando o retorno do yfinance
+    tickers_para_teste = ['ITUB4.SA', 'BBDC4.SA', 'SANB11.SA', 'BBAS3.SA']
+    testar_yfinance(tickers_para_teste)
+
     datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='ME')
     macro_data = pd.DataFrame({
         'data': datas,
