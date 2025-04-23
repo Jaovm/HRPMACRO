@@ -443,7 +443,7 @@ def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
     return df
 
 
-def calcular_score(preco_atual, preco_alvo, cimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False):
+def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False):
     import numpy as np
 
     if preco_atual == 0:
@@ -485,9 +485,9 @@ def calcular_score(preco_atual, preco_alvo, cimento_score, ticker, setor, macro,
     bonus = np.clip(bonus, 0, 0.1)
 
     # 4. Score final
-    score_total = base_score + (0.01 * score_macro) + bonus + (cimento_score * 1.5 if usar_pesos_macroeconomicos else 0)
+    score_total = base_score + (0.01 * score_macro) + bonus + (favorecimento_score * 1.5 if usar_pesos_macroeconomicos else 0)
 
-    detalhe = f"upside={upside:.2f}, base={base_score:.2f}, macro={score_macro:.2f}, bonus={bonus:.2f}, cimento={cimento_score:.2f}"
+    detalhe = f"upside={upside:.2f}, base={base_score:.2f}, macro={score_macro:.2f}, bonus={bonus:.2f}, favorecimento={favorecimento_score:.2f}"
 
     if return_details:
         return score_total, detalhe
@@ -546,7 +546,7 @@ sensibilidade_setorial = {
     'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
 }
 
-def calcular_cimento_continuo(setor, score_macro):
+def calcular_favorecimento_continuo(setor, score_macro):
     if setor not in sensibilidade_setorial:
         return 0
     sens = sensibilidade_setorial[setor]
@@ -571,7 +571,7 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
             continue
 
         setor = setores_por_ticker.get(ticker)
-        score = calcular_score(preco_atual, preco_alvo, cimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False)
+        score = calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False)
 
 
         ativos_validos.append({
