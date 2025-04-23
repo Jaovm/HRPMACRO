@@ -261,7 +261,7 @@ def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
         return None
 
     base_url = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
-    url = f"{base_url}ExpectativasMercadoTop5Anuais?$top=10000&$skip=84999&$filter=Indicador eq '{nome_indicador}'&$format=json&$select=Indicador,Data,DataReferencia,Mediana"
+    url = f"{base_url}ExpectativasMercadoTop5Anuais?$top=10000&$filter=Indicador eq '{nome_indicador}'&$format=json&$select=Indicador,Data,DataReferencia,Mediana""
 
     try:
         response = requests.get(url)
@@ -321,24 +321,12 @@ def obter_preco_petroleo():
 # Funções de pontuação individual
 
 def pontuar_selic(selic):
-    if selic < 9:
-        return 2
-    elif selic <= 11:
-        return 1
-    elif selic <= 13:
-        return 0
-    else:
-        return -1
+    return max(min(2 - (selic - 9) / 2, 2), -1)  # Quanto menor a Selic, melhor (até 9%)
+
 
 def pontuar_ipca(ipca):
-    if ipca < 3:
-        return 2
-    elif ipca <= 5:
-        return 1
-    elif ipca <= 7:
-        return 0
-    else:
-        return -1
+    return max(min(2 - (ipca - 3) / 2, 2), -1)  # Ideal abaixo de 3%
+
 
 def pontuar_dolar(dolar):
     if dolar < 4.8:
@@ -349,14 +337,8 @@ def pontuar_dolar(dolar):
         return -1
 
 def pontuar_pib(pib):
-    if pib > 2:
-        return 2
-    elif pib > 1:
-        return 1
-    elif pib > 0:
-        return 0
-    else:
-        return -1
+    return max(min((pib - 0.5), 2), -1)  # PIB acima de 2 é ótimo, abaixo de 0 ruim
+
 
 def pontuar_soja_milho(preco_soja, preco_milho):
     if preco_soja is not None and preco_milho is not None:
@@ -383,17 +365,13 @@ def pontuar_minerio(preco_minerio):
     return 0
 
 def pontuar_macro(m):
-    score = 0
-    if m.get('selic') is not None:
-        score += pontuar_selic(m['selic'])
-    if m.get('ipca') is not None:
-        score += pontuar_ipca(m['ipca'])
-    if m.get('cambio') is not None:
-        score += pontuar_dolar(m['cambio'])
-    if m.get('pib') is not None:
-        score += pontuar_pib(m['pib'])
-    score += pontuar_soja_milho(m.get('soja'), m.get('milho'))
-    score += pontuar_minerio(m.get('minerio'))
+    score = {}
+    score["juros"] = pontuar_selic(m["selic"]) if m.get("selic") else 0
+    score["inflação"] = pontuar_ipca(m["ipca"]) if m.get("ipca") else 0
+    score["cambio"] = pontuar_dolar(m["cambio"]) if m.get("cambio") else 0
+    score["pib"] = pontuar_pib(m["pib"]) if m.get("pib") else 0
+    score["commodities_agro"] = pontuar_soja_milho(m.get("soja"), m.get("milho"))
+    score["commodities_minerio"] = pontuar_minerio(m.get("minerio"))
     return score
 
 
@@ -417,17 +395,19 @@ def obter_preco_atual(ticker):
     return None
 
 
-def classificar_cenario_macro(score_macro):
-    if score_macro >= 7:
+def classificar_cenario_macro(score_dict):
+    total = sum(score_dict.values())
+    if total >= 7:
         return "Expansão Forte"
-    elif score_macro >= 4:
+    elif total >= 4:
         return "Expansão Moderada"
-    elif score_macro >= 1:
+    elif total >= 1:
         return "Estável"
-    elif score_macro >= -2:
+    elif total >= -2:
         return "Contração Moderada"
     else:
         return "Contração Forte"
+
 
 
 #===========PESOS FALTANTES======
