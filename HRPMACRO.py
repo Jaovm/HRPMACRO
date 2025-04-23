@@ -1153,6 +1153,10 @@ if st.button("Gerar Alocação Otimizada"):
                     )
                     st.dataframe(destaque.head(5), use_container_width=True)
 
+                except FileNotFoundError:
+                    st.info("O histórico dos últimos 7 anos ainda não foi gerado. Rode o script de geração primeiro.")
+                    historico_7anos = pd.DataFrame()
+
             
 with st.expander("ℹ️ Como funciona a sugestão"):
     st.markdown("""
