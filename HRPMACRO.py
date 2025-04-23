@@ -287,7 +287,7 @@ def obter_macro():
         "ipca": buscar_projecoes_focus("IPCA"),
         "selic": buscar_projecoes_focus("Selic"),
         "pib": buscar_projecoes_focus("PIB Total"),
-        "cambio": buscar_projecoes_focus("Câmbio")
+        "dolar": buscar_projecoes_focus("Câmbio")
     }
 
     # Preços de commodities
@@ -328,7 +328,7 @@ def pontuar_ipca(ipca):
     return max(min(2 - (ipca - 3) / 2, 2), -1)  # Ideal abaixo de 3%
 
 
-def pontuar_dolar(cambio):
+def pontuar_dolar(dolar):
     if dolar < 4.8:
         return 1
     elif dolar <= 5.2:
