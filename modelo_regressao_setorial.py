@@ -9,7 +9,7 @@ from dados_setoriais import setores_por_ticker
 
 def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salvar_csv=False):
     # Gerar dados simulados de indicadores macroeconômicos
-    datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='ME')
+    datas = pd.date_range(end=pd.Timestamp.today(), periods=60, freq='ME')
     macro_data = pd.DataFrame({
         'data': datas,
         'selic': np.random.normal(9, 1, len(datas)),
