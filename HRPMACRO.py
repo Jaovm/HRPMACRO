@@ -853,7 +853,7 @@ with st.sidebar:
 st.subheader("🏆 Ranking Geral de Ações (com base no score)")
 carteira = dict(zip(tickers, pesos_atuais))
 ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
-st.dataframe(ranking_df[["ticker", "setor", "preço atual", "preço alvo", "favorecimento macro", "score"]], use_container_width=True)
+
 
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
