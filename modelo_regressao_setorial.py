@@ -41,15 +41,24 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
     retornos_setoriais = {}
     for setor, tickers in setores.items():
         try:
-            st.info(f"🔄 Baixando dados para setor: {setor} -> {tickers}")
+            st.info(f"🔄 Baixando dados para setor: {setor} → {tickers}")
             dados = yf.download(tickers, period="2y", interval="1mo", group_by="ticker", auto_adjust=True)
 
+            # Verificar se os dados possuem as colunas esperadas
             if isinstance(dados.columns, pd.MultiIndex):
-                dados = dados['Close']
+                if 'Close' in dados.columns.get_level_values(0):
+                    dados = dados['Close']
+                elif 'Adj Close' in dados.columns.get_level_values(0):
+                    dados = dados['Adj Close']
+                else:
+                    st.warning(f"⚠️ Nenhuma coluna 'Close' ou 'Adj Close' encontrada para {setor}")
+                    continue
             elif 'Close' in dados:
                 dados = dados[['Close']]
+            elif 'Adj Close' in dados:
+                dados = dados[['Adj Close']]
             else:
-                st.warning(f"⚠️ Nenhuma coluna 'Close' encontrada para {setor}")
+                st.warning(f"⚠️ Nenhuma coluna 'Close' ou 'Adj Close' encontrada para {setor}")
                 continue
 
             dados = dados.fillna(method='ffill')
