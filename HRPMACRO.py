@@ -366,7 +366,6 @@ def completar_pesos(tickers_originais, pesos_calculados):
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
-tickers_carteira = list(carteira.keys())
 
 sensibilidade_setorial = obter_sensibilidade_regressao(
     tickers_carteira=tickers_carteira,
