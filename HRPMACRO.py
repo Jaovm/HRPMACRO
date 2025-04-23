@@ -570,8 +570,9 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
         if preco_atual is None or preco_alvo is None:
             continue
 
-        favorecido = setor in setores_favorecidos
-        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro)
+        setor = setores_por_ticker.get(ticker)
+        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, setor, macro)
+
 
         ativos_validos.append({
             "ticker": ticker,
