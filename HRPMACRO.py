@@ -672,11 +672,12 @@ score_macro = pontuar_macro(macro)
 score_medio = round(np.mean(list(score_macro.values())), 2)
 st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_medio})")
 st.markdown("### 📉 Indicadores Macroeconômicos")
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col15 = st.columns(5)
 col1.metric("Selic (%)", f"{macro['selic']:.2f}")
 col2.metric("IPCA (%)", f"{macro['ipca']:.2f}")
-col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
-col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
+col3.metric("PIB (%)", f"{macro['pib']:.2f}")
+col4.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
+col5.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
 
 
 
