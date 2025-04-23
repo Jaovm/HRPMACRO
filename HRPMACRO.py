@@ -370,7 +370,7 @@ def pontuar_macro(m):
     score = {}
     score["juros"] = pontuar_selic(m["selic"]) if m.get("selic") else 0
     score["inflação"] = pontuar_ipca(m["ipca"]) if m.get("ipca") else 0
-    score["cambio"] = pontuar_dolar(m["cambio"]) if m.get("cambio") else 0
+    score["dolar"] = pontuar_dolar(m["dolar"]) if m.get("dolar") else 0
     score["pib"] = pontuar_pib(m["pib"]) if m.get("pib") else 0
     score["commodities_agro"] = pontuar_soja_milho(m.get("soja"), m.get("milho"))
     score["commodities_minerio"] = pontuar_minerio(m.get("minerio"))
