@@ -1024,26 +1024,27 @@ if st.button("Gerar Alocação Otimizada"):
                     explicacao += "Exportadora favorecida por dólar alto. "
                 st.info(explicacao)
 
-            st.subheader("🏅 Empresas que se destacaram em cenários similares")
-
-            if historico.empty:
-                st.info("Histórico de cenários ainda não disponível. Execute o app mais vezes para construir o histórico.")
-            else:
-                # Filtra cenário igual ao atual e tickers da carteira
-                similares = historico[historico["cenario"] == cenario]
-                similares = similares[similares["ticker"].isin(carteira.keys())]
-                if similares.empty:
-                    st.info("Nenhuma empresa da carteira tem registro de destaque em cenários similares no histórico.")
+                st.subheader("🏅 Top 5 empresas que se destacaram em cenários similares")
+                
+                if historico.empty:
+                    st.info("Histórico de cenários ainda não disponível. Execute o app mais vezes para construir o histórico.")
                 else:
-                    destaque = (
-                        similares.groupby(["ticker", "setor"])
-                        .agg(media_favorecido=("favorecido", "mean"),
-                             media_score=("score", "mean"),
-                             ocorrencias=("favorecido", "count"))
-                        .reset_index()
-                        .sort_values(by=["media_favorecido", "media_score"], ascending=False)
-                    )
-                    st.dataframe(destaque, use_container_width=True)
+                    # Filtra cenário igual ao atual e tickers da carteira
+                    similares = historico[historico["cenario"] == cenario]
+                    similares = similares[similares["ticker"].isin(carteira.keys())]
+                    if similares.empty:
+                        st.info("Nenhuma empresa da carteira tem registro de destaque em cenários similares no histórico.")
+                    else:
+                        destaque = (
+                            similares.groupby(["ticker", "setor"])
+                            .agg(media_favorecido=("favorecido", "mean"),
+                                 media_score=("score", "mean"),
+                                 ocorrencias=("favorecido", "count"))
+                            .reset_index()
+                            .sort_values(by=["media_favorecido", "media_score"], ascending=False)
+                        )
+                        destaque_top5 = destaque.head(5)
+                        st.dataframe(destaque_top5, use_container_width=True)
                         
             # Troco do aporte
             valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
