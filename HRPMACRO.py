@@ -573,7 +573,7 @@ def completar_pesos(tickers_originais, pesos_calculados):
     'Consumo Básico':                 {'juros': 1,  'inflação': -2, 'dolar': -1, 'pib': 1,  'commodities_agro': -1, 'commodities_minerio': -1},
     'Comunicação':                    {'juros': 0,  'inflação': 0,  'dolar': -1, 'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
     'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
-}
+    }
 
 def calcular_favorecimento_continuo(setor, score_macro):
     """
