@@ -449,7 +449,7 @@ def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
     st.dataframe(df[colunas_existentes], use_container_width=True)
 
 with st.expander("🔍 Ver detalhes dos scoress"):
-        st.dataframe(df[["ticker", "detalhe"]], use_container_width=True)
+        st.dataframe([["ticker", "detalhe"]], use_container_width=True)
 
      
 
