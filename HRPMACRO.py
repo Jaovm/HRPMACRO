@@ -273,10 +273,11 @@ def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
     
     with st.expander("🔍 Ver detalhes dos scores"):
         st.dataframe(df[["ticker", "detalhe"]], use_container_width=True)
-    
     return df
 
-     
+     with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
+    st.json(sensibilidade_setorial)
+
 
 def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False):
     import numpy as np
@@ -366,7 +367,8 @@ def completar_pesos(tickers_originais, pesos_calculados):
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
-sensibilidade_setorial = obter_sensibilidade_regressao()
+sensibilidade_setorial = obter_sensibilidade_regressao(normalizar=True)
+
         
 
 def calcular_favorecimento_continuo(setor, score_macro):
