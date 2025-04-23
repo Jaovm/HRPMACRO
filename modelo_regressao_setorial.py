@@ -4,8 +4,6 @@ import numpy as np
 import yfinance as yf
 import statsmodels.api as sm
 from collections import defaultdict
-from dados_setoriais import setores_por_ticker
-from time import sleep
 
 
 def validar_tickers(tickers):
@@ -23,59 +21,79 @@ def validar_tickers(tickers):
     return validos
 
 
-def baixar_dados_com_retentativa(tickers, period="2y", interval="1mo", max_retentativas=3):
-    """Baixa dados com retentativas em caso de falha e valida colunas."""
-    for tentativa in range(max_retentativas):
-        try:
-            sleep(1)  # Aguarda 1 segundo entre as tentativas para evitar limitações
-            dados = yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=False)
-
-            # Verificar se os dados são válidos
-            if dados.empty:
-                st.warning(f"⚠️ Dados vazios retornados para {tickers}.")
-                continue
-
-            # Verificar se os dados são um DataFrame com colunas
-            if isinstance(dados, pd.DataFrame) and not dados.empty:
-                if 'Adj Close' in dados.columns:
-                    st.info("✅ Coluna 'Adj Close' encontrada.")
-                    return dados['Adj Close']
-                elif dados.shape[1] > 4:
-                    st.warning("⚠️ Tentando acessar a 5ª coluna como fallback.")
-                    return dados.iloc[:, 4]  # Acessar a 5ª coluna diretamente
-
-            st.warning("⚠️ Dados retornados não possuem 'Adj Close' ou formato esperado.")
-        except Exception as e:
-            st.warning(f"⚠️ Tentativa {tentativa + 1}/{max_retentativas} falhou para tickers {tickers}. ({e})")
-            sleep(5)  # Espera antes de tentar novamente
-
-    st.error(f"⚠️ Não foi possível baixar os dados para tickers {tickers} após {max_retentativas} tentativas.")
-    return pd.DataFrame()  # Retorna DataFrame vazio em caso de falha
+def baixar_dados(tickers, period="2y", interval="1mo"):
+    """Baixa dados do Yahoo Finance para os tickers fornecidos."""
+    try:
+        dados = yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=True)
+        if dados.empty:
+            st.warning(f"⚠️ Nenhum dado retornado para os tickers: {tickers}")
+        return dados
+    except Exception as e:
+        st.error(f"⚠️ Erro ao baixar dados para os tickers {tickers}: {e}")
+        return pd.DataFrame()
 
 
 def gerar_dados_simulados(tickers, periodos=24):
     """Gera dados simulados para tickers sem dados válidos."""
     st.warning("⚠️ Gerando dados simulados para os tickers ausentes...")
-    datas = pd.date_range(end=pd.Timestamp.today(), periods=periodos, freq='ME')
+    datas = pd.date_range(end=pd.Timestamp.today(), periods=periodos, freq='MS')
     dados_simulados = {ticker: np.random.normal(0, 0.02, len(datas)) for ticker in tickers}
     return pd.DataFrame(dados_simulados, index=datas)
 
 
-def integrar_dados_simulados(setores, tickers_sem_dados):
-    """Integra dados simulados para setores que falharam ao obter dados reais."""
+def obter_dados_setoriais(setores, tickers_validos):
+    """Obtém dados setoriais para cada setor."""
     retornos_setoriais = {}
     for setor, tickers in setores.items():
-        if any(ticker in tickers_sem_dados for ticker in tickers):
-            st.warning(f"⚠️ Usando dados simulados para o setor {setor}")
+        tickers_validos_setor = [t for t in tickers if t in tickers_validos]
+        if not tickers_validos_setor:
+            st.warning(f"⚠️ Nenhum ticker válido para o setor {setor}. Gerando dados simulados.")
             simulados = gerar_dados_simulados(tickers)
             retornos_setoriais[setor] = simulados.mean(axis=1)
-    return retornos_setoriais
+            continue
+
+        st.info(f"🔄 Baixando dados para setor: {setor} → {tickers_validos_setor}")
+        dados = baixar_dados(tickers_validos_setor)
+        if dados.empty:
+            st.warning(f"⚠️ Dados vazios para setor {setor}. Gerando dados simulados.")
+            simulados = gerar_dados_simulados(tickers)
+            retornos_setoriais[setor] = simulados.mean(axis=1)
+            continue
+
+        try:
+            if 'Adj Close' in dados.columns.get_level_values(0):
+                dados = dados['Adj Close']
+            retornos = dados.pct_change().dropna()
+            retornos_setoriais[setor] = retornos.mean(axis=1)
+        except Exception as e:
+            st.error(f"⚠️ Erro ao processar dados para setor {setor}: {e}")
+            simulados = gerar_dados_simulados(tickers)
+            retornos_setoriais[setor] = simulados.mean(axis=1)
+
+    return pd.DataFrame(retornos_setoriais)
 
 
-def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salvar_csv=False):
-    datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='ME')
+def construir_modelo_regressao(retornos_setoriais, macro_data):
+    """Constrói modelos de regressão para cada setor."""
+    coeficientes = {}
+    fatores_macro = macro_data.columns
+    for setor in retornos_setoriais.columns:
+        try:
+            y = retornos_setoriais[setor]
+            X = macro_data
+            X = sm.add_constant(X)
+            modelo = sm.OLS(y, X).fit()
+            coeficientes[setor] = modelo.params.drop('const').to_dict()
+            st.success(f"✅ Regressão bem-sucedida para setor {setor}")
+        except Exception as e:
+            st.error(f"⚠️ Erro ao construir regressão para setor {setor}: {e}")
+    return coeficientes
+
+
+def main():
+    # Dados macroeconômicos simulados
+    datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='MS')
     macro_data = pd.DataFrame({
-        'data': datas,
         'selic': np.random.normal(9, 1, len(datas)),
         'ipca': np.random.normal(3, 0.5, len(datas)),
         'dolar': np.random.normal(5.2, 0.3, len(datas)),
@@ -83,62 +101,36 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
         'commodities_agro': np.random.normal(9, 2, len(datas)),
         'commodities_minerio': np.random.normal(110, 15, len(datas)),
         'commodities_petroleo': np.random.normal(85, 10, len(datas)),
-    })
-    macro_data.set_index('data', inplace=True)
+    }, index=datas)
 
-    setores = defaultdict(list)
-    for ticker, setor in setores_por_ticker.items():
-        setores[setor].append(ticker)
+    # Dados setoriais (exemplo)
+    setores = {
+        'Bancos': ['ITUB4.SA', 'BBDC4.SA', 'SANB11.SA', 'BBAS3.SA'],
+        'Seguradoras': ['BBSE3.SA', 'PSSA3.SA', 'CXSE3.SA'],
+        'Energia Elétrica': ['EGIE3.SA', 'TAEE11.SA', 'CMIG4.SA'],
+    }
 
-    # Validação de tickers antes do processamento
-    st.info("📋 Validando tickers...")
-    tickers_validos = validar_tickers([t for setor in setores.values() for t in setor])
-    tickers_sem_dados = set([t for setor in setores.values() for t in setor]) - set(tickers_validos)
-    if not tickers_validos:
-        st.error("❌ Nenhum ticker válido encontrado. Abortando.")
-        return {}
+    # Validar tickers
+    todos_tickers = [ticker for tickers in setores.values() for ticker in tickers]
+    tickers_validos = validar_tickers(todos_tickers)
 
-    # Filtrar setores com base nos tickers válidos
-    setores = {setor: [t for t in tickers if t in tickers_validos] for setor, tickers in setores.items()}
-    if tickers_carteira:
-        setores = {s: tks for s, tks in setores.items() if any(t in tickers_carteira for t in tks)}
+    # Obter dados setoriais
+    retornos_setoriais = obter_dados_setoriais(setores, tickers_validos)
 
-    st.info(f"📌 Setores selecionados para regressão: {list(setores.keys())}")
+    if retornos_setoriais.empty:
+        st.error("⚠️ Nenhum dado setorial disponível. Abortando.")
+        return
 
-    retornos_setoriais = {}
-    for setor, tickers in setores.items():
-        if not tickers:
-            st.warning(f"⚠️ Nenhum ticker válido para o setor {setor}. Ignorando.")
-            continue
+    # Construir modelo de regressão
+    coeficientes = construir_modelo_regressao(retornos_setoriais, macro_data)
 
-        try:
-            st.info(f"🔄 Baixando dados para setor: {setor} → {tickers}")
-            dados = baixar_dados_com_retentativa(tickers)
+    # Exibir resultados
+    if coeficientes:
+        st.info("📈 Coeficientes finais:")
+        st.write(pd.DataFrame(coeficientes).T)
+    else:
+        st.error("⚠️ Nenhum modelo de regressão foi construído.")
 
-            if dados.empty:
-                st.warning(f"⚠️ Dados vazios para setor: {setor}")
-                continue
 
-            dados = dados.fillna(method='ffill')
-            retornos = dados.pct_change().dropna()
-            if retornos.empty:
-                st.warning(f"⚠️ Retornos vazios para setor: {setor}")
-                continue
-
-            retornos_setoriais[setor] = retornos.mean(axis=1)
-        except Exception as e:
-            st.error(f"⚠️ Erro ao processar setor {setor}: {e}")
-            continue
-
-    # Integração de dados simulados
-    dados_simulados = integrar_dados_simulados(setores, tickers_sem_dados)
-    retornos_setoriais.update(dados_simulados)
-
-    retornos_df = pd.DataFrame(retornos_setoriais).dropna()
-    st.info(f"📈 Retornos setoriais disponíveis: {list(retornos_df.columns)}")
-
-    if retornos_df.empty:
-        st.error("⚠️ Nenhum dado de retorno setorial disponível após filtragem.")
-        return {}
-
-    st.info("✅ Fluxo concluído com sucesso!")
+if __name__ == "__main__":
+    main()
