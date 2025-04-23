@@ -657,18 +657,23 @@ def otimizar_carteira_hrp(tickers, carteira_atual):
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
-st.title("📊 Sugestão e Otimização de Carteira com Base no Cenário Macroeconômico")
+st.title("📊 Sugestão e Otimização de Carteira")
+
+st.markdown("---")
+
 
 macro = obter_macro()
 cenario = classificar_cenario_macro(macro)
 score_macro = pontuar_macro(macro)
-st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_macro})")
+score_medio = round(np.mean(list(score_macro.values())), 2)
+st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_medio})")
+st.markdown("### 📉 Indicadores Macroeconômicos")
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Selic (%)", f"{macro['selic']:.2f}")
-col2.metric("Inflação IPCA (%)", f"{macro['ipca']:.2f}")
+col2.metric("IPCA (%)", f"{macro['ipca']:.2f}")
 col3.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
 col4.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
-st.info(f"**Cenário Macroeconômico Atual:** {cenario}")
+
 
 
 # --- SIDEBAR ---
@@ -803,7 +808,8 @@ if st.button("Gerar Alocação Otimizada"):
             st.dataframe(df_resultado[[
                 "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
                 "Valor Alocado (R$)", "% na Carteira Final"
-            ]])
+            ]], use_container_width=True)
+
             
             # Mostra pesos da HRP como comparação
             pesos_hrp = otimizar_carteira_hrp(todos_os_tickers, carteira)
