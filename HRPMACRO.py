@@ -10,16 +10,80 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
 
-def carregar_historico_cenarios(path="historico_cenarios.csv"):
-    if os.path.exists(path):
-        return pd.read_csv(path)
+def get_bcb_hist(code, start, end):
+    """Baixa série histórica mensal do BCB para um código SGS."""
+    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados?formato=json&dataInicial={start}&dataFinal={end}"
+    r = requests.get(url)
+    if r.status_code == 200:
+        df = pd.DataFrame(r.json())
+        df['data'] = pd.to_datetime(df['data'], dayfirst=True)
+        df['valor'] = df['valor'].str.replace(",", ".").astype(float)
+        return df.set_index('data')['valor']
     else:
-        return pd.DataFrame(columns=[
-            "data", "cenario", "ticker", "setor", "score", "favorecido"
-        ])
+        return pd.Series(dtype=float)
 
-def salvar_historico_cenarios(df, path="historico_cenarios.csv"):
-    df.to_csv(path, index=False)
+def obter_preco_petroleo_hist(start, end):
+    """Baixa preço histórico mensal do petróleo Brent (BZ=F) do Yahoo Finance."""
+    df = yf.download("BZ=F", start=start, end=end, interval="1mo", progress=False)
+    if not df.empty:
+        df.index = pd.to_datetime(df.index)
+        return df['Close']
+    return pd.Series(dtype=float)
+
+def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
+    """Gera ou atualiza historico_7anos.csv automaticamente dentro do app."""
+    file_hist = "historico_7anos.csv"
+    hoje = datetime.date.today()
+    inicio = pd.to_datetime(start)
+    final = hoje
+    datas = pd.date_range(inicio, final, freq='M')
+
+    # Baixar séries macro históricas do BCB
+    selic_hist = get_bcb_hist(432, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
+    ipca_hist = get_bcb_hist(433, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
+    dolar_hist = get_bcb_hist(1, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
+    # Petroleo
+    petroleo_hist = obter_preco_petroleo_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
+
+    # Preencher e alinhar datas
+    macro_df = pd.DataFrame(index=datas)
+    macro_df['selic'] = selic_hist.reindex(datas, method='ffill')
+    macro_df['ipca'] = ipca_hist.reindex(datas, method='ffill')
+    macro_df['dolar'] = dolar_hist.reindex(datas, method='ffill')
+    macro_df['petroleo'] = petroleo_hist.reindex(datas, method='ffill')
+    macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
+
+    # Monta histórico
+    historico = []
+    for data, row in macro_df.iterrows():
+        macro = {
+            "ipca": row['ipca'],
+            "selic": row['selic'],
+            "dolar": row['dolar'],
+            "petroleo": row.get('petroleo', None),
+        }
+        # Funções do seu script:
+        cenario = classificar_cenario_macro(
+            ipca=macro.get("ipca"),
+            selic=macro.get("selic"),
+            dolar=macro.get("dolar"),
+            pib=2,  # PIB fixo (pode integrar histórico se quiser)
+            preco_soja=None, preco_milho=None, preco_minerio=None, preco_petroleo=macro.get("petroleo")
+        )
+        score_macro = pontuar_macro(macro)
+        for ticker in tickers:
+            setor = setores_por_ticker.get(ticker, None)
+            favorecido = calcular_favorecimento_continuo(setor, score_macro)
+            historico.append({
+                "data": str(data.date()),
+                "cenario": cenario,
+                "ticker": ticker,
+                "setor": setor,
+                "favorecido": favorecido
+            })
+    df_hist = pd.DataFrame(historico)
+    df_hist.to_csv(file_hist, index=False)
+    return df_hist
 
 # ========= DICIONÁRIOS ==========
 
@@ -1033,7 +1097,15 @@ if st.button("Gerar Alocação Otimizada"):
             pesos_finais = valores_totais / valores_totais.sum()
             
             df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
-            
+
+            tickers = list(carteira.keys())
+            file_hist7 = "historico_7anos.csv"
+            if not os.path.exists(file_hist7):
+                with st.spinner("Gerando histórico dos últimos 7 anos (pode demorar alguns minutos na primeira vez)..."):
+                    historico_7anos = montar_historico_7anos(tickers, setores_por_ticker)
+                    st.success("Histórico dos últimos 7 anos gerado!")
+            else:
+                historico_7anos = pd.read_csv(file_hist7)
             # Exibe a tabela final
             st.subheader("📈 Ativos Recomendados para Novo Aporte")
             st.dataframe(df_resultado[[
@@ -1050,41 +1122,36 @@ if st.button("Gerar Alocação Otimizada"):
                     explicacao += "Exportadora favorecida por dólar alto. "
                 st.info(explicacao)
 
-                st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
-                
-                # Carregue o histórico de 7 anos
-                try:
-                    historico_7anos = pd.read_csv("historico_7anos.csv")
-                except FileNotFoundError:
-                    st.info("O histórico dos últimos 7 anos ainda não foi gerado.")
-                    historico_7anos = pd.DataFrame()
-                
-                if historico_7anos.empty:
-                    st.info("Sem dados históricos para exibir. Rode a rotina de geração do histórico de 7 anos primeiro.")
-                else:
-                    # Filtro: cenário igual ao atual e tickers da carteira
-                    similares = historico_7anos[(historico_7anos["cenario"] == cenario) &
-                                                (historico_7anos["ticker"].isin(carteira.keys()))]
-                    if similares.empty:
-                        st.info("Nenhum destaque histórico para esse cenário.")
-                    else:
-                        destaque = (
-                            similares.groupby(["ticker", "setor"])
-                            .agg(media_favorecido=("favorecido", "mean"),
-                                 ocorrencias=("favorecido", "count"))
-                            .reset_index()
-                            .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
-                        )
-                        st.dataframe(destaque.head(5), use_container_width=True)
                         
             # Troco do aporte
             valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
             troco = aporte - valor_utilizado
             st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
             st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+            
+            st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
 
-        except Exception as e:
-            st.error(f"Erro na otimização: {str(e)}")
+            if historico_7anos.empty:
+                st.info("Sem dados históricos para exibir. Rode o app novamente, ou confira conexão.")
+            else:
+                similares = historico_7anos[
+                    (historico_7anos["cenario"] == cenario) &
+                    (historico_7anos["ticker"].isin(carteira.keys()))
+                ]
+                if similares.empty:
+                    st.info("Nenhum destaque histórico para esse cenário e carteira nos últimos 7 anos.")
+                else:
+                    destaque = (
+                        similares.groupby(["ticker", "setor"])
+                        .agg(media_favorecido=("favorecido", "mean"),
+                             ocorrencias=("favorecido", "count"))
+                        .reset_index()
+                        .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
+                    )
+                    st.dataframe(destaque.head(5), use_container_width=True)
+            
+                    except Exception as e:
+                        st.error(f"Erro na otimização: {str(e)}")
             
 
             
