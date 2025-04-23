@@ -368,7 +368,6 @@ def completar_pesos(tickers_originais, pesos_calculados):
 # Novo modelo com commodities separadas
 
 sensibilidade_setorial = obter_sensibilidade_regressao(
-    tickers_carteira=tickers_carteira,
     normalizar=True,
     salvar_csv=True
 )
