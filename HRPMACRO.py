@@ -1029,9 +1029,9 @@ if st.button("Gerar Alocação Otimizada"):
             st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
             st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
-
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
+            
 
             st.subheader("🏅 Empresas que se destacaram em cenários similares")
 
