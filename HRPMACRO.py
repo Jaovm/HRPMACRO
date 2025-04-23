@@ -558,7 +558,7 @@ def completar_pesos(tickers_originais, pesos_calculados):
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
-    sensibilidade_setorial = obter_sensibilidade_regressao()
+sensibilidade_setorial = obter_sensibilidade_regressao()
     'Bancos':                          {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 1, 'commodities_minerio': 1},
     'Seguradoras':                     {'juros': 2,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0, 'commodities_minerio': 0},
     'Bolsas e Serviços Financeiros':  {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': 0, 'commodities_minerio': 0},
