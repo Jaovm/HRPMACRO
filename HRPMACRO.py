@@ -322,26 +322,31 @@ def obter_preco_petroleo():
 # Funções de pontuação individual
 
 def pontuar_selic(selic):
-    ideal = 9  # ponto de equilíbrio neutro
-    return np.clip(1.5 * np.exp(-((selic - ideal) ** 2) / 10), -2, 2)
+    if selic is None:
+        return 0
+    ideal = 10  # equilíbrio mais realista no Brasil
+    return np.clip(2 * np.exp(-((selic - ideal) ** 2) / 8), -2, 2)
+
 
 def pontuar_ipca(ipca):
     if ipca is None:
         return 0
-    ideal = 3  # centro da meta de inflação
-    return np.clip(1.5 * np.exp(-((ipca - ideal) ** 2) / 2.5), -2, 2)
+    ideal = 3  # centro da meta ajustado
+    return np.clip(2 * np.exp(-((ipca - ideal) ** 2) / 1.8), -2, 2)
+
 
 def pontuar_dolar(dolar):
     if dolar is None:
         return 0
-    ideal = 5.0  # valor considerado de equilíbrio
-    return np.clip(1.8 * np.exp(-((dolar - ideal) ** 2) / 0.8), -2, 2)
+    ideal = 5.5
+    return np.clip(2 * np.exp(-((dolar - ideal) ** 2) / 0.7), -2, 2)
+
 
 def pontuar_pib(pib):
     if pib is None:
         return 0
-    # crescimento > 2 é ótimo, < 0 é ruim
-    return np.clip((pib - 0.5) * 1.5, -2, 2)
+    return np.clip((pib - 1.0) * 1.8, -2, 2)  # sensibilidade ajustada
+
 
 def pontuar_soja_milho(preco_soja, preco_milho):
     if preco_soja is not None and preco_milho is not None:
@@ -490,17 +495,18 @@ def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, 
 
 def classificar_cenario_macro(score_dict):
     total = sum(score_dict.values())
-    # Considerando pontuação total possível entre -6 e +10
-    if total >= 8:
+    # Novo intervalo considerando score entre -7 e +12
+    if total >= 9:
         return "Expansão Forte"
     elif total >= 5:
         return "Expansão Moderada"
-    elif total >= 2:
+    elif total >= 1:
         return "Estável"
     elif total >= -2:
         return "Contração Moderada"
     else:
         return "Contração Forte"
+
 
 
 
@@ -542,7 +548,8 @@ def calcular_favorecimento_continuo(setor, score_macro):
         return 0
     sens = sensibilidade_setorial[setor]
     bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
-    return np.clip(bruto / 5, -2, 2)  # normaliza suavemente
+    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
+
 
     
 
