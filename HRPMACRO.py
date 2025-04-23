@@ -1130,10 +1130,9 @@ if st.button("Gerar Alocação Otimizada"):
             st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
             
             
-                    except Exception as e:
-                        st.error(f"Erro na otimização: {str(e)}")
 
-                        st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
+
+            st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
 
             if historico_7anos.empty:
                 st.info("Sem dados históricos para exibir. Rode o app novamente, ou confira conexão.")
