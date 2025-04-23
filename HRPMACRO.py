@@ -456,7 +456,6 @@ def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
 
      
 
-
 def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False):
     import numpy as np
 
@@ -586,9 +585,7 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
                                         preco_petroleo=macro.get("petroleo"))
     
     # Exibir as pontuações e o cenário
-    st.write("Pontuação por indicador:", score_macro)
-    st.write("Score Total:", sum(score_macro.values()))
-    st.write("Cenário:", cenario)
+
 
     # Obter os setores válidos conforme o cenário
     setores_cidos = setores_por_cenario.get(cenario, [])
@@ -850,10 +847,11 @@ with st.sidebar:
         st.error("A soma dos pesos deve ser maior que 0.")
         st.stop()
 
-# Constrói a carteira com os tickers e pesos normalizados
-carteira = dict(zip(tickers, pesos_atuais))
+
+
 # Gerar ranking geral com base no score macro + preço alvo
 st.subheader("🏆 Ranking Geral de Ações (com base no score)")
+carteira = dict(zip(tickers, pesos_atuais))
 ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 st.dataframe(ranking_df[["ticker", "setor", "preço atual", "preço alvo", "favorecimento macro", "score"]], use_container_width=True)
 
