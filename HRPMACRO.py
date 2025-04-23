@@ -1047,109 +1047,97 @@ if st.button("Gerar Alocação Otimizada"):
         tickers_validos = [a['ticker'] for a in ativos_validos]
         try:
             if usar_hrp:
-                pesos = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
+                pesos = otimizar_carteira_hrp(tickers_validos, carteira)
             else:
-                pesos = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
+                pesos = otimizar_carteira_sharpe(tickers_validos, carteira)
 
             if pesos is not None:
                 tickers_completos = set(carteira)
                 tickers_usados = set(tickers_validos)
                 tickers_zerados = tickers_completos - tickers_usados
 
-                
-                # Ativos da carteira atual sem recomendação
-            if tickers_zerados:
-                st.subheader("📉 Ativos da carteira atual sem recomendação de aporte")
-                st.write(", ".join(tickers_zerados))
-            
-            # Cria DataFrame com todos os tickers da carteira original
-            todos_os_tickers = list(carteira.keys())
-            df_resultado_completo = pd.DataFrame({'ticker': todos_os_tickers})
-            
-            # Junta com os dados dos ativos válidos (os que passaram nos filtros)
-            df_validos = pd.DataFrame(ativos_validos)
-            df_resultado = df_resultado_completo.merge(df_validos, on='ticker', how='left')
-            
-            # Preenche colunas faltantes para os ativos zerados
-            df_resultado["preco_atual"] = df_resultado["preco_atual"].fillna(0)
-            df_resultado["preco_alvo"] = df_resultado["preco_alvo"].fillna(0)
-            df_resultado["score"] = df_resultado["score"].fillna(0)
-            df_resultado["setor"] = df_resultado["setor"].fillna("Não recomendado")
-            
-            # Mapeia os pesos calculados para os tickers (os ausentes recebem 0)
-            pesos_dict = dict(zip(tickers_validos, pesos))
-            df_resultado["peso_otimizado"] = df_resultado["ticker"].map(pesos_dict).fillna(0)
-            
-            # Calcula valor alocado bruto e quantidade de ações
-            df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
-            df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"])\
-                .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
-            df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
-            
-            # Cálculo de novos pesos considerando carteira anterior + novo aporte
-            tickers_resultado = df_resultado["ticker"].tolist()
-            pesos_atuais_dict = dict(zip(carteira, pesos_atuais))
-            pesos_atuais_filtrados = np.array([pesos_atuais_dict[t] for t in tickers_resultado])
-            valores_atuais = pesos_atuais_filtrados * 1_000_000  # exemplo: carteira anterior de 1 milhão
-            
-            valores_aporte = df_resultado["Valor Alocado (R$)"].to_numpy()
-            valores_totais = valores_atuais + valores_aporte
-            pesos_finais = valores_totais / valores_totais.sum()
-            
-            df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
-            # ... resto do código ...
-            # Exibe a tabela final
-            st.subheader("📈 Ativos Recomendados para Novo Aporte")
-            st.dataframe(df_resultado[[
-                "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
-                "Valor Alocado (R$)", "% na Carteira Final"
-            ]], use_container_width=True)
+                if tickers_zerados:
+                    st.subheader("📉 Ativos da carteira atual sem recomendação de aporte")
+                    st.write(", ".join(tickers_zerados))
 
-            for i, row in df_resultado.iterrows():
-                explicacao = f"O ativo {row['ticker']} foi recomendado porque: "
-                explicacao += f"Setor {row['setor']} é favorecido em cenários de {cenario}. "
-                if row['favorecido'] > 0:
-                    explicacao += "Setor sensível a fatores macro positivos. "
-                if row['ticker'] in empresas_exportadoras and macro['dolar'] > 5:
-                    explicacao += "Exportadora favorecida por dólar alto. "
-                st.info(explicacao)
-            tickers = list(carteira.keys())
-            file_hist7 = "historico_7anos.csv"
-            try:
-                historico_7anos = pd.read_csv(file_hist7)
-            except FileNotFoundError:
-                st.info("O histórico dos últimos 7 anos ainda não foi gerado.")
-                historico_7anos = pd.DataFrame()
-            
-            st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
-            
-            if historico_7anos.empty:
-                st.info("Sem dados históricos para exibir. Rode o app novamente, ou confira conexão.")
-            else:
-                similares = historico_7anos[
-                    (historico_7anos["cenario"] == cenario) &
-                    (historico_7anos["ticker"].isin(carteira.keys()))
-                ]
-                if similares.empty:
-                    st.info("Nenhum destaque histórico para esse cenário e carteira nos últimos 7 anos.")
+                # Cria DataFrame com todos os tickers da carteira original
+                todos_os_tickers = list(carteira.keys())
+                df_resultado_completo = pd.DataFrame({'ticker': todos_os_tickers})
+
+                # Junta com os dados dos ativos válidos (os que passaram nos filtros)
+                df_validos = pd.DataFrame(ativos_validos)
+                df_resultado = df_resultado_completo.merge(df_validos, on='ticker', how='left')
+
+                # Preenche colunas faltantes para os ativos zerados
+                df_resultado["preco_atual"] = df_resultado["preco_atual"].fillna(0)
+                df_resultado["preco_alvo"] = df_resultado["preco_alvo"].fillna(0)
+                df_resultado["score"] = df_resultado["score"].fillna(0)
+                df_resultado["setor"] = df_resultado["setor"].fillna("Não recomendado")
+
+                # Mapeia os pesos calculados para os tickers (os ausentes recebem 0)
+                pesos_dict = dict(zip(tickers_validos, pesos))
+                df_resultado["peso_otimizado"] = df_resultado["ticker"].map(pesos_dict).fillna(0)
+
+                # Calcula valor alocado bruto e quantidade de ações
+                df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
+                df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"])\
+                    .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
+                df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
+
+                # Cálculo de novos pesos considerando carteira anterior + novo aporte
+                tickers_resultado = df_resultado["ticker"].tolist()
+                pesos_atuais_dict = dict(zip(carteira, pesos_atuais))
+                pesos_atuais_filtrados = np.array([pesos_atuais_dict[t] for t in tickers_resultado])
+                valores_atuais = pesos_atuais_filtrados * 1_000_000  # exemplo: carteira anterior de 1 milhão
+
+                valores_aporte = df_resultado["Valor Alocado (R$)"].to_numpy()
+                valores_totais = valores_atuais + valores_aporte
+                pesos_finais = valores_totais / valores_totais.sum()
+
+                df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
+
+                # Exibe a tabela final
+                st.subheader("📈 Ativos Recomendados para Novo Aporte")
+                st.dataframe(df_resultado[[
+                    "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
+                    "Valor Alocado (R$)", "% na Carteira Final"
+                ]], use_container_width=True)
+
+                # Troco do aporte
+                valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
+                troco = aporte - valor_utilizado
+                st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
+                st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+
+                # ---- Top 5 empresas destaque histórico ----
+                file_hist7 = "historico_7anos.csv"
+                try:
+                    historico_7anos = pd.read_csv(file_hist7)
+                except FileNotFoundError:
+                    st.info("O histórico dos últimos 7 anos ainda não foi gerado.")
+                    historico_7anos = pd.DataFrame()
+
+                st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
+
+                if historico_7anos.empty:
+                    st.info("Sem dados históricos para exibir. Rode o app novamente, ou confira conexão.")
                 else:
-                    destaque = (
-                        similares.groupby(["ticker", "setor"])
-                        .agg(media_favorecido=("favorecido", "mean"),
-                             ocorrencias=("favorecido", "count"))
-                        .reset_index()
-                        .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
-                    )
-                    st.dataframe(destaque.head(5), use_container_width=True)
-                        
-            # Troco do aporte
-            valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
-            troco = aporte - valor_utilizado
-            st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
-            st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+                    similares = historico_7anos[
+                        (historico_7anos["cenario"] == cenario) &
+                        (historico_7anos["ticker"].isin(carteira.keys()))
+                    ]
+                    if similares.empty:
+                        st.info("Nenhum destaque histórico para esse cenário e carteira nos últimos 7 anos.")
+                    else:
+                        destaque = (
+                            similares.groupby(["ticker", "setor"])
+                            .agg(media_favorecido=("favorecido", "mean"),
+                                 ocorrencias=("favorecido", "count"))
+                            .reset_index()
+                            .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
+                        )
+                        st.dataframe(destaque.head(5), use_container_width=True)
 
-            else:
-                st.error("Falha na otimização da carteira.")
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
             
