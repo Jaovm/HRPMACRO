@@ -696,7 +696,7 @@ st.markdown("---")
 
 
 macro = obter_macro()
-cenario = score_macro(macro)
+cenario = classificar_cenario_macro()
 score_macro = pontuar_macro(macro)
 score_medio = round(np.mean(list(score_macro.values())), 2)
 st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_medio})")
@@ -723,7 +723,7 @@ with st.sidebar:
     pesos_default = [
         0.07, 0.06, 0.07, 0.07, 0.08,
         0.07, 0.12, 0.09, 0.06, 0.04,
-        0.1, 0.18, 0.04, 0.01, 0.2
+        0.1, 0.18, 0.04, 0.01, 0.02
     ]
 
     # Número de ativos controlado por estado da sessão
@@ -847,10 +847,6 @@ if st.button("Gerar Alocação Otimizada"):
             ]], use_container_width=True)
 
             
-            # Mostra pesos da HRP como comparação
-            pesos_hrp = otimizar_carteira_hrp(todos_os_tickers, carteira)
-            st.dataframe(pesos_hrp.rename("Peso HRP"))
-
             
             # Troco do aporte
             valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
