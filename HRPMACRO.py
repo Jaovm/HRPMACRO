@@ -765,7 +765,7 @@ def otimizar_carteira_hrp(tickers, carteira_atual):
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
-st.title("📊 Sugestão e Otimização de Carteira")
+st.title("📊 Sugestão e Otimização de Carteira: Cenário Projetado")
 
 st.markdown("---")
 
