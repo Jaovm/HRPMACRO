@@ -251,7 +251,6 @@ setores_por_cenario = {
 def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
     url = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoTop5Anuais"
     params = {
-        "$top": "1000000",
         "$format": "json",
         "$select": "Indicador,Data,DataReferencia,Media,Mediana"
     }
