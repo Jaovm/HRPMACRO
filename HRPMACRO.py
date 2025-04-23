@@ -222,25 +222,28 @@ empresas_exportadoras = [
 setores_por_cenario = {
     "Expansão Forte": [
         'Consumo Discricionário', 'Tecnologia',
-        'Indústria e Bens de Capital', 'Agronegócio'
+        'Indústria e Bens de Capital', 'Agronegócio',
+        'Saúde', 'Comunicação'
     ],
     "Expansão Moderada": [
         'Consumo Discricionário', 'Tecnologia',
-        'Indústria e Bens de Capital', 'Agronegócio', 'Saúde'
+        'Indústria e Bens de Capital', 'Agronegócio', 'Saúde', 'Bancos'
     ],
     "Estável": [
         'Saúde', 'Bancos', 'Seguradoras',
-        'Bolsas e Serviços Financeiros', 'Utilidades Públicas'
+        'Bolsas e Serviços Financeiros', 'Utilidades Públicas', 'Comunicação'
     ],
     "Contração Moderada": [
         'Energia Elétrica', 'Petróleo, Gás e Biocombustíveis',
-        'Mineração e Siderurgia', 'Consumo Básico', 'Comunicação'
+        'Mineração e Siderurgia', 'Consumo Básico', 'Utilidades Públicas'
     ],
     "Contração Forte": [
-        'Energia Elétrica', 'Petróleo, Gás e Biocombustíveis',
-        'Mineração e Siderurgia', 'Consumo Básico'
+        'Energia Elétrica', 'Consumo Básico',
+        'Mineração e Siderurgia', 'Petróleo, Gás e Biocombustíveis',
+        'Utilidades Públicas'
     ]
 }
+
 
 
 
@@ -382,11 +385,11 @@ def pontuar_macro(m):
     indicadores = {
         "juros": (m.get("selic"), 9, 2),      # valor, média histórica, desvio padrão estimado
         "inflação": (m.get("ipca"), 3, 2),
-        "dolar": (m.get("dolar"), 5.5, 0.5),
+        "dolar": (m.get("dolar"), 5.2, 0.5),
         "pib": (m.get("pib"), 2, 1),
         "commodities_agro": ((m.get("soja") + m.get("milho")) / 2, 9, 2),
-        "commodities_minerio": (m.get("minerio"), 100, 15),
-        "commodities_petroleo": (m.get("petroleo"), 80, 15),
+        "commodities_minerio": (m.get("minerio"), 110, 15),
+        "commodities_petroleo": (m.get("petroleo"), 85, 10),
     }
 
     scores = {}
@@ -572,12 +575,28 @@ sensibilidade_setorial = {
 }
 
 def calcular_favorecimento_continuo(setor, score_macro):
+    """
+    Calcula favorecimento de um setor com base na sensibilidade a fatores macroeconômicos.
+    Aplica ponderação e suavização.
+    """
     if setor not in sensibilidade_setorial:
         return 0
-    sens = sensibilidade_setorial[setor]
-    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
-    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
 
+    sens = sensibilidade_setorial[setor]
+    soma = 0
+    total_pesos = 0
+
+    for fator, peso in sens.items():
+        if fator in score_macro:
+            soma += score_macro[fator] * peso
+            total_pesos += abs(peso)
+
+    if total_pesos == 0:
+        return 0
+
+    favorecimento = soma / total_pesos  # média ponderada
+    favorecimento_normalizado = np.tanh(favorecimento / 2) * 2  # suaviza para escala de -2 a +2
+    return favorecimento_normalizado
 
     
 
