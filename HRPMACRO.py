@@ -484,7 +484,7 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_peso
 
 def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score):
     score_macro = pontuar_macro(macro)
-    cenario = classificar_cenario(score_macro)
+    cenario = classificar_cenario_macro(score_macro)
     setores_favorecidos = setores_por_cenario.get(cenario, [])
 
     ativos_validos = []
