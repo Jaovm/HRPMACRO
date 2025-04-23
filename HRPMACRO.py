@@ -571,7 +571,7 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
             continue
 
         setor = setores_por_ticker.get(ticker)
-        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False)
+        score = calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False)
 
 
         ativos_validos.append({
@@ -581,7 +581,7 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
             "preco_atual": preco_atual,
             "preco_alvo": preco_alvo,
             "score": score,
-            "favorecido": favorecido
+            "favorecido": favorecimento_score
         })
 
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
