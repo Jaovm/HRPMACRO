@@ -449,7 +449,6 @@ sensibilidade_setorial = {
 def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macroeconomicos=True):
     upside = (preco_alvo - preco_atual) / preco_atual
     bonus = 0.1 if favorecido else 0
-
     setor = setores_por_ticker.get(ticker)
     score_macro = 0
 
@@ -657,6 +656,22 @@ def otimizar_carteira_hrp(tickers, carteira_atual):
 
     return completar_pesos(tickers, pesos_hrp)
 
+def gerar_ranking_acoes(dados_carteira, macro, usar_pesos_macro=True):
+    resultados = []
+    for ticker, setor in setores_por_ticker.items():
+        preco_atual = obter_preco_atual(ticker)
+        preco_alvo = obter_preco_alvo(ticker)
+        favorecido = setor in setores_por_cenario.get(classificar_cenario_macro(pontuar_macro(macro)), [])
+        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macro)
+        resultados.append({
+            "ticker": ticker,
+            "setor": setor,
+            "preço atual": preco_atual,
+            "preço alvo": preco_alvo,
+            "favorecido": favorecido,
+            "score": score
+        })
+    return pd.DataFrame(resultados).sort_values(by="score", ascending=False)
 
 
 # ========= STREAMLIT ==========
@@ -678,7 +693,6 @@ col2.metric("IPCA (%)", f"{macro['ipca']:.2f}")
 col3.metric("PIB (%)", f"{macro['pib']:.2f}")
 col4.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
 col5.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
-
 
 
 # --- SIDEBAR ---
@@ -736,7 +750,11 @@ with st.sidebar:
 
 # Constrói a carteira com os tickers e pesos normalizados
 carteira = dict(zip(tickers, pesos_atuais))
-
+# Gerar ranking geral com base no score macro + preço alvo
+st.subheader("🏆 Ranking Geral de Ações (com base no score)")
+dados_carteira = dict(zip(tickers, pesos_atuais))
+ranking_df = gerar_ranking_acoes(dados_carteira, macro, usar_pesos_macro=True)
+st.dataframe(ranking_df[["ticker", "setor", "preço atual", "preço alvo", "favorecido", "score"]], use_container_width=True)
 
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
@@ -819,6 +837,7 @@ if st.button("Gerar Alocação Otimizada"):
             # Mostra pesos da HRP como comparação
             pesos_hrp = otimizar_carteira_hrp(todos_os_tickers, carteira)
             st.dataframe(pesos_hrp.rename("Peso HRP"))
+
             
             # Troco do aporte
             valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
