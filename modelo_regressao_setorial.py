@@ -42,7 +42,13 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
     for setor, tickers in setores.items():
         try:
             st.info(f"🔄 Baixando dados para setor: {setor} → {tickers}")
-            dados = yf.download(tickers, period="2y", interval="1mo", group_by="ticker", auto_adjust=True)
+            # Remover tickers inexistentes ou delistados
+            tickers_validos = validar_tickers(tickers)
+            if not tickers_validos:
+                st.warning(f"⚠️ Nenhum ticker válido encontrado para setor {setor}. Ignorando.")
+                continue
+
+            dados = yf.download(tickers_validos, period="2y", interval="1mo", group_by="ticker", auto_adjust=True)
 
             # Verificar se os dados possuem as colunas esperadas
             if isinstance(dados.columns, pd.MultiIndex):
@@ -121,6 +127,19 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
 
     st.success(f"✅ Coeficientes gerados para {len(coeficientes)} setores.")
     return coeficientes
+
+
+def validar_tickers(tickers):
+    """Valida os tickers para verificar se possuem dados disponíveis no Yahoo Finance."""
+    validos = []
+    for ticker in tickers:
+        try:
+            dados = yf.Ticker(ticker).history(period="1d")
+            if not dados.empty:
+                validos.append(ticker)
+        except Exception as e:
+            st.warning(f"⚠️ Ticker inválido ou sem dados: {ticker} ({e})")
+    return validos
 
 
 def normalizar_coeficientes(coef_dict):
