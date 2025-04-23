@@ -684,7 +684,7 @@ carteira = dict(zip(tickers, pesos_atuais))
 tickers_carteira = list(carteira.keys())
 
 sensibilidade_setorial = obter_sensibilidade_regressao(
-    tickers_carteira=tickers_carteira,
+    tickers_carteira=list(carteira.keys()),  # ativos inseridos pelo usuário
     normalizar=True,
     salvar_csv=True
 )
