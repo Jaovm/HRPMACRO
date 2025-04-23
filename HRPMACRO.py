@@ -11,7 +11,6 @@ from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
 from dados_setoriais import setores_por_ticker
 
-import statsmodels.api as sm
 
 def filtrar_tickers_com_dados(tickers, periodo="2y", intervalo="1mo"):
     """Retorna apenas tickers com histórico válido (Close ou Adj Close) no Yahoo Finance."""
@@ -126,7 +125,7 @@ def obter_sensibilidade_regressao_interno(tickers_carteira, normalizar=True):
     return coeficientes
 
 # --- No seu fluxo principal (substitua a chamada antiga) ---
-sensibilidade_setorial = obter_sensibilidade_regressao_interno(list(carteira.keys()), normalizar=True)
+
 
 
 
@@ -800,9 +799,7 @@ st.subheader("🏆 Ranking Geral de Ações (com base no score)")
 carteira = dict(zip(tickers, pesos_atuais))
 tickers_carteira = list(carteira.keys())
 
-sensibilidade_setorial = obter_sensibilidade_regressao_interno(
-    list(carteira.keys()), normalizar=True
-)
+sensibilidade_setorial = obter_sensibilidade_regressao_interno(tickers_carteira, normalizar=True)
 
 if sensibilidade_setorial:
     with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
