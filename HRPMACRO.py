@@ -681,9 +681,6 @@ with st.sidebar:
 # Gerar ranking geral com base no score macro + preço alvo
 st.subheader("🏆 Ranking Geral de Ações (com base no score)")
 carteira = dict(zip(tickers, pesos_atuais))
-ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
-
-
 tickers_carteira = list(carteira.keys())
 
 sensibilidade_setorial = obter_sensibilidade_regressao(
@@ -697,6 +694,10 @@ if sensibilidade_setorial:
         st.json(sensibilidade_setorial)
 else:
     st.warning("⚠️ Nenhum dado de sensibilidade disponível.")
+
+ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
+
+
 
 
 
