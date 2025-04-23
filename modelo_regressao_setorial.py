@@ -24,12 +24,16 @@ def validar_tickers(tickers):
 
 
 def baixar_dados_com_retentativa(tickers, period="2y", interval="1mo", max_retentativas=3):
-    """Baixa dados com retentativas em caso de falha."""
+    """Baixa dados com retentativas em caso de falha e valida colunas."""
     for tentativa in range(max_retentativas):
         try:
             sleep(1)  # Aguarda 1 segundo entre as tentativas para evitar limitações
             dados = yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=False)
             
+            # Logando os dados retornados
+            st.write("🔍 Dados brutos retornados pelo yfinance:")
+            st.write(dados)
+
             # Verificar se o retorno é um MultiIndex
             if isinstance(dados.columns, pd.MultiIndex):
                 if 'Adj Close' in dados.columns.get_level_values(0):
@@ -54,33 +58,17 @@ def gerar_dados_simulados(tickers, periodos=24):
     return pd.DataFrame(dados_simulados, index=datas)
 
 
-def testar_yfinance(tickers):
-    """Testa como o yfinance está retornando os dados e exibe os resultados."""
-    st.info("🔍 Testando retorno do yfinance para os tickers...")
-    try:
-        dados = baixar_dados_com_retentativa(tickers, period="2y", interval="1mo")
-        st.write("=== Dados Retornados ===")
-        st.write(dados)
-
-        # Verificando se 'Adj Close' ou 'Close' estão presentes
-        if isinstance(dados.columns, pd.MultiIndex):
-            st.write("=== Colunas Disponíveis ===")
-            st.write(dados.columns.get_level_values(0).unique())
-        else:
-            st.write("=== Colunas Disponíveis ===")
-            st.write(dados.columns)
-
-        # Exibindo as primeiras linhas para inspecionar o formato
-        st.write("=== Primeiras Linhas ===")
-        st.write(dados.head())
-    except Exception as e:
-        st.error(f"Erro ao testar retorno do yfinance: {e}")
-
-
 def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salvar_csv=False):
     # Testando o retorno do yfinance
     tickers_para_teste = ['ITUB4.SA', 'BBDC4.SA', 'SANB11.SA', 'BBAS3.SA']
-    testar_yfinance(tickers_para_teste)
+    try:
+        st.info("🔍 Testando retorno do yfinance para os tickers...")
+        testar_retorno = baixar_dados_com_retentativa(tickers_para_teste, period="2y", interval="1mo")
+        st.write("🔍 Retorno de teste bem-sucedido:")
+        st.write(testar_retorno)
+    except Exception as e:
+        st.error(f"Erro ao testar o retorno do yfinance: {e}")
+        return
 
     datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='ME')
     macro_data = pd.DataFrame({
@@ -102,15 +90,12 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
     # Validação de tickers antes do processamento
     st.info("📋 Validando tickers...")
     tickers_validos = validar_tickers([t for setor in setores.values() for t in setor])
-    tickers_invalidos = set([t for setor in setores.values() for t in setor]) - set(tickers_validos)
     if not tickers_validos:
         st.error("❌ Nenhum ticker válido encontrado. Abortando.")
         return {}
 
     # Filtrar setores com base nos tickers válidos
     setores = {setor: [t for t in tickers if t in tickers_validos] for setor, tickers in setores.items()}
-    if tickers_carteira:
-        setores = {s: tks for s, tks in setores.items() if any(t in tickers_carteira for t in tks)}
 
     st.info(f"📌 Setores selecionados para regressão: {list(setores.keys())}")
 
@@ -134,19 +119,16 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
                 st.warning(f"⚠️ Retornos vazios para setor: {setor}")
                 continue
 
-            media_mensal = retornos.mean(axis=1)
-            retornos_setoriais[setor] = media_mensal
+            retornos_setoriais[setor] = retornos.mean(axis=1)
         except Exception as e:
             st.error(f"⚠️ Erro ao processar setor {setor}: {e}")
             continue
 
     # Gerar dados simulados para setores sem dados
     setores_sem_dados = [setor for setor in setores.keys() if setor not in retornos_setoriais]
-    if setores_sem_dados:
-        for setor in setores_sem_dados:
-            tickers_no_setor = setores[setor]
-            simulados = gerar_dados_simulados(tickers_no_setor)
-            retornos_setoriais[setor] = simulados.mean(axis=1)
+    for setor in setores_sem_dados:
+        simulados = gerar_dados_simulados(setores[setor])
+        retornos_setoriais[setor] = simulados.mean(axis=1)
 
     retornos_df = pd.DataFrame(retornos_setoriais).dropna()
     st.info(f"📈 Retornos setoriais disponíveis: {list(retornos_df.columns)}")
@@ -155,50 +137,4 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
         st.error("⚠️ Nenhum dado de retorno setorial disponível após filtragem.")
         return {}
 
-    dados_merged = macro_data.join(retornos_df, how='inner').dropna()
-
-    coeficientes = {}
-    fatores_macro = ['selic', 'ipca', 'dolar', 'pib', 'commodities_agro', 'commodities_minerio', 'commodities_petroleo']
-    for setor in retornos_df.columns:
-        try:
-            y = dados_merged[setor]
-            X = dados_merged[fatores_macro]
-            if y.empty or X.empty:
-                st.warning(f"⚠️ Dados insuficientes para regressão no setor {setor}. Ignorando.")
-                continue
-
-            X = sm.add_constant(X)
-            modelo = sm.OLS(y, X).fit()
-            coef = modelo.params.drop('const')
-            coeficientes[setor] = coef.to_dict()
-            st.success(f"✅ Regressão bem-sucedida para setor {setor}")
-        except Exception as e:
-            st.error(f"⚠️ Regressão falhou para setor {setor}: {e}")
-            continue
-
-    if not coeficientes:
-        st.error("⚠️ Nenhum coeficiente foi gerado. Retornando dicionário vazio.")
-        return {}
-
-    st.info(f"📈 Coeficientes finais: {coeficientes}")
-
-    if normalizar:
-        coeficientes = normalizar_coeficientes(coeficientes)
-
-    if salvar_csv:
-        try:
-            pd.DataFrame.from_dict(coeficientes, orient='index').to_csv("sensibilidade_setorial.csv")
-            st.success("✅ Coeficientes salvos em sensibilidade_setorial.csv")
-        except Exception as e:
-            st.error(f"⚠️ Falha ao salvar coeficientes em CSV: {e}")
-
-    return coeficientes
-
-
-def normalizar_coeficientes(coef_dict):
-    """Normaliza os coeficientes para uma escala fixa."""
-    return {
-        setor: {
-            fator: int(np.clip(round(valor * 2), -2, 2)) for fator, valor in coef.items()
-        } for setor, coef in coef_dict.items()
-    }
+    st.info("✅ Fluxo concluído com sucesso!")
