@@ -908,16 +908,6 @@ ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
-with st.expander("🔬 Simular Cenários Macro"):
-    ipca_sim = st.slider("IPCA Simulado (%)", 0, 15, int(macro["ipca"] if macro["ipca"] else 5))
-    selic_sim = st.slider("Selic Simulada (%)", 0, 20, int(macro["selic"] if macro["selic"] else 10))
-    # ... outros sliders se quiser
-    if st.button("Rodar Simulação"):
-        macro_sim = macro.copy()
-        macro_sim["ipca"] = ipca_sim
-        macro_sim["selic"] = selic_sim
-        # Chame funções de sugestão de carteira usando macro_sim
-        # Exemplo: gerar_ranking_acoes(carteira, macro_sim, ...)
 
 
 
