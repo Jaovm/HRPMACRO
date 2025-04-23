@@ -342,7 +342,7 @@ def pontuar_selic(selic):
         return max(0, 10 - (selic - neutra) * 1.5)  # juros contracionistas
 
 # Função para pontuar o Câmbio
-def pontuar_cambio(cambio):
+def pontuar_dolar(dolar):
     ideal = 5.90
     desvio = abs(cambio - ideal)
     return max(0, 10 - desvio * 2)
@@ -488,13 +488,13 @@ def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, 
 
 
 
-def classificar_cenario_macro(ipca, selic, cambio, pib,
+def classificar_cenario_macro(ipca, selic, dolar, pib,
                               preco_soja=None, preco_milho=None,
                               preco_minerio=None, preco_petroleo=None):
 
     score_ipca = pontuar_ipca(ipca)
     score_selic = pontuar_selic(selic)
-    score_cambio = pontuar_cambio(cambio)
+    score_cambio = pontuar_dolar(dolar)
     score_pib = pontuar_pib(pib)
 
     total_score = score_ipca + score_selic + score_cambio + score_pib
