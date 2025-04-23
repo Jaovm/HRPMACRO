@@ -366,16 +366,6 @@ def completar_pesos(tickers_originais, pesos_calculados):
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
-
-  # já existente no app
-tickers_carteira = list(carteira.keys())
-
-sensibilidade_setorial = obter_sensibilidade_regressao(
-    tickers_carteira=tickers_carteira,
-    normalizar=True,
-    salvar_csv=True
-)
-
         
 
 def calcular_favorecimento_continuo(setor, score_macro):
@@ -693,18 +683,21 @@ st.subheader("🏆 Ranking Geral de Ações (com base no score)")
 carteira = dict(zip(tickers, pesos_atuais))
 ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 
-# Mostrar os coeficientes de regressão setorial
-with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
-        tickers_exemplo = ["ITUB4.SA", "PRIO3.SA", "VALE3.SA"]
-    st.write("Carteira de exemplo:", tickers_exemplo)
 
-    coeficientes = obter_sensibilidade_regressao(tickers_carteira=tickers_exemplo, normalizar=True)
+tickers_carteira = list(carteira.keys())
 
-    if coeficientes:
-        with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
-            st.json(coeficientes)
-    else:
-        st.warning("Nenhum coeficiente de regressão gerado.")
+sensibilidade_setorial = obter_sensibilidade_regressao(
+    tickers_carteira=tickers_carteira,
+    normalizar=True,
+    salvar_csv=True
+)
+
+if sensibilidade_setorial:
+    with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
+        st.json(sensibilidade_setorial)
+else:
+    st.warning("⚠️ Nenhum dado de sensibilidade disponível.")
+
 
 
 
