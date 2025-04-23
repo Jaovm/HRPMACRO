@@ -734,11 +734,11 @@ usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
 
 # Utilize o valor selecionado na otimização e filtragem de ativos
-ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
+ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
 
 
 if st.button("Gerar Alocação Otimizada"):
-    ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
+    ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
 
     if not ativos_validos:
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
