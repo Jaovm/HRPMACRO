@@ -1,0 +1,52 @@
+
+import pandas as pd
+import numpy as np
+import yfinance as yf
+import statsmodels.api as sm
+
+def obter_sensibilidade_regressao():
+    datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='M')
+    macro_data = pd.DataFrame({
+        'data': datas,
+        'selic': np.random.normal(9, 1, len(datas)),
+        'ipca': np.random.normal(4, 0.5, len(datas)),
+        'dolar': np.random.normal(5.2, 0.3, len(datas)),
+        'pib': np.random.normal(2.0, 0.7, len(datas)),
+        'commodities_agro': np.random.normal(9, 2, len(datas)),
+        'commodities_minerio': np.random.normal(110, 15, len(datas)),
+        'commodities_petroleo': np.random.normal(85, 10, len(datas)),
+    })
+    macro_data.set_index('data', inplace=True)
+
+    setores = {
+        'Bancos': ['ITUB4.SA', 'BBDC4.SA'],
+        'Tecnologia': ['TOTS3.SA', 'LWSA3.SA'],
+        'Mineração e Siderurgia': ['VALE3.SA', 'CSNA3.SA'],
+        'Agronegócio': ['AGRO3.SA', 'SLCE3.SA'],
+    }
+
+    retornos_setoriais = {}
+    for setor, tickers in setores.items():
+        dados = yf.download(tickers, period="2y", interval="1mo")['Adj Close']
+        if isinstance(dados, pd.Series):
+            dados = dados.to_frame()
+        dados = dados.fillna(method='ffill')
+        retornos = dados.pct_change().dropna()
+        media_mensal = retornos.mean(axis=1)
+        retornos_setoriais[setor] = media_mensal
+
+    retornos_df = pd.DataFrame(retornos_setoriais).dropna()
+    retornos_df.index = pd.to_datetime(retornos_df.index)
+    dados_merged = macro_data.join(retornos_df, how='inner')
+
+    coeficientes = {}
+    fatores_macro = ['selic', 'ipca', 'dolar', 'pib', 'commodities_agro', 'commodities_minerio', 'commodities_petroleo']
+    for setor in setores:
+        y = dados_merged[setor]
+        X = dados_merged[fatores_macro]
+        X = sm.add_constant(X)
+        modelo = sm.OLS(y, X).fit()
+        coef = modelo.params.drop('const')
+        coeficientes[setor] = coef.to_dict()
+
+    return coeficientes
