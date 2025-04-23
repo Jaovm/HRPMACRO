@@ -685,8 +685,8 @@ st.subheader("🏆 Ranking Geral de Ações (com base no score)")
 carteira = dict(zip(tickers, pesos_atuais))
 ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 
-     with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
-        st.json(sensibilidade_setorial)
+with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
+st.json(sensibilidade_setorial)
 
 
 
