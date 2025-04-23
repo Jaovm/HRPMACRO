@@ -323,20 +323,23 @@ def obter_preco_petroleo():
 # Funções de pontuação individual
 
 def pontuar_selic(selic):
-    return max(min(2 - (selic - 9) / 2, 2), -1)  # Quanto menor a Selic, melhor (até 9%)
-
+    # Valor ideal centrado em 9%, penaliza tanto taxas muito altas quanto muito baixas
+    return max(min(2 * np.exp(-((selic - 9) ** 2) / 18), 2), -1)
 
 def pontuar_ipca(ipca):
-    return max(min(2 - (ipca - 3) / 2, 2), -1)  # Ideal abaixo de 3%
+    if ipca is None:
+        return 0
+    ideal = 3
+    return max(min(2 * np.exp(-((ipca - ideal) ** 2) / 3), 2), -1)
 
 
 def pontuar_dolar(dolar):
-    if dolar < 4.8:
-        return 1
-    elif dolar <= 5.2:
+    if dolar is None:
         return 0
-    else:
-        return -1
+    ideal = 5.8
+    return max(min(2 * np.exp(-((dolar - ideal) ** 2) / 0.5), 2), -2)
+
+
 
 def pontuar_pib(pib):
     return max(min((pib - 0.5), 2), -1)  # PIB acima de 2 é ótimo, abaixo de 0 ruim
@@ -397,8 +400,10 @@ def obter_preco_atual(ticker):
     return None
 
 def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
+    score_macro = pontuar_macro(macro)
     resultados = []
-    for ticker in carteira.keys():  # Só processa os tickers da carteira
+
+    for ticker in carteira.keys():
         setor = setores_por_ticker.get(ticker)
         if setor is None:
             st.warning(f"Setor não encontrado para {ticker}. Ignorando.")
@@ -411,19 +416,20 @@ def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
             st.warning(f"Dados insuficientes para {ticker}. Ignorando.")
             continue
 
-        favorecido = setor in setores_por_cenario.get(classificar_cenario_macro(pontuar_macro(macro)), [])
-        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macro)
+        favorecimento_score = calcular_favorecimento_continuo(setor, score_macro)
+        score = calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, macro, usar_pesos_macro)
 
         resultados.append({
             "ticker": ticker,
             "setor": setor,
             "preço atual": preco_atual,
             "preço alvo": preco_alvo,
-            "favorecido": favorecido,
+            "favorecimento macro": favorecimento_score,
             "score": score
         })
 
     return pd.DataFrame(resultados).sort_values(by="score", ascending=False)
+
 
 
 
@@ -476,11 +482,24 @@ sensibilidade_setorial = {
     'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
 }
 
-def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macroeconomicos=True):
+def calcular_favorecimento_continuo(setor, score_macro):
+    if setor not in sensibilidade_setorial:
+        return 0
+    sens = sensibilidade_setorial[setor]
+    return sum(score_macro.get(chave, 0) * peso for chave, peso in sens.items())
+    
+
+def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, macro, usar_pesos_macro=True):
+    """
+    Score final baseado em:
+    - Potencial de valorização (quanto maior o upside, maior o score)
+    - Favorecimento macroeconômico contínuo
+    """
+    if preco_atual == 0:
+        return -float("inf")
     upside = (preco_alvo - preco_atual) / preco_atual
-    bonus = 0.1 if favorecido else 0
-    setor = setores_por_ticker.get(ticker)
-    score_macro = 0
+    base_score = upside * 10  # Normalizando para escala parecida
+    macro_bonus = favorecimento_score * 1.5 if usar_pesos_macro else 0
 
     if setor in sensibilidade_setorial and usar_pesos_macroeconomicos:
         s = sensibilidade_setorial[setor]
@@ -508,7 +527,7 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_peso
             bonus += 0.05
 
     score_total = upside + bonus + 0.01 * score_macro
-    return score_total
+    return base_score + macro_bonus
 
 
 
@@ -699,7 +718,7 @@ macro = obter_macro()
 cenario = classificar_cenario_macro(pontuar_macro(macro))
 score_macro = pontuar_macro(macro)
 score_medio = round(np.mean(list(score_macro.values())), 2)
-st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_medio})")
+st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}**")
 st.markdown("### 📉 Indicadores Macroeconômicos")
 col1, col2, col3, col4, col5 = st.columns(5)
 col1.metric("Selic (%)", f"{macro['selic']:.2f}")
