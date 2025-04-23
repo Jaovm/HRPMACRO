@@ -3,7 +3,8 @@ import numpy as np
 import yfinance as yf
 import statsmodels.api as sm
 from collections import defaultdict
-from HRPMACRO import setores_por_ticker
+from dados_setoriais import setores_por_ticker
+
 
 
 
