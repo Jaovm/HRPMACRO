@@ -669,6 +669,22 @@ def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001):
     media_retorno = retornos.mean()
     cov_matrix = LedoitWolf().fit(retornos).covariance_
     cov = pd.DataFrame(cov_matrix, index=retornos.columns, columns=retornos.columns)
+    if favorecimentos:
+        fav_array = np.array([max(0, favorecimentos.get(t, 0)) for t in tickers_validos])
+        # Pesos iniciais proporcionais ao favorecimento (ou uniformes se tudo zero)
+        if fav_array.sum() > 0:
+            pesos_iniciais = fav_array / fav_array.sum()
+        else:
+            pesos_iniciais = np.ones(n) / n
+        # Limite máximo 20% + até 10% extra se favorecido (exemplo)
+        max_limits = 0.2 + 0.1 * fav_array / (fav_array.max() if fav_array.max() > 0 else 1)
+        limites = [(0.01, float(mx)) for mx in max_limits]
+        # Opcional: ajustar retorno esperado pelo favorecimento (deixe comentado se não quiser)
+        # media_retorno = media_retorno * (1 + 0.5 * fav_array)
+    else:
+        pesos_iniciais = np.array([carteira_atual.get(t, 0.0) for t in tickers_validos])
+        pesos_iniciais = pesos_iniciais / pesos_iniciais.sum() if pesos_iniciais.sum() > 0 else np.ones(n) / n
+        limites = [(0.01, 0.20) for _ in range(n)]
 
     def sharpe_neg(pesos):
         retorno_esperado = np.dot(pesos, media_retorno) - taxa_risco_livre
@@ -760,6 +776,11 @@ def otimizar_carteira_hrp(tickers, carteira_atual):
     sort_ix = get_quasi_diag(linkage_matrix)
     ordered_tickers = [retornos.columns[i] for i in sort_ix]
     pesos_hrp = get_recursive_bisection(cov_df, ordered_tickers)
+    if favorecimentos:
+        fav_array = np.array([1 + max(0, favorecimentos.get(t, 0)) for t in pesos_hrp.index])
+        pesos_hrp = pesos_hrp * fav_array
+        pesos_hrp = pesos_hrp / pesos_hrp.sum()
+
 
     return completar_pesos(tickers, pesos_hrp)
 
@@ -890,6 +911,7 @@ with st.expander("🔬 Simular Cenários Macro"):
 # Utilize o valor selecionado na otimização e filtragem de ativos
 ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
 
+favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
@@ -900,10 +922,9 @@ if st.button("Gerar Alocação Otimizada"):
         tickers_validos = [a['ticker'] for a in ativos_validos]
         try:
             if usar_hrp:
-                pesos = otimizar_carteira_hrp(tickers_validos, carteira)
-
+                pesos = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
             else:
-                pesos = otimizar_carteira_sharpe(tickers_validos, carteira)
+                pesos = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
 
             if pesos is not None:
                 tickers_completos = set(carteira)
