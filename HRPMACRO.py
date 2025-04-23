@@ -1156,19 +1156,3 @@ if st.button("Gerar Alocação Otimizada"):
             
             
 
-
-
-
-
-
-            
-with st.expander("ℹ️ Como funciona a sugestão"):
-    st.markdown("""
-    - O cenário macroeconômico é classificado automaticamente com base em **Selic** e **IPCA**.
-    - São priorizados ativos com **preço atual abaixo do preço-alvo dos analistas**.
-    - Ativos de **setores favorecidos pelo cenário atual** recebem um bônus no score.
-    - Exportadoras ganham bônus adicionais com **dólar alto** ou **petróleo acima de US$ 80**.
-    - O método de otimização pode ser:
-        - **Sharpe máximo** (baseado na relação risco/retorno histórica).
-        - **HRP** (Hierarchical Risk Parity), que diversifica riscos sem estimar retornos.
-    """)
