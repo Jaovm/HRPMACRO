@@ -318,7 +318,7 @@ def obter_preco_commodity(ticker, nome="Commodity"):
     return obter_preco_yf(ticker, nome)
 
 def obter_preco_petroleo():
-    return obter_preco_yf("CL=F", "Petróleo")
+    return obter_preco_yf("BZ=F", "Petróleo")
 
 # Funções de pontuação individual
 
@@ -669,7 +669,7 @@ st.markdown("---")
 macro = obter_macro()
 cenario = classificar_cenario_macro(macro)
 score_macro = pontuar_macro(macro)
-#score_medio = round(np.mean(list(score_macro.values())), 2)
+score_medio = round(np.mean(list(score_macro.values())), 2)
 st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_medio})")
 st.markdown("### 📉 Indicadores Macroeconômicos")
 col1, col2, col3, col4, col5 = st.columns(5)
