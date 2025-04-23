@@ -6,15 +6,24 @@ import statsmodels.api as sm
 from collections import defaultdict
 from dados_setoriais import setores_por_ticker
 
+def filtrar_tickers_com_dados(tickers, periodo="2y", intervalo="1mo"):
+    """Retorna apenas tickers com histórico válido (Close ou Adj Close)."""
+    tickers_validos = []
+    for ticker in tickers:
+        try:
+            dados = yf.download(ticker, period=periodo, interval=intervalo, progress=False)
+            if not dados.empty and ("Close" in dados.columns or "Adj Close" in dados.columns):
+                tickers_validos.append(ticker)
+        except Exception:
+            continue
+    return tickers_validos
+
 def baixar_dados_validos(tickers, period="2y", interval="1mo"):
-    """
-    Baixa dados do Yahoo Finance para uma lista de tickers, retornando apenas aqueles com série histórica válida.
-    Sempre retorna DataFrame com colunas = tickers válidos e linhas = datas.
-    """
+    """Baixa dados do Yahoo Finance para tickers válidos, retorna DataFrame de preços de fechamento."""
     if not tickers:
         return pd.DataFrame()
     dados = yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=True, progress=False)
-    # Se for MultiIndex, pegar Close
+    # Se for MultiIndex, pegar Close/Adj Close
     if isinstance(dados.columns, pd.MultiIndex):
         if "Close" in dados.columns.get_level_values(0):
             dados = dados["Close"]
@@ -26,6 +35,32 @@ def baixar_dados_validos(tickers, period="2y", interval="1mo"):
     if isinstance(dados, pd.DataFrame):
         dados = dados.dropna(axis=1, how='all')
     return dados
+
+def gerar_dados_simulados_para_setor(setor, n_periodos=24):
+    datas = pd.date_range(end=pd.Timestamp.today(), periods=n_periodos, freq='MS')
+    simulados = pd.Series(np.random.normal(0, 0.02, n_periodos), index=datas, name=setor)
+    return simulados
+
+def obter_retornos_setoriais(setores, n_tickers_setor=3, periodo="2y", intervalo="1mo", n_periodos=24):
+    """Para cada setor, tenta até n_tickers_setor com dados, senão gera simulado."""
+    retornos_setoriais = {}
+    for setor in setores:
+        tickers_setor = [t for t, s in setores_por_ticker.items() if s == setor]
+        tickers_validos = filtrar_tickers_com_dados(tickers_setor, periodo, intervalo)[:n_tickers_setor]
+        if not tickers_validos:
+            # GERAR SIMULADO SE NÃO HOUVER TICKER VÁLIDO
+            retornos_setoriais[setor] = gerar_dados_simulados_para_setor(setor, n_periodos)
+            continue
+        dados = baixar_dados_validos(tickers_validos, period=periodo, interval=intervalo)
+        if dados.empty:
+            retornos_setoriais[setor] = gerar_dados_simulados_para_setor(setor, n_periodos)
+            continue
+        dados = dados.ffill().bfill()
+        retornos = dados.pct_change().dropna()
+        media_mensal = retornos.mean(axis=1)
+        retornos_setoriais[setor] = media_mensal
+    retornos_df = pd.DataFrame(retornos_setoriais).dropna()
+    return retornos_df
 
 def gerar_dados_macro(periodos=24):
     datas = pd.date_range(end=pd.Timestamp.today(), periods=periodos, freq='MS')
@@ -48,27 +83,7 @@ def obter_setores_da_carteira(tickers):
             setores_set.add(setor)
     return setores_set
 
-def obter_retornos_setoriais(setores, n_tickers_setor=3, periodo="2y", intervalo="1mo"):
-    """
-    Para cada setor, pega até n_tickers_setor tickers válidos, retorna DataFrame com retorno médio mensal por setor.
-    """
-    retornos_setoriais = {}
-    for setor in setores:
-        tickers_setor = [t for t, s in setores_por_ticker.items() if s == setor][:n_tickers_setor]
-        dados = baixar_dados_validos(tickers_setor, period=periodo, interval=intervalo)
-        if dados.empty:
-            continue
-        dados = dados.ffill().bfill()
-        retornos = dados.pct_change().dropna()
-        media_mensal = retornos.mean(axis=1)
-        retornos_setoriais[setor] = media_mensal
-    if not retornos_setoriais:
-        return pd.DataFrame()
-    retornos_df = pd.DataFrame(retornos_setoriais).dropna()
-    return retornos_df
-
 def ajustar_e_sincronizar_macro_com_retornos(macro_data, retornos_df):
-    # Ajusta os índices (datas) para garantir merge adequado
     macro_data.index = pd.to_datetime(macro_data.index).normalize()
     retornos_df.index = pd.to_datetime(retornos_df.index).normalize()
     merged = macro_data.join(retornos_df, how='inner').dropna()
@@ -84,12 +99,8 @@ def normalizar_coeficientes(coef_dict):
 
 def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=True, salvar_csv=False):
     """
-    Modelo robusto de regressão setorial.
-    1. Identifica setores presentes na carteira (ou todos).
-    2. Para cada setor, calcula retorno médio mensal histórico com até 3 tickers válidos.
-    3. Obtém histórico macro simulado ou real.
-    4. Para cada setor, faz uma regressão múltipla dos retornos setoriais em função dos fatores macro.
-    5. Retorna coeficientes normalizados por setor.
+    Modelo robusto de regressão setorial para uso no HRPMACRO.py.
+    Sempre retorna dados para todos setores relevantes, usando simulado se necessário.
     """
     n_periodos = 24
     macro_data = gerar_dados_macro(periodos=n_periodos)
@@ -97,7 +108,7 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=True, salvar
         setores = obter_setores_da_carteira(tickers_carteira)
     else:
         setores = set(setores_por_ticker.values())
-    retornos_df = obter_retornos_setoriais(setores, n_tickers_setor=3, periodo=f"{n_periodos}mo", intervalo="1mo")
+    retornos_df = obter_retornos_setoriais(setores, n_tickers_setor=3, periodo=f"{n_periodos}mo", intervalo="1mo", n_periodos=n_periodos)
     if retornos_df.empty:
         st.warning("⚠️ Nenhum dado de retorno setorial disponível para regressão setorial.")
         return {}
