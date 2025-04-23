@@ -322,28 +322,26 @@ def obter_preco_petroleo():
 # Funções de pontuação individual
 
 def pontuar_selic(selic):
-    ideal = 9
-    return np.clip(1.5 * np.exp(-((selic - ideal) ** 2) / 12), -1, 2)
-
+    ideal = 9  # ponto de equilíbrio neutro
+    return np.clip(1.5 * np.exp(-((selic - ideal) ** 2) / 10), -2, 2)
 
 def pontuar_ipca(ipca):
     if ipca is None:
         return 0
-    ideal = 3
-    return max(min(1.5 * np.exp(-((ipca - ideal) ** 2) / 3), 2), -1)
-
+    ideal = 3  # centro da meta de inflação
+    return np.clip(1.5 * np.exp(-((ipca - ideal) ** 2) / 2.5), -2, 2)
 
 def pontuar_dolar(dolar):
     if dolar is None:
         return 0
-    ideal = 5.8
-    return max(min(1.5 * np.exp(-((dolar - ideal) ** 2) / 0.5), 2), -2)
-
-
+    ideal = 5.0  # valor considerado de equilíbrio
+    return np.clip(1.8 * np.exp(-((dolar - ideal) ** 2) / 0.8), -2, 2)
 
 def pontuar_pib(pib):
-    return max(min((pib - 0.5), 2), -1)  # PIB acima de 2 é ótimo, abaixo de 0 ruim
-
+    if pib is None:
+        return 0
+    # crescimento > 2 é ótimo, < 0 é ruim
+    return np.clip((pib - 0.5) * 1.5, -2, 2)
 
 def pontuar_soja_milho(preco_soja, preco_milho):
     if preco_soja is not None and preco_milho is not None:
@@ -358,25 +356,38 @@ def pontuar_soja_milho(preco_soja, preco_milho):
     return 0
 
 def pontuar_minerio(preco_minerio):
-    if preco_minerio is not None:
-        if preco_minerio > 120:
-            return 2
-        elif preco_minerio > 100:
-            return 1
-        elif preco_minerio > 80:
-            return 0
-        else:
-            return -1
-    return 0
+    if preco_minerio is None:
+        return 0
+    if preco_minerio > 120:
+        return 2
+    elif preco_minerio > 100:
+        return 1
+    elif preco_minerio > 80:
+        return 0
+    else:
+        return -1
+
+def pontuar_petroleo(preco_petroleo):
+    if preco_petroleo is None:
+        return 0
+    if preco_petroleo > 90:
+        return 2
+    elif preco_petroleo > 75:
+        return 1
+    elif preco_petroleo > 60:
+        return 0
+    else:
+        return -1
 
 def pontuar_macro(m):
     score = {}
-    score["juros"] = pontuar_selic(m["selic"]) if m.get("selic") else 0
-    score["inflação"] = pontuar_ipca(m["ipca"]) if m.get("ipca") else 0
-    score["dolar"] = pontuar_dolar(m["dolar"]) if m.get("dolar") else 0
-    score["pib"] = pontuar_pib(m["pib"]) if m.get("pib") else 0
+    score["juros"] = pontuar_selic(m.get("selic"))
+    score["inflação"] = pontuar_ipca(m.get("ipca"))
+    score["dolar"] = pontuar_dolar(m.get("dolar"))
+    score["pib"] = pontuar_pib(m.get("pib"))
     score["commodities_agro"] = pontuar_soja_milho(m.get("soja"), m.get("milho"))
     score["commodities_minerio"] = pontuar_minerio(m.get("minerio"))
+    score["commodities_petroleo"] = pontuar_petroleo(m.get("petroleo"))
     return score
 
 
