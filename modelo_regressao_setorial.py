@@ -6,12 +6,12 @@ import statsmodels.api as sm
 from dados_setoriais import setores_por_ticker
 
 def filtrar_tickers_com_dados(tickers, periodo="2y", intervalo="1mo"):
-    """Retorna apenas tickers com histórico válido (Close ou Adj Close)."""
+    """Retorna apenas tickers com histórico válido (Close ou Adj Close) no Yahoo Finance."""
     tickers_validos = []
     for ticker in tickers:
         try:
             dados = yf.download(ticker, period=periodo, interval=intervalo, progress=False)
-            if not dados.empty and ("Close" in dados.columns or "Adj Close" in dados.columns):
+            if not dados.empty and (("Close" in dados.columns) or ("Adj Close" in dados.columns)):
                 tickers_validos.append(ticker)
         except Exception:
             continue
@@ -41,13 +41,16 @@ def gerar_dados_simulados_para_setor(setor, n_periodos=24):
     return simulados
 
 def obter_retornos_setoriais(setores, n_tickers_setor=3, periodo="2y", intervalo="1mo", n_periodos=24):
-    """Para cada setor, tenta até n_tickers_setor com dados, senão gera simulado."""
+    """
+    Para cada setor, tenta até n_tickers_setor com dados válidos, senão gera simulado.
+    Sempre retorna DataFrame de retornos médios mensais por setor.
+    """
     retornos_setoriais = {}
     for setor in setores:
         tickers_setor = [t for t, s in setores_por_ticker.items() if s == setor]
         tickers_validos = filtrar_tickers_com_dados(tickers_setor, periodo, intervalo)[:n_tickers_setor]
         if not tickers_validos:
-            # GERAR SIMULADO SE NÃO HOUVER TICKER VÁLIDO
+            # GERA SIMULADO SE NÃO HOUVER TICKER VÁLIDO
             retornos_setoriais[setor] = gerar_dados_simulados_para_setor(setor, n_periodos)
             continue
         dados = baixar_dados_validos(tickers_validos, period=periodo, interval=intervalo)
