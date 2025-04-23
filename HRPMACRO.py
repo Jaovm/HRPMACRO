@@ -453,7 +453,7 @@ with st.expander("Detalhes"):
     if st.checkbox("🔍 Ver detalhes dos scores"):
         st.dataframe(df[["ticker", "detalhe"]], use_container_width=True)
 
-    return df
+        return df
 
 
 def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False):
