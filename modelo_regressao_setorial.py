@@ -31,17 +31,19 @@ def obter_sensibilidade_regressao():
 
     retornos_setoriais = {}
     for setor, tickers in setores.items():
-        dados = yf.download(tickers, period="2y", interval="1mo", group_by="ticker", auto_adjust=True)
-            if isinstance(dados.columns, pd.MultiIndex):
-                dados = dados.stack(level=0).unstack(level=1)  # reorganiza MultiIndex
-                dados = dados['Close'] if 'Close' in dados else dados  # fallback se "Close" for único
-            
-            elif 'Adj Close' in dados:
-                dados = dados['Adj Close']
-            elif 'Close' in dados:
-                dados = dados['Close']
-            else:
-                continue  # pular se não tem dados relevantes
+    dados = yf.download(tickers, period="2y", interval="1mo", group_by="ticker", auto_adjust=True)
+    
+    if isinstance(dados.columns, pd.MultiIndex):
+        dados = dados.stack(level=0).unstack(level=1)  # reorganiza MultiIndex
+        dados = dados['Close'] if 'Close' in dados else dados  # fallback se "Close" for único
+    
+    elif 'Adj Close' in dados:
+        dados = dados['Adj Close']
+    elif 'Close' in dados:
+        dados = dados['Close']
+    else:
+        continue  # pular se não tem dados relevantes
+
 
         if isinstance(dados, pd.Series):
             dados = dados.to_frame()
