@@ -275,8 +275,7 @@ def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
         st.dataframe(df[["ticker", "detalhe"]], use_container_width=True)
     return df
 
-     with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
-    st.json(sensibilidade_setorial)
+
 
 
 def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False):
@@ -685,6 +684,9 @@ with st.sidebar:
 st.subheader("🏆 Ranking Geral de Ações (com base no score)")
 carteira = dict(zip(tickers, pesos_atuais))
 ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
+
+     with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
+        st.json(sensibilidade_setorial)
 
 
 
