@@ -328,7 +328,7 @@ def pontuar_ipca(ipca):
     return max(min(2 - (ipca - 3) / 2, 2), -1)  # Ideal abaixo de 3%
 
 
-def pontuar_dolar(dolar):
+def pontuar_dolar(cambio):
     if dolar < 4.8:
         return 1
     elif dolar <= 5.2:
