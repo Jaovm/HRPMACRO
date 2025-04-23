@@ -1132,30 +1132,28 @@ if st.button("Gerar Alocação Otimizada"):
             
 
 
-            st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
+st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
 
-            if historico_7anos.empty:
-                st.info("Sem dados históricos para exibir. Rode o app novamente, ou confira conexão.")
-            else:
-                similares = historico_7anos[
-                    (historico_7anos["cenario"] == cenario) &
-                    (historico_7anos["ticker"].isin(carteira.keys()))
-                ]
-                if similares.empty:
-                    st.info("Nenhum destaque histórico para esse cenário e carteira nos últimos 7 anos.")
-                else:
-                    destaque = (
-                        similares.groupby(["ticker", "setor"])
-                        .agg(media_favorecido=("favorecido", "mean"),
-                             ocorrencias=("favorecido", "count"))
-                        .reset_index()
-                        .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
-                    )
-                    st.dataframe(destaque.head(5), use_container_width=True)
+if historico_7anos.empty:
+    st.info("Sem dados históricos para exibir. Rode o app novamente, ou confira conexão.")
+else:
+    similares = historico_7anos[
+        (historico_7anos["cenario"] == cenario) &
+        (historico_7anos["ticker"].isin(carteira.keys()))
+    ]
+    if similares.empty:
+        st.info("Nenhum destaque histórico para esse cenário e carteira nos últimos 7 anos.")
+    else:
+        destaque = (
+            similares.groupby(["ticker", "setor"])
+            .agg(media_favorecido=("favorecido", "mean"),
+                 ocorrencias=("favorecido", "count"))
+            .reset_index()
+            .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
+        )
+        st.dataframe(destaque.head(5), use_container_width=True)
 
-                except FileNotFoundError:
-                    st.info("O histórico dos últimos 7 anos ainda não foi gerado. Rode o script de geração primeiro.")
-                    historico_7anos = pd.DataFrame()
+
 
             
 with st.expander("ℹ️ Como funciona a sugestão"):
