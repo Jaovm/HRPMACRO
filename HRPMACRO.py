@@ -12,117 +12,76 @@ from scipy.optimize import minimize
 from dados_setoriais import setores_por_ticker
 
 
-def filtrar_tickers_com_dados(tickers, periodo="2y", intervalo="1mo"):
-    """Retorna apenas tickers com histórico válido (Close ou Adj Close) no Yahoo Finance."""
-    tickers_validos = []
+@st.cache_data(show_spinner="Baixando histórico de preços para regressão setorial...")
+def filtrar_e_baixar_precos(tickers, periodo="2y", intervalo="1mo"):
+    validos = []
+    precos = {}
+    erros = []
     for ticker in tickers:
         try:
-            dados = yf.download(ticker, period=periodo, interval=intervalo, progress=False)
-            if not dados.empty and (("Close" in dados.columns) or ("Adj Close" in dados.columns)):
-                tickers_validos.append(ticker)
+            df = yf.download(ticker, period=periodo, interval=intervalo, threads=False, progress=False)
+            if not df.empty and (("Close" in df.columns) or ("Adj Close" in df.columns)):
+                validos.append(ticker)
+                precos[ticker] = df
+            else:
+                erros.append(ticker)
         except Exception:
-            continue
-    return tickers_validos
+            erros.append(ticker)
+    return validos, precos, erros
 
-def baixar_dados_validos(tickers, period="2y", interval="1mo"):
-    """Baixa dados do Yahoo Finance para tickers válidos, retorna DataFrame de preços de fechamento."""
-    if not tickers:
-        return pd.DataFrame()
-    dados = yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=True, progress=False)
-    if isinstance(dados.columns, pd.MultiIndex):
-        if "Close" in dados.columns.get_level_values(0):
-            dados = dados["Close"]
-        elif "Adj Close" in dados.columns.get_level_values(0):
-            dados = dados["Adj Close"]
-        else:
-            return pd.DataFrame()
-    if isinstance(dados, pd.DataFrame):
-        dados = dados.dropna(axis=1, how='all')
-    return dados
-
-def gerar_dados_simulados_para_setor(setor, n_periodos=24):
+def gerar_simulado(n_periodos=24):
     datas = pd.date_range(end=pd.Timestamp.today(), periods=n_periodos, freq='MS')
-    simulados = pd.Series(np.random.normal(0, 0.025, n_periodos), index=datas, name=setor)
-    return simulados
+    return pd.Series(np.random.normal(0, 0.025, n_periodos), index=datas)
 
-def obter_setores_a_partir_ativos(ativos_usuario):
-    return set([setores_por_ticker[t] for t in ativos_usuario if t in setores_por_ticker])
-
-def obter_retornos_setoriais(setores, n_tickers_setor=3, periodo="2y", intervalo="1mo", n_periodos=24):
+def obter_retornos_setoriais_robusto(ativos_usuario, setores_por_ticker, n_periodos=24):
+    setores = set([setores_por_ticker.get(t) for t in ativos_usuario if t in setores_por_ticker])
+    setor2tickers = {s: [t for t in ativos_usuario if setores_por_ticker.get(t)==s] for s in setores}
     retornos_setoriais = {}
-    for setor in setores:
-        tickers_setor = [t for t, s in setores_por_ticker.items() if s == setor]
-        tickers_validos = filtrar_tickers_com_dados(tickers_setor, periodo, intervalo)[:n_tickers_setor]
-        if not tickers_validos:
-            retornos_setoriais[setor] = gerar_dados_simulados_para_setor(setor, n_periodos)
+    tickers_simulados = []
+    for setor, tickers in setor2tickers.items():
+        validos, precos, erros = filtrar_e_baixar_precos(tickers)
+        if not validos:
+            retornos_setoriais[setor] = gerar_simulado(n_periodos)
+            tickers_simulados += tickers
             continue
-        dados = baixar_dados_validos(tickers_validos, period=periodo, interval=intervalo)
-        if dados.empty:
-            retornos_setoriais[setor] = gerar_dados_simulados_para_setor(setor, n_periodos)
-            continue
+        # Preço mensal médio
+        dfs = [precos[t] for t in validos]
+        closes = [df["Close"] if "Close" in df.columns else df["Adj Close"] for df in dfs]
+        dados = pd.concat(closes, axis=1)
+        dados.columns = validos
         dados = dados.ffill().bfill()
         retornos = dados.pct_change().dropna()
-        media_mensal = retornos.mean(axis=1)
-        retornos_setoriais[setor] = media_mensal
-    retornos_df = pd.DataFrame(retornos_setoriais).dropna()
-    return retornos_df
+        retornos_setoriais[setor] = retornos.mean(axis=1)
+    return pd.DataFrame(retornos_setoriais).dropna(), tickers_simulados
 
-def gerar_dados_macro(periodos=24):
-    datas = pd.date_range(end=pd.Timestamp.today(), periods=periodos, freq='MS')
-    macro_data = pd.DataFrame({
-        'selic': np.random.normal(9, 1, len(datas)),
-        'ipca': np.random.normal(3, 0.5, len(datas)),
-        'dolar': np.random.normal(5.2, 0.3, len(datas)),
-        'pib': np.random.normal(2.0, 0.7, len(datas)),
-        'commodities_agro': np.random.normal(9, 2, len(datas)),
-        'commodities_minerio': np.random.normal(110, 15, len(datas)),
-        'commodities_petroleo': np.random.normal(85, 10, len(datas)),
-    }, index=datas)
-    return macro_data
-
-def ajustar_e_sincronizar_macro_com_retornos(macro_data, retornos_df):
-    macro_data.index = pd.to_datetime(macro_data.index).normalize()
-    retornos_df.index = pd.to_datetime(retornos_df.index).normalize()
-    merged = macro_data.join(retornos_df, how='inner').dropna()
-    return merged
-
-def normalizar_coeficientes(coef_dict):
-    return {
-        setor: {
-            fator: int(np.clip(round(valor * 2), -2, 2)) for fator, valor in coef.items()
-        } for setor, coef in coef_dict.items()
-    }
-
-def obter_sensibilidade_regressao_interno(tickers_carteira, normalizar=True):
-    n_periodos = 24
-    macro_data = gerar_dados_macro(periodos=n_periodos)
-    setores = obter_setores_a_partir_ativos(tickers_carteira)
-    if not setores:
-        st.warning("⚠️ Nenhum setor identificado para os ativos fornecidos.")
-        return {}
-    retornos_df = obter_retornos_setoriais(setores, n_tickers_setor=3, periodo=f"{n_periodos}mo", intervalo="1mo", n_periodos=n_periodos)
+def obter_sensibilidade_setorial_robusta(ativos_usuario, setores_por_ticker, n_periodos=24):
+    macro = pd.DataFrame({
+        'selic': np.random.normal(9, 1, n_periodos),
+        'ipca': np.random.normal(3, 0.5, n_periodos),
+        'dolar': np.random.normal(5.2, 0.3, n_periodos),
+        'pib': np.random.normal(2.0, 0.7, n_periodos),
+        'commodities_agro': np.random.normal(9, 2, n_periodos),
+        'commodities_minerio': np.random.normal(110, 15, n_periodos),
+        'commodities_petroleo': np.random.normal(85, 10, n_periodos),
+    }, index=pd.date_range(end=pd.Timestamp.today(), periods=n_periodos, freq='MS'))
+    retornos_df, tickers_simulados = obter_retornos_setoriais_robusto(ativos_usuario, setores_por_ticker, n_periodos)
     if retornos_df.empty:
-        st.warning("⚠️ Nenhum dado de retorno setorial disponível para regressão setorial.")
-        return {}
-    merged = ajustar_e_sincronizar_macro_com_retornos(macro_data, retornos_df)
-    fatores_macro = ['selic', 'ipca', 'dolar', 'pib', 'commodities_agro', 'commodities_minerio', 'commodities_petroleo']
+        st.warning("Nenhum dado de retorno setorial disponível. Usando tudo simulado.")
+        return {}, ativos_usuario
+    merged = macro.join(retornos_df, how='inner').dropna()
+    fatores = macro.columns.tolist()
     coeficientes = {}
     for setor in retornos_df.columns:
         try:
             y = merged[setor]
-            X = merged[fatores_macro]
+            X = merged[fatores]
             X = sm.add_constant(X)
-            modelo = sm.OLS(y, X).fit()
+            modelo = sm.OLS(y,X).fit()
             coef = modelo.params.drop('const')
-            coeficientes[setor] = coef.to_dict()
+            coeficientes[setor] = {f:int(np.clip(round(v*2),-2,2)) for f,v in coef.items()}
         except Exception as e:
-            st.warning(f"⚠️ Regressão falhou para setor {setor}: {e}")
-    if not coeficientes:
-        st.warning("⚠️ Nenhum coeficiente foi gerado. Retornando dicionário vazio.")
-        return {}
-    if normalizar:
-        coeficientes = normalizar_coeficientes(coeficientes)
-    return coeficientes
+            st.warning(f"Regressão falhou para setor {setor}: {e}")
+    return coeficientes, tickers_simulados
 
 # --- No seu fluxo principal (substitua a chamada antiga) ---
 
@@ -744,7 +703,6 @@ with st.sidebar:
     st.header("Parâmetros")
     st.markdown("### Dados dos Ativos")
 
-    # Tickers e pesos default
     tickers_default = [
         "AGRO3.SA", "BBAS3.SA", "BBSE3.SA", "BPAC11.SA", "EGIE3.SA",
         "ITUB4.SA", "PRIO3.SA", "PSSA3.SA", "SAPR11.SA", "SBSP3.SA",
@@ -756,7 +714,6 @@ with st.sidebar:
         0.1, 0.18, 0.04, 0.01, 0.02
     ]
 
-    # Número de ativos controlado por estado da sessão
     if "num_ativos" not in st.session_state:
         st.session_state.num_ativos = len(tickers_default)
 
@@ -768,10 +725,8 @@ with st.sidebar:
         if st.button("( - )", key="remove_ativo") and st.session_state.num_ativos > 1:
             st.session_state.num_ativos -= 1
 
-    # Lista para armazenar inputs
     tickers = []
     pesos = []
-
     for i in range(st.session_state.num_ativos):
         col1, col2 = st.columns(2)
         with col1:
@@ -784,7 +739,6 @@ with st.sidebar:
             tickers.append(ticker)
             pesos.append(peso)
 
-    # Normalização
     pesos_array = np.array(pesos)
     if pesos_array.sum() > 0:
         pesos_atuais = pesos_array / pesos_array.sum()
@@ -799,13 +753,17 @@ st.subheader("🏆 Ranking Geral de Ações (com base no score)")
 carteira = dict(zip(tickers, pesos_atuais))
 tickers_carteira = list(carteira.keys())
 
-sensibilidade_setorial = obter_sensibilidade_regressao_interno(tickers_carteira, normalizar=True)
+# CHAME AQUI:
+sensibilidade_setorial, tickers_simulados = obter_sensibilidade_setorial_robusta(
+    tickers_carteira, setores_por_ticker
+)
 
-if sensibilidade_setorial:
-    with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
-        st.json(sensibilidade_setorial)
+if tickers_simulados:
+    st.warning(f"Atenção: os seguintes ativos não tinham dados históricos e foram simulados: {', '.join(tickers_simulados)}")
+if not sensibilidade_setorial:
+    st.error("Nenhum dado de sensibilidade disponível (todos os setores simulados ou erro nas regressões).")
 else:
-    st.warning("⚠️ Nenhum dado de sensibilidade disponível.")
+    st.info("Sensibilidade setorial calculada com sucesso!")
 
 ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 
