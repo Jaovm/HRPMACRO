@@ -100,19 +100,4 @@ def normalizar_coeficientes(coef_dict):
         } for setor, coef in coef_dict.items()
     }
 
-from modelo_regressao_setorial import obter_sensibilidade_regressao
 
-carteira = dict(zip(tickers, pesos_atuais))
-tickers_carteira = list(carteira.keys())
-
-sensibilidade_setorial = obter_sensibilidade_regressao(
-    tickers_carteira=tickers_carteira,
-    normalizar=True,
-    salvar_csv=True
-)
-
-if sensibilidade_setorial:
-    with st.expander("📉 Ver Sensibilidade Setorial (Regressão)"):
-        st.json(sensibilidade_setorial)
-else:
-    st.warning("⚠️ Nenhum dado de sensibilidade disponível.")
