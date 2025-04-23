@@ -399,16 +399,18 @@ def obter_preco_atual(ticker):
 
 def classificar_cenario_macro(score_dict):
     total = sum(score_dict.values())
-    if total >= 7:
+    # Considerando pontuação total possível entre -6 e +10
+    if total >= 8:
         return "Expansão Forte"
-    elif total >= 4:
+    elif total >= 5:
         return "Expansão Moderada"
-    elif total >= 1:
+    elif total >= 2:
         return "Estável"
     elif total >= -2:
         return "Contração Moderada"
     else:
         return "Contração Forte"
+
 
 
 
@@ -484,7 +486,9 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_peso
 
 def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score):
     score_macro = pontuar_macro(macro)
-    cenario = classificar_cenario_macro(score_macro)
+    st.write("Pontuação por indicador:", score_macro)
+    st.write("Score Total:", sum(score_macro.values()))
+    st.write("Cenário:", classificar_cenario_macro(score_macro))
     setores_favorecidos = setores_por_cenario.get(cenario, [])
 
     ativos_validos = []
