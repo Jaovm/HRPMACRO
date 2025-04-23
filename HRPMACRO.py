@@ -448,12 +448,10 @@ def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
     colunas_existentes = [col for col in colunas_desejadas if col in df.columns]
     st.dataframe(df[colunas_existentes], use_container_width=True)
 
-with st.expander("Detalhes"):
-    # Opcional: exibir detalhes
-    if st.checkbox("🔍 Ver detalhes dos scores"):
+with st.expander("🔍 Ver detalhes dos scoress"):
         st.dataframe(df[["ticker", "detalhe"]], use_container_width=True)
 
-        return df
+     
 
 
 def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False):
