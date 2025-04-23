@@ -289,13 +289,12 @@ def obter_macro():
         "pib": buscar_projecoes_focus("PIB Total"),
         "petroleo": obter_preco_petroleo(),
         "dolar": buscar_projecoes_focus("Câmbio")
+        "soja": obter_preco_commodity("ZS=F", nome="Soja")
+        "milho": obter_preco_commodity("ZC=F", nome="Milho")
+        "minerio": obter_preco_commodity("BZ=F", nome="Minério de Ferro")
+    
     }
 
-    # Preços de commodities
-    macro["soja"] = obter_preco_commodity("ZS=F", nome="Soja")
-    macro["milho"] = obter_preco_commodity("ZC=F", nome="Milho")
-    macro["minerio"] = obter_preco_commodity("BZ=F", nome="Minério de Ferro")
-    
 
     return macro
 
@@ -323,21 +322,22 @@ def obter_preco_petroleo():
 # Funções de pontuação individual
 
 def pontuar_selic(selic):
-    # Valor ideal centrado em 9%, penaliza tanto taxas muito altas quanto muito baixas
-    return max(min(2 * np.exp(-((selic - 9) ** 2) / 18), 2), -1)
+    ideal = 9
+    return np.clip(1.5 * np.exp(-((selic - ideal) ** 2) / 12), -1, 2)
+
 
 def pontuar_ipca(ipca):
     if ipca is None:
         return 0
     ideal = 3
-    return max(min(2 * np.exp(-((ipca - ideal) ** 2) / 3), 2), -1)
+    return max(min(1.5 * np.exp(-((ipca - ideal) ** 2) / 3), 2), -1)
 
 
 def pontuar_dolar(dolar):
     if dolar is None:
         return 0
     ideal = 5.8
-    return max(min(2 * np.exp(-((dolar - ideal) ** 2) / 0.5), 2), -2)
+    return max(min(1.5 * np.exp(-((dolar - ideal) ** 2) / 0.5), 2), -2)
 
 
 
@@ -449,50 +449,30 @@ def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, 
     if preco_atual == 0:
         return -float("inf"), "Preço atual igual a zero"
 
-    # 1. Potencial de valorização (upside)
     upside = (preco_alvo - preco_atual) / preco_atual
-    base_score = upside * 10  # Normalizado
+    base_score = upside * 10
 
-    # 2. Score macroeconômico
     score_macro = 0
     if setor in sensibilidade_setorial and usar_pesos_macroeconomicos:
         s = sensibilidade_setorial[setor]
-        if macro.get('selic') is not None:
-            score_macro += s['juros'] * (1 if macro['selic'] > 10 else -1)
-        if macro.get('ipca') is not None:
-            score_macro += s['inflação'] * (1 if macro['ipca'] > 5 else -1)
-        if macro.get('dolar') is not None:
-            score_macro += s['cambio'] * (1 if macro['dolar'] > 5 else -1)
-        if macro.get('pib') is not None:
-            score_macro += s['pib'] * (1 if macro['pib'] > 0 else -1)
-        if macro.get('soja') is not None and macro.get('milho') is not None:
-            media_agro = (macro['soja'] / 1000 + macro['milho'] / 1000) / 2
-            score_macro += s.get('commodities_agro', 0) * (1 if media_agro > 1 else -1)
-        if macro.get('minerio') is not None:
-            score_macro += s.get('commodities_minerio', 0) * (1 if macro['minerio'] > 100 else -1)
+        score_indicadores = pontuar_macro(macro)  # já normalizado
+        for indicador, peso in s.items():
+            score_macro += peso * score_indicadores.get(indicador, 0)
 
-    # Limitar impacto do score macroeconômico
     score_macro = np.clip(score_macro, -10, 10)
 
-    # 3. Bônus para exportadoras
     bonus = 0
     if ticker in empresas_exportadoras:
-        if macro.get('dolar') is not None and macro['dolar'] > 5:
+        if macro.get('dolar') and macro['dolar'] > 5:
             bonus += 0.05
-        if macro.get('petroleo') is not None and macro['petroleo'] > 80:
+        if macro.get('petroleo') and macro['petroleo'] > 80:
             bonus += 0.05
-
     bonus = np.clip(bonus, 0, 0.1)
 
-    # 4. Score final
-    score_total = base_score + (0.01 * score_macro) + bonus + (favorecimento_score * 1.5 if usar_pesos_macroeconomicos else 0)
-
+    score_total = base_score + (0.05 * score_macro) + bonus + (favorecimento_score * 1.5 if usar_pesos_macroeconomicos else 0)
     detalhe = f"upside={upside:.2f}, base={base_score:.2f}, macro={score_macro:.2f}, bonus={bonus:.2f}, favorecimento={favorecimento_score:.2f}"
 
-    if return_details:
-        return score_total, detalhe
-    else:
-        return score_total
+    return (score_total, detalhe) if return_details else score_total
 
 
 
@@ -550,7 +530,9 @@ def calcular_favorecimento_continuo(setor, score_macro):
     if setor not in sensibilidade_setorial:
         return 0
     sens = sensibilidade_setorial[setor]
-    return sum(score_macro.get(chave, 0) * peso for chave, peso in sens.items())
+    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
+    return np.clip(bruto / 5, -2, 2)  # normaliza suavemente
+
     
 
 
