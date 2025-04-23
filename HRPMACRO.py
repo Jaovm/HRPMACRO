@@ -288,9 +288,9 @@ def obter_macro():
         "selic": buscar_projecoes_focus("Selic"),
         "pib": buscar_projecoes_focus("PIB Total"),
         "petroleo": obter_preco_petroleo(),
-        "dolar": buscar_projecoes_focus("Câmbio")
-        "soja": obter_preco_commodity("ZS=F", nome="Soja")
-        "milho": obter_preco_commodity("ZC=F", nome="Milho")
+        "dolar": buscar_projecoes_focus("Câmbio"),
+        "soja": obter_preco_commodity("ZS=F", nome="Soja"),
+        "milho": obter_preco_commodity("ZC=F", nome="Milho"),
         "minerio": obter_preco_commodity("BZ=F", nome="Minério de Ferro")
     
     }
