@@ -733,11 +733,10 @@ carteira = dict(zip(tickers, pesos_atuais))
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
-usar_pesos_macroeconomicos = st.checkbox('Usar pesos macroeconômicos', value=True)
 
 
 # Utilize o valor selecionado na otimização e filtragem de ativos
-ativos_validos = filtrar_ativos_validos(carteira, cenario, macro, usar_pesos_macroeconomicos=usar_pesos_macroeconomicos)
+ativos_validos = filtrar_ativos_validos(carteira, cenario, macro)
 
 
 if st.button("Gerar Alocação Otimizada"):
