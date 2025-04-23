@@ -27,11 +27,20 @@ def baixar_dados_com_retentativa(tickers, period="2y", interval="1mo", max_reten
     """Baixa dados com retentativas em caso de falha."""
     for tentativa in range(max_retentativas):
         try:
+            sleep(1)  # Aguarda 1 segundo entre as tentativas para evitar limitações
             return yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=True)
         except Exception as e:
             st.warning(f"⚠️ Tentativa {tentativa + 1}/{max_retentativas} falhou para tickers {tickers}. ({e})")
             sleep(5)  # Espera antes de tentar novamente
     raise Exception(f"⚠️ Não foi possível baixar os dados para tickers {tickers} após {max_retentativas} tentativas.")
+
+
+def gerar_dados_simulados(tickers, periodos=24):
+    """Gera dados simulados para tickers sem dados válidos."""
+    st.warning("⚠️ Gerando dados simulados para os tickers ausentes...")
+    datas = pd.date_range(end=pd.Timestamp.today(), periods=periodos, freq='ME')
+    dados_simulados = {ticker: np.random.normal(0, 0.02, len(datas)) for ticker in tickers}
+    return pd.DataFrame(dados_simulados, index=datas)
 
 
 def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salvar_csv=False):
@@ -55,6 +64,7 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
     # Validação de tickers antes do processamento
     st.info("📋 Validando tickers...")
     tickers_validos = validar_tickers([t for setor in setores.values() for t in setor])
+    tickers_invalidos = set([t for setor in setores.values() for t in setor]) - set(tickers_validos)
     if not tickers_validos:
         st.error("❌ Nenhum ticker válido encontrado. Abortando.")
         return {}
@@ -105,9 +115,13 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
             st.error(f"⚠️ Erro ao processar setor {setor}: {e}")
             continue
 
-    if not retornos_setoriais:
-        st.error("⚠️ Nenhum dado de retorno setorial disponível.")
-        return {}
+    # Gerar dados simulados para setores sem dados
+    setores_sem_dados = [setor for setor in setores.keys() if setor not in retornos_setoriais]
+    if setores_sem_dados:
+        for setor in setores_sem_dados:
+            tickers_no_setor = setores[setor]
+            simulados = gerar_dados_simulados(tickers_no_setor)
+            retornos_setoriais[setor] = simulados.mean(axis=1)
 
     retornos_df = pd.DataFrame(retornos_setoriais).dropna()
     st.info(f"📈 Retornos setoriais disponíveis: {list(retornos_df.columns)}")
