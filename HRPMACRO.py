@@ -1146,7 +1146,7 @@ if st.button("Gerar Alocação Otimizada"):
                 if row['ticker'] in empresas_exportadoras and macro['dolar'] > 5:
                     explicacao += "Exportadora favorecida por dólar alto. "
                 st.info(explicacao)
-
+            
                         
             # Troco do aporte
             valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
@@ -1155,4 +1155,4 @@ if st.button("Gerar Alocação Otimizada"):
             st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
             
             
-
+            finally
