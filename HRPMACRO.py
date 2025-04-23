@@ -417,7 +417,8 @@ def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
             continue
 
         favorecimento_score = calcular_favorecimento_continuo(setor, score_macro)
-        score = calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, macro, usar_pesos_macro)
+        score = calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macro)
+
 
         resultados.append({
             "ticker": ticker,
@@ -489,21 +490,24 @@ def calcular_favorecimento_continuo(setor, score_macro):
     return sum(score_macro.get(chave, 0) * peso for chave, peso in sens.items())
     
 
-def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, macro, usar_pesos_macro=True):
+def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True):
     """
-    Score final baseado em:
-    - Potencial de valorização (quanto maior o upside, maior o score)
-    - Favorecimento macroeconômico contínuo
+    Calcula o score final para um ativo com base em:
+    - Potencial de valorização (upside)
+    - Sensibilidade setorial ao cenário macroeconômico
+    - Benefícios adicionais por ser exportadora em cenário favorável
     """
     if preco_atual == 0:
         return -float("inf")
-    upside = (preco_alvo - preco_atual) / preco_atual
-    base_score = upside * 10  # Normalizando para escala parecida
-    macro_bonus = favorecimento_score * 1.5 if usar_pesos_macro else 0
 
+    # 1. Potencial de valorização (upside)
+    upside = (preco_alvo - preco_atual) / preco_atual
+    base_score = upside * 10  # Normalizado
+
+    # 2. Score macro com base em sensibilidade setorial
+    score_macro = 0
     if setor in sensibilidade_setorial and usar_pesos_macroeconomicos:
         s = sensibilidade_setorial[setor]
-
         if macro.get('selic') is not None:
             score_macro += s['juros'] * (1 if macro['selic'] > 10 else -1)
         if macro.get('ipca') is not None:
@@ -512,25 +516,23 @@ def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, macro, 
             score_macro += s['cambio'] * (1 if macro['dolar'] > 5 else -1)
         if macro.get('pib') is not None:
             score_macro += s['pib'] * (1 if macro['pib'] > 0 else -1)
-
         if macro.get('soja') is not None and macro.get('milho') is not None:
             media_agro = (macro['soja'] / 1000 + macro['milho'] / 1000) / 2
             score_macro += s.get('commodities_agro', 0) * (1 if media_agro > 1 else -1)
-
         if macro.get('minerio') is not None:
             score_macro += s.get('commodities_minerio', 0) * (1 if macro['minerio'] > 100 else -1)
 
+    # 3. Bonus extra para exportadoras em cenário favorável
+    bonus = 0
     if ticker in empresas_exportadoras:
         if macro.get('dolar') is not None and macro['dolar'] > 5:
             bonus += 0.05
         if macro.get('petroleo') is not None and macro['petroleo'] > 80:
             bonus += 0.05
 
-    score_total = upside + bonus + 0.01 * score_macro
-    return base_score + macro_bonus
-
-
-
+    # 4. Score final
+    score_total = base_score + (0.01 * score_macro) + bonus + (favorecimento_score * 1.5 if usar_pesos_macroeconomicos else 0)
+    return score_total
 
 def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score):
     score_macro = pontuar_macro(macro)
