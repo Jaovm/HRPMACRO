@@ -396,6 +396,36 @@ def obter_preco_atual(ticker):
         st.warning(f"Erro ao obter preço atual de {ticker}: {e}")
     return None
 
+def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
+    resultados = []
+    for ticker in carteira.keys():  # Só processa os tickers da carteira
+        setor = setores_por_ticker.get(ticker)
+        if setor is None:
+            st.warning(f"Setor não encontrado para {ticker}. Ignorando.")
+            continue
+
+        preco_atual = obter_preco_atual(ticker)
+        preco_alvo = obter_preco_alvo(ticker)
+
+        if preco_atual is None or preco_alvo is None or preco_atual == 0:
+            st.warning(f"Dados insuficientes para {ticker}. Ignorando.")
+            continue
+
+        favorecido = setor in setores_por_cenario.get(classificar_cenario_macro(pontuar_macro(macro)), [])
+        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macro)
+
+        resultados.append({
+            "ticker": ticker,
+            "setor": setor,
+            "preço atual": preco_atual,
+            "preço alvo": preco_alvo,
+            "favorecido": favorecido,
+            "score": score
+        })
+
+    return pd.DataFrame(resultados).sort_values(by="score", ascending=False)
+
+
 
 def classificar_cenario_macro(score_dict):
     total = sum(score_dict.values())
@@ -656,22 +686,6 @@ def otimizar_carteira_hrp(tickers, carteira_atual):
 
     return completar_pesos(tickers, pesos_hrp)
 
-def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
-    resultados = []
-    for ticker, setor in setores_por_ticker.items():
-        preco_atual = obter_preco_atual(ticker)
-        preco_alvo = obter_preco_alvo(ticker)
-        favorecido = setor in setores_por_cenario.get(classificar_cenario_macro(pontuar_macro(macro)), [])
-        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_pesos_macro)
-        resultados.append({
-            "ticker": ticker,
-            "setor": setor,
-            "preço atual": preco_atual,
-            "preço alvo": preco_alvo,
-            "favorecido": favorecido,
-            "score": score
-        })
-    return pd.DataFrame(resultados).sort_values(by="score", ascending=False)
 
 
 # ========= STREAMLIT ==========
