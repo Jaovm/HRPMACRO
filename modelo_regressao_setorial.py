@@ -30,28 +30,23 @@ def baixar_dados_com_retentativa(tickers, period="2y", interval="1mo", max_reten
             sleep(1)  # Aguarda 1 segundo entre as tentativas para evitar limitações
             dados = yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=False)
             
-            # Logando os dados retornados
-            st.write("🔍 Dados brutos retornados pelo yfinance:")
-            st.write(dados)
-
-            # Tentar acessar a coluna 'Adj Close' de forma flexível
+            # Verificar se a coluna 'Adj Close' está disponível
             if isinstance(dados.columns, pd.MultiIndex):
                 if 'Adj Close' in dados.columns.get_level_values(0):
                     st.info("✅ Coluna 'Adj Close' encontrada no MultiIndex.")
                     return dados['Adj Close']
-                
-                # Verificando a 5ª posição
-                st.warning("⚠️ Coluna 'Adj Close' não encontrada pelo nome. Tentando acessar pela posição.")
-                return dados.iloc[:, 4]  # Acessar a 5ª coluna diretamente
-
+                else:
+                    st.warning("⚠️ A coluna 'Adj Close' não foi encontrada no retorno MultiIndex.")
             elif 'Adj Close' in dados.columns:
                 st.info("✅ Coluna 'Adj Close' encontrada.")
                 return dados['Adj Close']
-            
-            # Verificando a 5ª posição diretamente
-            st.warning("⚠️ Coluna 'Adj Close' não encontrada. Tentando acessar pela posição.")
-            return dados.iloc[:, 4]  # Acessar a 5ª coluna diretamente
 
+            # Verificar a 5ª coluna como fallback
+            if dados.shape[1] > 4:
+                st.warning("⚠️ Tentando acessar a 5ª coluna como fallback.")
+                return dados.iloc[:, 4]  # Acessar a 5ª coluna diretamente
+
+            st.error("⚠️ Nenhuma coluna 'Adj Close' ou equivalente foi encontrada.")
         except Exception as e:
             st.warning(f"⚠️ Tentativa {tentativa + 1}/{max_retentativas} falhou para tickers {tickers}. ({e})")
             sleep(5)  # Espera antes de tentar novamente
