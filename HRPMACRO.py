@@ -1100,10 +1100,6 @@ if st.button("Gerar Alocação Otimizada"):
 
             tickers = list(carteira.keys())
             file_hist7 = "historico_7anos.csv"
-            if not os.path.exists(file_hist7):
-                with st.spinner("Gerando histórico dos últimos 7 anos (pode demorar alguns minutos na primeira vez)..."):
-                    historico_7anos = montar_historico_7anos(tickers, setores_por_ticker)
-                    st.success("Histórico dos últimos 7 anos gerado!")
             try:
                 historico_7anos = pd.read_csv(file_hist7)
             except FileNotFoundError:
@@ -1111,7 +1107,7 @@ if st.button("Gerar Alocação Otimizada"):
                 historico_7anos = pd.DataFrame()
             
             st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
-
+            
             if historico_7anos.empty:
                 st.info("Sem dados históricos para exibir. Rode o app novamente, ou confira conexão.")
             else:
@@ -1155,4 +1151,4 @@ if st.button("Gerar Alocação Otimizada"):
             st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
             
             
-            finally
+         
