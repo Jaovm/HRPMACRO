@@ -9,7 +9,7 @@ from time import sleep
 
 
 def validar_tickers(tickers):
-    """Valida os tickers para garantir que possuem dados disponíveis."""
+    """Valida os tickers para garantir que possuem dados básicos disponíveis."""
     validos = []
     for ticker in tickers:
         try:
@@ -34,20 +34,30 @@ def baixar_dados_com_retentativa(tickers, period="2y", interval="1mo", max_reten
             st.write("🔍 Dados brutos retornados pelo yfinance:")
             st.write(dados)
 
-            # Verificar se o retorno é um MultiIndex
+            # Tentar acessar a coluna 'Adj Close' de forma flexível
             if isinstance(dados.columns, pd.MultiIndex):
                 if 'Adj Close' in dados.columns.get_level_values(0):
+                    st.info("✅ Coluna 'Adj Close' encontrada no MultiIndex.")
                     return dados['Adj Close']
-                else:
-                    raise ValueError("⚠️ A coluna 'Adj Close' não foi encontrada no retorno.")
-            elif 'Adj Close' in dados:
-                return dados[['Adj Close']]
-            else:
-                raise ValueError("⚠️ A coluna 'Adj Close' não foi encontrada no retorno.")
+                
+                # Verificando a 5ª posição
+                st.warning("⚠️ Coluna 'Adj Close' não encontrada pelo nome. Tentando acessar pela posição.")
+                return dados.iloc[:, 4]  # Acessar a 5ª coluna diretamente
+
+            elif 'Adj Close' in dados.columns:
+                st.info("✅ Coluna 'Adj Close' encontrada.")
+                return dados['Adj Close']
+            
+            # Verificando a 5ª posição diretamente
+            st.warning("⚠️ Coluna 'Adj Close' não encontrada. Tentando acessar pela posição.")
+            return dados.iloc[:, 4]  # Acessar a 5ª coluna diretamente
+
         except Exception as e:
             st.warning(f"⚠️ Tentativa {tentativa + 1}/{max_retentativas} falhou para tickers {tickers}. ({e})")
             sleep(5)  # Espera antes de tentar novamente
-    raise Exception(f"⚠️ Não foi possível baixar os dados para tickers {tickers} após {max_retentativas} tentativas.")
+
+    st.error(f"⚠️ Não foi possível baixar os dados para tickers {tickers} após {max_retentativas} tentativas.")
+    return pd.DataFrame()  # Retorna DataFrame vazio em caso de falha
 
 
 def gerar_dados_simulados(tickers, periodos=24):
@@ -58,18 +68,18 @@ def gerar_dados_simulados(tickers, periodos=24):
     return pd.DataFrame(dados_simulados, index=datas)
 
 
-def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salvar_csv=False):
-    # Testando o retorno do yfinance
-    tickers_para_teste = ['ITUB4.SA', 'BBDC4.SA', 'SANB11.SA', 'BBAS3.SA']
-    try:
-        st.info("🔍 Testando retorno do yfinance para os tickers...")
-        testar_retorno = baixar_dados_com_retentativa(tickers_para_teste, period="2y", interval="1mo")
-        st.write("🔍 Retorno de teste bem-sucedido:")
-        st.write(testar_retorno)
-    except Exception as e:
-        st.error(f"Erro ao testar o retorno do yfinance: {e}")
-        return
+def integrar_dados_simulados(setores, tickers_sem_dados):
+    """Integra dados simulados para setores que falharam ao obter dados reais."""
+    retornos_setoriais = {}
+    for setor, tickers in setores.items():
+        if any(ticker in tickers_sem_dados for ticker in tickers):
+            st.warning(f"⚠️ Usando dados simulados para o setor {setor}")
+            simulados = gerar_dados_simulados(tickers)
+            retornos_setoriais[setor] = simulados.mean(axis=1)
+    return retornos_setoriais
 
+
+def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salvar_csv=False):
     datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='ME')
     macro_data = pd.DataFrame({
         'data': datas,
@@ -90,12 +100,15 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
     # Validação de tickers antes do processamento
     st.info("📋 Validando tickers...")
     tickers_validos = validar_tickers([t for setor in setores.values() for t in setor])
+    tickers_sem_dados = set([t for setor in setores.values() for t in setor]) - set(tickers_validos)
     if not tickers_validos:
         st.error("❌ Nenhum ticker válido encontrado. Abortando.")
         return {}
 
     # Filtrar setores com base nos tickers válidos
     setores = {setor: [t for t in tickers if t in tickers_validos] for setor, tickers in setores.items()}
+    if tickers_carteira:
+        setores = {s: tks for s, tks in setores.items() if any(t in tickers_carteira for t in tks)}
 
     st.info(f"📌 Setores selecionados para regressão: {list(setores.keys())}")
 
@@ -124,11 +137,9 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
             st.error(f"⚠️ Erro ao processar setor {setor}: {e}")
             continue
 
-    # Gerar dados simulados para setores sem dados
-    setores_sem_dados = [setor for setor in setores.keys() if setor not in retornos_setoriais]
-    for setor in setores_sem_dados:
-        simulados = gerar_dados_simulados(setores[setor])
-        retornos_setoriais[setor] = simulados.mean(axis=1)
+    # Integração de dados simulados
+    dados_simulados = integrar_dados_simulados(setores, tickers_sem_dados)
+    retornos_setoriais.update(dados_simulados)
 
     retornos_df = pd.DataFrame(retornos_setoriais).dropna()
     st.info(f"📈 Retornos setoriais disponíveis: {list(retornos_df.columns)}")
