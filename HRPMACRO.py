@@ -571,7 +571,7 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
             continue
 
         setor = setores_por_ticker.get(ticker)
-        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, setor, macro)
+        score = calcular_score(preco_atual, preco_alvo, favorecido, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False)
 
 
         ativos_validos.append({
