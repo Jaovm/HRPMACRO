@@ -451,33 +451,34 @@ def calcular_score(preco_atual, preco_alvo, favorecido, ticker, macro, usar_peso
     setor = setores_por_ticker.get(ticker)
     score_macro = 0
 
-    if setor in sensibilidade_setorial and usar_pesos_macroeconomicos:  # Verifique se devemos usar os pesos macroeconômicos
+    if setor in sensibilidade_setorial and usar_pesos_macroeconomicos:
         s = sensibilidade_setorial[setor]
 
-        if macro['selic'] is not None:
+        if macro.get('selic') is not None:
             score_macro += s['juros'] * (1 if macro['selic'] > 10 else -1)
-        if macro['ipca'] is not None:
+        if macro.get('ipca') is not None:
             score_macro += s['inflação'] * (1 if macro['ipca'] > 5 else -1)
-        if macro['dolar'] is not None:
+        if macro.get('dolar') is not None:
             score_macro += s['cambio'] * (1 if macro['dolar'] > 5 else -1)
-        if macro['pib'] is not None:
+        if macro.get('pib') is not None:
             score_macro += s['pib'] * (1 if macro['pib'] > 0 else -1)
 
-        if macro['soja'] is not None and macro['milho'] is not None:
+        if macro.get('soja') is not None and macro.get('milho') is not None:
             media_agro = (macro['soja'] / 1000 + macro['milho'] / 1000) / 2
             score_macro += s.get('commodities_agro', 0) * (1 if media_agro > 1 else -1)
 
-        if macro['minerio'] is not None:
+        if macro.get('minerio') is not None:
             score_macro += s.get('commodities_minerio', 0) * (1 if macro['minerio'] > 100 else -1)
 
     if ticker in empresas_exportadoras:
-        if macro['dolar'] and macro['dolar'] > 5:
+        if macro.get('dolar') is not None and macro['dolar'] > 5:
             bonus += 0.05
-        if macro['petroleo'] and macro['petroleo'] > 80:
+        if macro.get('petroleo') is not None and macro['petroleo'] > 80:
             bonus += 0.05
 
     score_total = upside + bonus + 0.01 * score_macro
     return score_total
+
 
 
 
@@ -651,9 +652,6 @@ def otimizar_carteira_hrp(tickers, carteira_atual):
     pesos_hrp = get_recursive_bisection(cov_df, ordered_tickers)
 
     return completar_pesos(tickers, pesos_hrp)
-
-
-
 
 
 
