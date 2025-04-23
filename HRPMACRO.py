@@ -249,30 +249,38 @@ setores_por_cenario = {
 # Funções para obter dados do BCB
 
 def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
-    url = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/ExpectativasMercadoTop5Anuais"
-    params = {
-        "$format": "json",
-        "$select": "Indicador,Data,DataReferencia,Media,Mediana"
+    indicador_map = {
+        "IPCA": "IPCA",
+        "Selic": "Selic",
+        "PIB Total": "PIB Total",
+        "Câmbio": "Câmbio"
     }
+    
+    nome_indicador = indicador_map.get(indicador)
+    if not nome_indicador:
+        return None
+
+    base_url = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
+    url = f"{base_url}ExpectativasMercadoTop5Anuais?$top=10000&$skip=84999&$filter=Indicador eq '{nome_indicador}'&$format=json&$select=Indicador,Data,DataReferencia,Mediana"
 
     try:
-        response = requests.get(url, params=params)
+        response = requests.get(url)
         response.raise_for_status()
         dados = response.json()["value"]
 
         df = pd.DataFrame(dados)
-        df = df[df["Indicador"].str.lower() == indicador.lower()]
         df = df[df["DataReferencia"].str.contains(str(ano))]
         df = df.sort_values("Data", ascending=False)
 
         if df.empty:
             raise ValueError(f"Nenhum dado encontrado para {indicador} em {ano}.")
 
-        return df.iloc[0]["Mediana"]
+        return float(df.iloc[0]["Mediana"])
     
     except Exception as e:
         print(f"Erro ao buscar {indicador} no Boletim Focus: {e}")
         return None
+
 
 def obter_macro():
     macro = {
@@ -288,6 +296,7 @@ def obter_macro():
     macro["minerio"] = obter_preco_commodity("BZ=F", nome="Minério de Ferro")
 
     return macro
+
 
 # Função genérica para obter preços via yfinance
 
