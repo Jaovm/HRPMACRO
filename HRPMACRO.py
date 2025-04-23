@@ -344,7 +344,7 @@ def pontuar_selic(selic):
 # Função para pontuar o Câmbio
 def pontuar_dolar(dolar):
     ideal = 5.90
-    desvio = abs(cambio - ideal)
+    desvio = abs(dolar - ideal)
     return max(0, 10 - desvio * 2)
 
 # Função para pontuar o PIB
@@ -494,10 +494,10 @@ def classificar_cenario_macro(ipca, selic, dolar, pib,
 
     score_ipca = pontuar_ipca(ipca)
     score_selic = pontuar_selic(selic)
-    score_cambio = pontuar_dolar(dolar)
+    score_dolar = pontuar_dolar(dolar)
     score_pib = pontuar_pib(pib)
 
-    total_score = score_ipca + score_selic + score_cambio + score_pib
+    total_score = score_ipca + score_selic + score_dolar + score_pib
 
     # Adiciona pontuação de commodities, se fornecidas
     if preco_soja is not None:
@@ -540,20 +540,20 @@ def completar_pesos(tickers_originais, pesos_calculados):
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
 sensibilidade_setorial = {
-    'Bancos':                          {'juros': 1,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities_agro': 1, 'commodities_minerio': 1},
-    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities_agro': 0, 'commodities_minerio': 0},
-    'Bolsas e Serviços Financeiros':  {'juros': 1,  'inflação': 0,  'cambio': 0,  'pib': 2,  'commodities_agro': 0, 'commodities_minerio': 0},
-    'Energia Elétrica':               {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1},
-    'Petróleo, Gás e Biocombustíveis':{'juros': 0,  'inflação': 0,  'cambio': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Mineração e Siderurgia':         {'juros': 0,  'inflação': 0,  'cambio': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 2},
-    'Indústria e Bens de Capital':    {'juros': -1, 'inflação': -1, 'cambio': -1, 'pib': 2,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Agronegócio':                    {'juros': 0,  'inflação': -1, 'cambio': 2,  'pib': 1,  'commodities_agro': 2,  'commodities_minerio': 0},
-    'Saúde':                          {'juros': 0,  'inflação': 0,  'cambio': 0,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Tecnologia':                     {'juros': -2, 'inflação': 0,  'cambio': 0,  'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
-    'Consumo Discricionário':         {'juros': -2, 'inflação': -1, 'cambio': -1, 'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
-    'Consumo Básico':                 {'juros': 1,  'inflação': -2, 'cambio': -1, 'pib': 1,  'commodities_agro': -1, 'commodities_minerio': -1},
-    'Comunicação':                    {'juros': 0,  'inflação': 0,  'cambio': -1, 'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'cambio': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
+    'Bancos':                          {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 1, 'commodities_minerio': 1},
+    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0, 'commodities_minerio': 0},
+    'Bolsas e Serviços Financeiros':  {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': 0, 'commodities_minerio': 0},
+    'Energia Elétrica':               {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1},
+    'Petróleo, Gás e Biocombustíveis':{'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Mineração e Siderurgia':         {'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 2},
+    'Indústria e Bens de Capital':    {'juros': -1, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Agronegócio':                    {'juros': 0,  'inflação': -1, 'dolar': 2,  'pib': 1,  'commodities_agro': 2,  'commodities_minerio': 0},
+    'Saúde':                          {'juros': 0,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Tecnologia':                     {'juros': -2, 'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
+    'Consumo Discricionário':         {'juros': -2, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
+    'Consumo Básico':                 {'juros': 1,  'inflação': -2, 'dolar': -1, 'pib': 1,  'commodities_agro': -1, 'commodities_minerio': -1},
+    'Comunicação':                    {'juros': 0,  'inflação': 0,  'dolar': -1, 'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
 }
 
 def calcular_favorecimento_continuo(setor, score_macro):
