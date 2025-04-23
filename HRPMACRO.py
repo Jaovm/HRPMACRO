@@ -696,7 +696,7 @@ st.markdown("---")
 
 
 macro = obter_macro()
-cenario = classificar_cenario_macro(macro)
+cenario = score_macro(macro)
 score_macro = pontuar_macro(macro)
 score_medio = round(np.mean(list(score_macro.values())), 2)
 st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}** (Score: {score_medio})")
