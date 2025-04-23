@@ -321,68 +321,63 @@ def obter_preco_petroleo():
 
 # Funções de pontuação individual
 
-def pontuar_selic(selic):
-    if selic is None:
-        return 0
-    ideal = 10  # equilíbrio mais realista no Brasil
-    return np.clip(2 * np.exp(-((selic - ideal) ** 2) / 8), -2, 2)
-
-
 def pontuar_ipca(ipca):
-    if ipca is None:
-        return 0
-    ideal = 3  # centro da meta ajustado
-    return np.clip(2 * np.exp(-((ipca - ideal) ** 2) / 1.8), -2, 2)
+    meta = 3.0
+    tolerancia = 1.5
+    if meta - tolerancia <= ipca <= meta + tolerancia:
+        return 10
+    elif ipca < meta - tolerancia:
+        return 7  # inflação baixa (risco de deflação)
+    else:
+        return max(0, 10 - (ipca - (meta + tolerancia)) * 2)
 
+# Função para pontuar a Selic
+def pontuar_selic(selic):
+    neutra = 9.0
+    if selic == neutra:
+        return 10
+    elif selic < neutra:
+        return max(5, 10 - (neutra - selic) * 1.5)  # juros estimulativos
+    else:
+        return max(0, 10 - (selic - neutra) * 1.5)  # juros contracionistas
 
-def pontuar_dolar(dolar):
-    if dolar is None:
-        return 0
-    ideal = 5.5
-    return np.clip(2 * np.exp(-((dolar - ideal) ** 2) / 0.7), -2, 2)
+# Função para pontuar o Câmbio
+def pontuar_cambio(cambio):
+    ideal = 5.90
+    desvio = abs(cambio - ideal)
+    return max(0, 10 - desvio * 2)
 
-
+# Função para pontuar o PIB
 def pontuar_pib(pib):
-    if pib is None:
-        return 0
-    return np.clip((pib - 1.0) * 1.8, -2, 2)  # sensibilidade ajustada
+    ideal = 2.0
+    if pib >= ideal:
+        return min(10, 8 + (pib - ideal) * 2)
+    else:
+        return max(0, 8 - (ideal - pib) * 3)
 
 
-def pontuar_soja_milho(preco_soja, preco_milho):
-    if preco_soja is not None and preco_milho is not None:
-        if preco_soja > 12 and preco_milho > 5:
-            return 2
-        elif preco_soja > 11 and preco_milho > 4:
-            return 1
-        elif preco_soja > 10 and preco_milho > 3:
-            return 0
-        else:
-            return -1
-    return 0
+def pontuar_soja(preco_soja):
+    ideal = 13.0  # referência média
+    desvio = abs(preco_soja - ideal)
+    return max(0, 10 - desvio * 1.5)
 
+# Pontuar preço do Milho (em US$/bushel)
+def pontuar_milho(preco_milho):
+    ideal = 5.5  # referência média
+    desvio = abs(preco_milho - ideal)
+    return max(0, 10 - desvio * 2)
+
+# Pontuar preço do Minério de Ferro (em US$/tonelada)
 def pontuar_minerio(preco_minerio):
-    if preco_minerio is None:
-        return 0
-    if preco_minerio > 120:
-        return 2
-    elif preco_minerio > 100:
-        return 1
-    elif preco_minerio > 80:
-        return 0
-    else:
-        return -1
+    ideal = 110.0  # referência média
+    desvio = abs(preco_minerio - ideal)
+    return max(0, 10 - desvio * 0.1)
 
+# Pontuar preço do Petróleo Brent (em US$/barril)
 def pontuar_petroleo(preco_petroleo):
-    if preco_petroleo is None:
-        return 0
-    if preco_petroleo > 90:
-        return 2
-    elif preco_petroleo > 75:
-        return 1
-    elif preco_petroleo > 60:
-        return 0
-    else:
-        return -1
+    ideal = 85.0  # referência média
+    desvio = abs(preco_petroleo - ideal)
+    return max(0, 10 - desvio * 0.2)
 
 def pontuar_macro(m):
     score = {}
@@ -493,19 +488,37 @@ def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, 
 
 
 
-def classificar_cenario_macro(score_dict):
-    total = sum(score_dict.values())
-    # Novo intervalo considerando score entre -7 e +12
-    if total >= 9:
-        return "Expansão Forte"
-    elif total >= 5:
-        return "Expansão Moderada"
-    elif total >= 1:
-        return "Estável"
-    elif total >= -2:
+def classificar_cenario_macro(ipca, selic, cambio, pib,
+                              preco_soja=None, preco_milho=None,
+                              preco_minerio=None, preco_petroleo=None):
+
+    score_ipca = pontuar_ipca(ipca)
+    score_selic = pontuar_selic(selic)
+    score_cambio = pontuar_cambio(cambio)
+    score_pib = pontuar_pib(pib)
+
+    total_score = score_ipca + score_selic + score_cambio + score_pib
+
+    # Adiciona pontuação de commodities, se fornecidas
+    if preco_soja is not None:
+        total_score += pontuar_soja(preco_soja)
+    if preco_milho is not None:
+        total_score += pontuar_milho(preco_milho)
+    if preco_minerio is not None:
+        total_score += pontuar_minerio(preco_minerio)
+    if preco_petroleo is not None:
+        total_score += pontuar_petroleo(preco_petroleo)
+
+    # Ajusta escala de classificação
+    if total_score >= 60:
+        return "Expansão Econômica"
+    elif total_score >= 45:
+        return "Neutro"
+    elif total_score >= 30:
         return "Contração Moderada"
     else:
         return "Contração Forte"
+
 
 
 
