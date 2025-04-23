@@ -28,7 +28,18 @@ def baixar_dados_com_retentativa(tickers, period="2y", interval="1mo", max_reten
     for tentativa in range(max_retentativas):
         try:
             sleep(1)  # Aguarda 1 segundo entre as tentativas para evitar limitações
-            return yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=True)
+            dados = yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=False)
+            
+            # Verificar se o retorno é um MultiIndex
+            if isinstance(dados.columns, pd.MultiIndex):
+                if 'Adj Close' in dados.columns.get_level_values(0):
+                    return dados['Adj Close']
+                else:
+                    raise ValueError("⚠️ A coluna 'Adj Close' não foi encontrada no retorno.")
+            elif 'Adj Close' in dados:
+                return dados[['Adj Close']]
+            else:
+                raise ValueError("⚠️ A coluna 'Adj Close' não foi encontrada no retorno.")
         except Exception as e:
             st.warning(f"⚠️ Tentativa {tentativa + 1}/{max_retentativas} falhou para tickers {tickers}. ({e})")
             sleep(5)  # Espera antes de tentar novamente
@@ -112,23 +123,6 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
         try:
             st.info(f"🔄 Baixando dados para setor: {setor} → {tickers}")
             dados = baixar_dados_com_retentativa(tickers)
-
-            # Verificar se os dados possuem as colunas esperadas
-            if isinstance(dados.columns, pd.MultiIndex):
-                if 'Close' in dados.columns.get_level_values(0):
-                    dados = dados['Close']
-                elif 'Adj Close' in dados.columns.get_level_values(0):
-                    dados = dados['Adj Close']
-                else:
-                    st.warning(f"⚠️ Nenhuma coluna 'Close' ou 'Adj Close' encontrada para {setor}")
-                    continue
-            elif 'Close' in dados:
-                dados = dados[['Close']]
-            elif 'Adj Close' in dados:
-                dados = dados[['Adj Close']]
-            else:
-                st.warning(f"⚠️ Nenhuma coluna 'Close' ou 'Adj Close' encontrada para {setor}")
-                continue
 
             if dados.empty:
                 st.warning(f"⚠️ Dados vazios para setor: {setor}")
