@@ -109,6 +109,10 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
 
             dados = dados.fillna(method='ffill')
             retornos = dados.pct_change().dropna()
+            if retornos.empty:
+                st.warning(f"⚠️ Retornos vazios para setor: {setor}")
+                continue
+
             media_mensal = retornos.mean(axis=1)
             retornos_setoriais[setor] = media_mensal
         except Exception as e:
@@ -126,6 +130,10 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
     retornos_df = pd.DataFrame(retornos_setoriais).dropna()
     st.info(f"📈 Retornos setoriais disponíveis: {list(retornos_df.columns)}")
 
+    if retornos_df.empty:
+        st.error("⚠️ Nenhum dado de retorno setorial disponível após filtragem.")
+        return {}
+
     dados_merged = macro_data.join(retornos_df, how='inner').dropna()
 
     coeficientes = {}
@@ -134,6 +142,10 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
         try:
             y = dados_merged[setor]
             X = dados_merged[fatores_macro]
+            if y.empty or X.empty:
+                st.warning(f"⚠️ Dados insuficientes para regressão no setor {setor}. Ignorando.")
+                continue
+
             X = sm.add_constant(X)
             modelo = sm.OLS(y, X).fit()
             coef = modelo.params.drop('const')
