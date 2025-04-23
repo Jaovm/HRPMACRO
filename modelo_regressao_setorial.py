@@ -1,8 +1,8 @@
-
 import pandas as pd
 import numpy as np
 import yfinance as yf
 import statsmodels.api as sm
+from collections import defaultdict
 
 def obter_sensibilidade_regressao():
     datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='M')
@@ -18,12 +18,12 @@ def obter_sensibilidade_regressao():
     })
     macro_data.set_index('data', inplace=True)
 
-    setores = {
-        'Bancos': ['ITUB4.SA', 'BBDC4.SA'],
-        'Tecnologia': ['TOTS3.SA', 'LWSA3.SA'],
-        'Mineração e Siderurgia': ['VALE3.SA', 'CSNA3.SA'],
-        'Agronegócio': ['AGRO3.SA', 'SLCE3.SA'],
-    }
+    
+
+    setores = defaultdict(list)
+    for ticker, setor in setores_por_ticker.items():
+        setores[setor].append(ticker)
+
 
     retornos_setoriais = {}
     for setor, tickers in setores.items():
