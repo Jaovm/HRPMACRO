@@ -287,6 +287,7 @@ def obter_macro():
         "ipca": buscar_projecoes_focus("IPCA"),
         "selic": buscar_projecoes_focus("Selic"),
         "pib": buscar_projecoes_focus("PIB Total"),
+        "petroleo": obter_preco_petroleo(),
         "dolar": buscar_projecoes_focus("Câmbio")
     }
 
@@ -294,6 +295,7 @@ def obter_macro():
     macro["soja"] = obter_preco_commodity("ZS=F", nome="Soja")
     macro["milho"] = obter_preco_commodity("ZC=F", nome="Milho")
     macro["minerio"] = obter_preco_commodity("BZ=F", nome="Minério de Ferro")
+    
 
     return macro
 
