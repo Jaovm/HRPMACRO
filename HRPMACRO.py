@@ -248,6 +248,7 @@ setores_por_cenario = {
 
 # Funções para obter dados do BCB
 
+@st.cache_data(ttl=86400)  # Cache por 1 dia
 def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
     indicador_map = {
         "IPCA": "IPCA",
@@ -300,7 +301,7 @@ def obter_macro():
 
 
 # Função genérica para obter preços via yfinance
-
+@st.cache_data(ttl=86400)
 def obter_preco_yf(ticker, nome="Ativo"):
     try:
         dados = yf.Ticker(ticker).history(period="5d")
@@ -312,10 +313,12 @@ def obter_preco_yf(ticker, nome="Ativo"):
     except Exception as e:
         st.error(f"Erro ao obter preço de {nome} ({ticker}): {e}")
         return None
-
+        
+@st.cache_data(ttl=86400)
 def obter_preco_commodity(ticker, nome="Commodity"):
     return obter_preco_yf(ticker, nome)
 
+@st.cache_data(ttl=86400)
 def obter_preco_petroleo():
     return obter_preco_yf("BZ=F", "Petróleo")
 
@@ -622,8 +625,7 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
 
 # ========= OTIMIZAÇÃO ==========
 
-
-
+@st.cache_data(ttl=86400)
 def obter_preco_diario_ajustado(tickers):
     dados_brutos = yf.download(tickers, period="7y", auto_adjust=False)
 
@@ -782,6 +784,19 @@ cenario = classificar_cenario_macro(
     preco_petroleo=macro.get("petroleo")
 )
 
+with st.sidebar:
+    st.header("Ajuste Manual dos Indicadores Macro")
+    macro_manual = {}
+    for indicador in ["ipca", "selic", "pib", "dolar"]:
+        macro_manual[indicador] = st.number_input(
+            f"{indicador.upper()} (ajuste, opcional)", 
+            value=macro[indicador] if macro[indicador] else 0.0,
+            step=0.01
+        )
+    usar_macro_manual = st.checkbox("Usar ajustes manuais acima?")
+    if usar_macro_manual:
+        macro.update(macro_manual)
+
 score_macro = pontuar_macro(macro)
 score_medio = round(np.mean(list(score_macro.values())), 2)
 st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}**")
@@ -859,6 +874,18 @@ ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
+with st.expander("🔬 Simular Cenários Macro"):
+    ipca_sim = st.slider("IPCA Simulado (%)", 0, 15, int(macro["ipca"] if macro["ipca"] else 5))
+    selic_sim = st.slider("Selic Simulada (%)", 0, 20, int(macro["selic"] if macro["selic"] else 10))
+    # ... outros sliders se quiser
+    if st.button("Rodar Simulação"):
+        macro_sim = macro.copy()
+        macro_sim["ipca"] = ipca_sim
+        macro_sim["selic"] = selic_sim
+        # Chame funções de sugestão de carteira usando macro_sim
+        # Exemplo: gerar_ranking_acoes(carteira, macro_sim, ...)
+
+
 
 # Utilize o valor selecionado na otimização e filtragem de ativos
 ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
@@ -932,7 +959,14 @@ if st.button("Gerar Alocação Otimizada"):
                 "Valor Alocado (R$)", "% na Carteira Final"
             ]], use_container_width=True)
 
-            
+            for i, row in df_resultado.iterrows():
+                explicacao = f"O ativo {row['ticker']} foi recomendado porque: "
+                explicacao += f"Setor {row['setor']} é favorecido em cenários de {cenario}. "
+                if row['favorecido'] > 0:
+                    explicacao += "Setor sensível a fatores macro positivos. "
+                if row['ticker'] in empresas_exportadoras and macro['dolar'] > 5:
+                    explicacao += "Exportadora favorecida por dólar alto. "
+                st.info(explicacao)
             
             # Troco do aporte
             valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
