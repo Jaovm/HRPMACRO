@@ -9,7 +9,7 @@ def obter_sensibilidade_regressao():
     macro_data = pd.DataFrame({
         'data': datas,
         'selic': np.random.normal(9, 1, len(datas)),
-        'ipca': np.random.normal(4, 0.5, len(datas)),
+        'ipca': np.random.normal(3, 0.5, len(datas)),
         'dolar': np.random.normal(5.2, 0.3, len(datas)),
         'pib': np.random.normal(2.0, 0.7, len(datas)),
         'commodities_agro': np.random.normal(9, 2, len(datas)),
