@@ -61,6 +61,10 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
                 st.warning(f"⚠️ Nenhuma coluna 'Close' ou 'Adj Close' encontrada para {setor}")
                 continue
 
+            if dados.empty:
+                st.warning(f"⚠️ Dados vazios para setor: {setor}")
+                continue
+
             dados = dados.fillna(method='ffill')
             retornos = dados.pct_change().dropna()
             media_mensal = retornos.mean(axis=1)
