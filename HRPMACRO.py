@@ -656,7 +656,7 @@ def otimizar_carteira_hrp(tickers, carteira_atual):
 
     return completar_pesos(tickers, pesos_hrp)
 
-def gerar_ranking_acoes(dados_carteira, macro, usar_pesos_macro=True):
+def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
     resultados = []
     for ticker, setor in setores_por_ticker.items():
         preco_atual = obter_preco_atual(ticker)
@@ -752,8 +752,7 @@ with st.sidebar:
 carteira = dict(zip(tickers, pesos_atuais))
 # Gerar ranking geral com base no score macro + preço alvo
 st.subheader("🏆 Ranking Geral de Ações (com base no score)")
-dados_carteira = dict(zip(tickers, pesos_atuais))
-ranking_df = gerar_ranking_acoes(dados_carteira, macro, usar_pesos_macro=True)
+ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 st.dataframe(ranking_df[["ticker", "setor", "preço atual", "preço alvo", "favorecido", "score"]], use_container_width=True)
 
 
