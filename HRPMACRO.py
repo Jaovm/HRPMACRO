@@ -569,12 +569,29 @@ def calcular_favorecimento_continuo(setor, score_macro):
 
 
 def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score):
+    # Extrair valores individuais do dicionário de pontuação
     score_macro = pontuar_macro(macro)
+    ipca = score_macro.get("inflação")
+    selic = score_macro.get("juros")
+    dolar = score_macro.get("dolar")
+    pib = score_macro.get("pib")
+
+    # Agora chama a função passando os parâmetros individuais
+    cenario = classificar_cenario_macro(ipca, selic, dolar, pib, 
+                                        preco_soja=macro.get("soja"), 
+                                        preco_milho=macro.get("milho"), 
+                                        preco_minerio=macro.get("minerio"), 
+                                        preco_petroleo=macro.get("petroleo"))
+    
+    # Exibir as pontuações e o cenário
     st.write("Pontuação por indicador:", score_macro)
     st.write("Score Total:", sum(score_macro.values()))
-    st.write("Cenário:", classificar_cenario_macro(score_macro))
+    st.write("Cenário:", cenario)
+
+    # Obter os setores válidos conforme o cenário
     setores_cidos = setores_por_cenario.get(cenario, [])
 
+    # Inicializar a lista de ativos válidos
     ativos_validos = []
     for ticker in carteira:
         setor = setores_por_ticker.get(ticker, None)
@@ -584,11 +601,10 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
         if preco_atual is None or preco_alvo is None:
             continue
 
-        setor = setores_por_ticker.get(ticker)
         favorecimento_score = calcular_favorecimento_continuo(setor, macro)
         score = calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False)
 
-
+        # Adicionar o ativo à lista de ativos válidos
         ativos_validos.append({
             "ticker": ticker,
             "setor": setor,
@@ -599,8 +615,11 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
             "favorecido": favorecimento_score
         })
 
+    # Ordenar os ativos válidos pelo score
     ativos_validos.sort(key=lambda x: x['score'], reverse=True)
+
     return ativos_validos
+
 
 # ========= OTIMIZAÇÃO ==========
 
