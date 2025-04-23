@@ -4,12 +4,13 @@ import numpy as np
 import yfinance as yf
 import statsmodels.api as sm
 from collections import defaultdict
+from time import sleep
 from dados_setoriais import setores_por_ticker
 
 
 def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salvar_csv=False):
     # Gerar dados simulados de indicadores macroeconômicos
-    datas = pd.date_range(end=pd.Timestamp.today(), periods=60, freq='ME')
+    datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='ME')
     macro_data = pd.DataFrame({
         'data': datas,
         'selic': np.random.normal(9, 1, len(datas)),
@@ -42,13 +43,12 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
     for setor, tickers in setores.items():
         try:
             st.info(f"🔄 Baixando dados para setor: {setor} → {tickers}")
-            # Remover tickers inexistentes ou delistados
             tickers_validos = validar_tickers(tickers)
             if not tickers_validos:
                 st.warning(f"⚠️ Nenhum ticker válido encontrado para setor {setor}. Ignorando.")
                 continue
 
-            dados = yf.download(tickers_validos, period="2y", interval="1mo", group_by="ticker", auto_adjust=True)
+            dados = baixar_dados_com_retentativa(tickers_validos, setor)
 
             # Verificar se os dados possuem as colunas esperadas
             if isinstance(dados.columns, pd.MultiIndex):
@@ -130,7 +130,7 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
 
 
 def validar_tickers(tickers):
-    """Valida os tickers para verificar se possuem dados disponíveis no Yahoo Finance."""
+    """Valida os tickers e verifica se possuem dados disponíveis no Yahoo Finance."""
     validos = []
     for ticker in tickers:
         try:
@@ -140,6 +140,17 @@ def validar_tickers(tickers):
         except Exception as e:
             st.warning(f"⚠️ Ticker inválido ou sem dados: {ticker} ({e})")
     return validos
+
+
+def baixar_dados_com_retentativa(tickers, setor, max_retentativas=3):
+    """Tenta baixar os dados para os tickers com retentativas em caso de falha."""
+    for tentativa in range(max_retentativas):
+        try:
+            return yf.download(tickers, period="2y", interval="1mo", group_by="ticker", auto_adjust=True)
+        except Exception as e:
+            st.warning(f"⚠️ Tentativa {tentativa + 1}/{max_retentativas} falhou para setor {setor}. ({e})")
+            sleep(5)  # Espera antes de tentar novamente
+    raise Exception(f"⚠️ Não foi possível baixar os dados para setor {setor} após {max_retentativas} tentativas.")
 
 
 def normalizar_coeficientes(coef_dict):
