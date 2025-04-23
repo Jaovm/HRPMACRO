@@ -571,6 +571,7 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
             continue
 
         setor = setores_por_ticker.get(ticker)
+        favorecimento_score = calcular_favorecimento_continuo(setor, macro)
         score = calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False)
 
 
