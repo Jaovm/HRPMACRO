@@ -23,7 +23,7 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=False, salva
     # Define quais setores usar
     setores = defaultdict(list)
     for ticker, setor in setores_por_ticker.items():
-        append(ticker).setores[setor]
+        setores[setor].append(ticker)
 
     if tickers_carteira:
         setores_ativos = {setores_por_ticker[ticker] for ticker in tickers_carteira if ticker in setores_por_ticker}
