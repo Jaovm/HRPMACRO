@@ -1097,7 +1097,22 @@ if st.button("Gerar Alocação Otimizada"):
             pesos_finais = valores_totais / valores_totais.sum()
             
             df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
+            # ... resto do código ...
+            # Exibe a tabela final
+            st.subheader("📈 Ativos Recomendados para Novo Aporte")
+            st.dataframe(df_resultado[[
+                "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
+                "Valor Alocado (R$)", "% na Carteira Final"
+            ]], use_container_width=True)
 
+            for i, row in df_resultado.iterrows():
+                explicacao = f"O ativo {row['ticker']} foi recomendado porque: "
+                explicacao += f"Setor {row['setor']} é favorecido em cenários de {cenario}. "
+                if row['favorecido'] > 0:
+                    explicacao += "Setor sensível a fatores macro positivos. "
+                if row['ticker'] in empresas_exportadoras and macro['dolar'] > 5:
+                    explicacao += "Exportadora favorecida por dólar alto. "
+                st.info(explicacao)
             tickers = list(carteira.keys())
             file_hist7 = "historico_7anos.csv"
             try:
@@ -1126,23 +1141,6 @@ if st.button("Gerar Alocação Otimizada"):
                         .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
                     )
                     st.dataframe(destaque.head(5), use_container_width=True)
-            # ... resto do código ...
-            # Exibe a tabela final
-            st.subheader("📈 Ativos Recomendados para Novo Aporte")
-            st.dataframe(df_resultado[[
-                "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
-                "Valor Alocado (R$)", "% na Carteira Final"
-            ]], use_container_width=True)
-
-            for i, row in df_resultado.iterrows():
-                explicacao = f"O ativo {row['ticker']} foi recomendado porque: "
-                explicacao += f"Setor {row['setor']} é favorecido em cenários de {cenario}. "
-                if row['favorecido'] > 0:
-                    explicacao += "Setor sensível a fatores macro positivos. "
-                if row['ticker'] in empresas_exportadoras and macro['dolar'] > 5:
-                    explicacao += "Exportadora favorecida por dólar alto. "
-                st.info(explicacao)
-            
                         
             # Troco do aporte
             valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
