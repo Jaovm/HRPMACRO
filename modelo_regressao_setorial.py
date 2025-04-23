@@ -29,24 +29,22 @@ def baixar_dados_com_retentativa(tickers, period="2y", interval="1mo", max_reten
         try:
             sleep(1)  # Aguarda 1 segundo entre as tentativas para evitar limitações
             dados = yf.download(tickers, period=period, interval=interval, group_by="ticker", auto_adjust=False)
-            
-            # Verificar se a coluna 'Adj Close' está disponível
-            if isinstance(dados.columns, pd.MultiIndex):
-                if 'Adj Close' in dados.columns.get_level_values(0):
-                    st.info("✅ Coluna 'Adj Close' encontrada no MultiIndex.")
+
+            # Verificar se os dados são válidos
+            if dados.empty:
+                st.warning(f"⚠️ Dados vazios retornados para {tickers}.")
+                continue
+
+            # Verificar se os dados são um DataFrame com colunas
+            if isinstance(dados, pd.DataFrame) and not dados.empty:
+                if 'Adj Close' in dados.columns:
+                    st.info("✅ Coluna 'Adj Close' encontrada.")
                     return dados['Adj Close']
-                else:
-                    st.warning("⚠️ A coluna 'Adj Close' não foi encontrada no retorno MultiIndex.")
-            elif 'Adj Close' in dados.columns:
-                st.info("✅ Coluna 'Adj Close' encontrada.")
-                return dados['Adj Close']
+                elif dados.shape[1] > 4:
+                    st.warning("⚠️ Tentando acessar a 5ª coluna como fallback.")
+                    return dados.iloc[:, 4]  # Acessar a 5ª coluna diretamente
 
-            # Verificar a 5ª coluna como fallback
-            if dados.shape[1] > 4:
-                st.warning("⚠️ Tentando acessar a 5ª coluna como fallback.")
-                return dados.iloc[:, 4]  # Acessar a 5ª coluna diretamente
-
-            st.error("⚠️ Nenhuma coluna 'Adj Close' ou equivalente foi encontrada.")
+            st.warning("⚠️ Dados retornados não possuem 'Adj Close' ou formato esperado.")
         except Exception as e:
             st.warning(f"⚠️ Tentativa {tentativa + 1}/{max_retentativas} falhou para tickers {tickers}. ({e})")
             sleep(5)  # Espera antes de tentar novamente
