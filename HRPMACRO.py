@@ -4,11 +4,22 @@ import numpy as np
 import yfinance as yf
 import requests
 import datetime
+import os
 from sklearn.covariance import LedoitWolf
 from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
 
+def carregar_historico_cenarios(path="historico_cenarios.csv"):
+    if os.path.exists(path):
+        return pd.read_csv(path)
+    else:
+        return pd.DataFrame(columns=[
+            "data", "cenario", "ticker", "setor", "score", "favorecido"
+        ])
+
+def salvar_historico_cenarios(df, path="historico_cenarios.csv"):
+    df.to_csv(path, index=False)
 
 # ========= DICIONÁRIOS ==========
 
@@ -913,7 +924,27 @@ usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
 # Utilize o valor selecionado na otimização e filtragem de ativos
 ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
+historico = carregar_historico_cenarios()
 
+# Monta novo registro para cada ativo válido
+hoje = datetime.datetime.now().strftime("%Y-%m-%d")
+novos_registros = []
+for ativo in ativos_validos:
+    novos_registros.append({
+        "data": hoje,
+        "cenario": cenario,
+        "ticker": ativo["ticker"],
+        "setor": ativo["setor"],
+        "score": ativo["score"],
+        "favorecido": ativo["favorecido"]
+    })
+
+# Atualiza DataFrame e salva
+if novos_registros:
+    df_novos = pd.DataFrame(novos_registros)
+    historico = pd.concat([historico, df_novos], ignore_index=True)
+    salvar_historico_cenarios(historico)
+    
 favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 if st.button("Gerar Alocação Otimizada"):
@@ -1001,6 +1032,29 @@ if st.button("Gerar Alocação Otimizada"):
 
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
+
+            st.subheader("🏅 Empresas que se destacaram em cenários similares")
+
+            if not historico.empty:
+                # Critério: cenário igual (ou, se quiser, use score-médio para "similar")
+                similares = historico[historico["cenario"] == cenario]
+                # Filtra só empresas que estão na carteira atual
+                similares = similares[similares["ticker"].isin(carteira.keys())]
+                # Média de favorecimento e score em cenários similares
+                destaque = (
+                    similares.groupby(["ticker", "setor"])
+                    .agg(media_favorecido=("favorecido", "mean"),
+                         media_score=("score", "mean"),
+                         ocorrencias=("favorecido", "count"))
+                    .reset_index()
+                    .sort_values(by=["media_favorecido", "media_score"], ascending=False)
+                )
+                if not destaque.empty:
+                    st.dataframe(destaque, use_container_width=True)
+                else:
+                    st.info("Nenhuma empresa da carteira se destacou em cenários similares no histórico.")
+            else:
+                st.info("Histórico de cenários ainda não disponível. Execute o app mais vezes para construir o histórico.")
             
 with st.expander("ℹ️ Como funciona a sugestão"):
     st.markdown("""
