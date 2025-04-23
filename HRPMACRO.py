@@ -255,33 +255,38 @@ def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
         "$format": "json",
         "$select": "Indicador,Data,DataReferencia,Media,Mediana"
     }
-    
-    response = requests.get(url, params=params)
-    if response.status_code != 200:
-        raise Exception(f"Erro ao acessar Boletim Focus ({indicador}): {response.status_code}")
-    
-    df = pd.DataFrame(response.json()["value"])
-    df = df[df["Indicador"] == indicador]
-    df = df[df["DataReferencia"].str.contains(str(ano))]
-    df = df.sort_values("Data", ascending=False)
 
-    if df.empty:
-        raise ValueError(f"Nenhum dado encontrado para {indicador} em {ano}.")
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        dados = response.json()["value"]
 
-    return df.iloc[0]["Mediana"]
+        df = pd.DataFrame(dados)
+        df = df[df["Indicador"].str.lower() == indicador.lower()]
+        df = df[df["DataReferencia"].str.contains(str(ano))]
+        df = df.sort_values("Data", ascending=False)
+
+        if df.empty:
+            raise ValueError(f"Nenhum dado encontrado para {indicador} em {ano}.")
+
+        return df.iloc[0]["Mediana"]
+    
+    except Exception as e:
+        print(f"Erro ao buscar {indicador} no Boletim Focus: {e}")
+        return None
 
 def obter_macro():
     macro = {
         "ipca": buscar_projecoes_focus("IPCA"),
-        "selic": buscar_projecoes_focus("SELIC"),
-        "pib": buscar_projecoes_focus("PIB"),
+        "selic": buscar_projecoes_focus("Selic"),
+        "pib": buscar_projecoes_focus("PIB Total"),
         "cambio": buscar_projecoes_focus("Câmbio")
     }
 
     # Preços de commodities
     macro["soja"] = obter_preco_commodity("ZS=F", nome="Soja")
     macro["milho"] = obter_preco_commodity("ZC=F", nome="Milho")
-    macro["minerio"] = obter_preco_commodity("BZ=F", nome="Minério de Ferro")  # Verifique se o ticker está correto
+    macro["minerio"] = obter_preco_commodity("BZ=F", nome="Minério de Ferro")
 
     return macro
 
