@@ -356,25 +356,25 @@ def pontuar_pib(pib):
         return max(0, 8 - (ideal - pib) * 3)
 
 
-def pontuar_soja(preco_soja):
+def pontuar_soja(soja):
     ideal = 13.0  # referência média
     desvio = abs(preco_soja - ideal)
     return max(0, 10 - desvio * 1.5)
 
 # Pontuar preço do Milho (em US$/bushel)
-def pontuar_milho(preco_milho):
+def pontuar_milho(milho):
     ideal = 5.5  # referência média
     desvio = abs(preco_milho - ideal)
     return max(0, 10 - desvio * 2)
 
 # Pontuar preço do Minério de Ferro (em US$/tonelada)
-def pontuar_minerio(preco_minerio):
+def pontuar_minerio(minerio):
     ideal = 110.0  # referência média
     desvio = abs(preco_minerio - ideal)
     return max(0, 10 - desvio * 0.1)
 
 # Pontuar preço do Petróleo Brent (em US$/barril)
-def pontuar_petroleo(preco_petroleo):
+def pontuar_petroleo(petroleo):
     ideal = 85.0  # referência média
     desvio = abs(preco_petroleo - ideal)
     return max(0, 10 - desvio * 0.2)
