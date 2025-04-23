@@ -650,7 +650,7 @@ def obter_preco_diario_ajustado(tickers):
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
 
 
-def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001):
+def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001, favorecimentos=None):
     """
     Otimiza a carteira com base no índice de Sharpe, com melhorias de robustez e controle de concentração.
     """
@@ -692,11 +692,21 @@ def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001):
         return -retorno_esperado / volatilidade if volatilidade != 0 else 0
 
     # Pesos iniciais baseados na carteira atual
-    pesos_iniciais = np.array([carteira_atual.get(t, 0.0) for t in tickers_validos])
-    pesos_iniciais = pesos_iniciais / pesos_iniciais.sum() if pesos_iniciais.sum() > 0 else np.ones(n) / n
-
-    # Limites por ativo: mínimo de 1%, máximo de 20%
-    limites = [(0.01, 0.20) for _ in range(n)]
+    # --- NOVO: usar favorecimento do cenário ---
+    if favorecimentos:
+        fav_array = np.array([max(0, favorecimentos.get(t, 0)) for t in tickers_validos])
+        # Pesos iniciais proporcionais ao favorecimento (ou uniformes se tudo zero)
+        if fav_array.sum() > 0:
+            pesos_iniciais = fav_array / fav_array.sum()
+        else:
+            pesos_iniciais = np.ones(n) / n
+        # Limite máximo 20% + até 10% extra se favorecido
+        max_limits = 0.2 + 0.1 * fav_array / (fav_array.max() if fav_array.max() > 0 else 1)
+        limites = [(0.01, float(mx)) for mx in max_limits]
+    else:
+        pesos_iniciais = np.array([carteira_atual.get(t, 0.0) for t in tickers_validos])
+        pesos_iniciais = pesos_iniciais / pesos_iniciais.sum() if pesos_iniciais.sum() > 0 else np.ones(n) / n
+        limites = [(0.01, 0.20) for _ in range(n)]
 
     # Restrição: soma dos pesos = 1
     restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
@@ -722,7 +732,7 @@ def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001):
 
 
 
-def otimizar_carteira_hrp(tickers, carteira_atual):
+def otimizar_carteira_hrp(tickers, carteira_atual, favorecimentos=None):
     """
     Otimiza a carteira com HRP, ajustando os pesos finais com base nos ativos válidos.
     """
@@ -776,10 +786,13 @@ def otimizar_carteira_hrp(tickers, carteira_atual):
     sort_ix = get_quasi_diag(linkage_matrix)
     ordered_tickers = [retornos.columns[i] for i in sort_ix]
     pesos_hrp = get_recursive_bisection(cov_df, ordered_tickers)
+
+        # --- NOVO: ajuste final pelo favorecimento ---
     if favorecimentos:
         fav_array = np.array([1 + max(0, favorecimentos.get(t, 0)) for t in pesos_hrp.index])
         pesos_hrp = pesos_hrp * fav_array
         pesos_hrp = pesos_hrp / pesos_hrp.sum()
+
 
 
     return completar_pesos(tickers, pesos_hrp)
