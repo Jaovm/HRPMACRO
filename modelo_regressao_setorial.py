@@ -3,6 +3,9 @@ import numpy as np
 import yfinance as yf
 import statsmodels.api as sm
 from collections import defaultdict
+from HRPMACRO import setores_por_ticker
+
+
 
 def obter_sensibilidade_regressao():
     datas = pd.date_range(end=pd.Timestamp.today(), periods=24, freq='M')
