@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import statsmodels.api as sm
-from collections import defaultdict
 from dados_setoriais import setores_por_ticker
 
 def filtrar_tickers_com_dados(tickers, periodo="2y", intervalo="1mo"):
@@ -38,7 +37,7 @@ def baixar_dados_validos(tickers, period="2y", interval="1mo"):
 
 def gerar_dados_simulados_para_setor(setor, n_periodos=24):
     datas = pd.date_range(end=pd.Timestamp.today(), periods=n_periodos, freq='MS')
-    simulados = pd.Series(np.random.normal(0, 0.02, n_periodos), index=datas, name=setor)
+    simulados = pd.Series(np.random.normal(0, 0.025, n_periodos), index=datas, name=setor)
     return simulados
 
 def obter_retornos_setoriais(setores, n_tickers_setor=3, periodo="2y", intervalo="1mo", n_periodos=24):
@@ -75,9 +74,9 @@ def gerar_dados_macro(periodos=24):
     }, index=datas)
     return macro_data
 
-def obter_setores_da_carteira(tickers):
+def obter_setores_a_partir_ativos(ativos_usuario):
     setores_set = set()
-    for ticker in tickers:
+    for ticker in ativos_usuario:
         setor = setores_por_ticker.get(ticker)
         if setor:
             setores_set.add(setor)
@@ -101,13 +100,17 @@ def obter_sensibilidade_regressao(tickers_carteira=None, normalizar=True, salvar
     """
     Modelo robusto de regressão setorial para uso no HRPMACRO.py.
     Sempre retorna dados para todos setores relevantes, usando simulado se necessário.
+    Os setores são filtrados a partir dos ativos inseridos pelo usuário.
     """
     n_periodos = 24
     macro_data = gerar_dados_macro(periodos=n_periodos)
     if tickers_carteira:
-        setores = obter_setores_da_carteira(tickers_carteira)
+        setores = obter_setores_a_partir_ativos(tickers_carteira)
     else:
         setores = set(setores_por_ticker.values())
+    if not setores:
+        st.warning("⚠️ Nenhum setor identificado para os ativos fornecidos.")
+        return {}
     retornos_df = obter_retornos_setoriais(setores, n_tickers_setor=3, periodo=f"{n_periodos}mo", intervalo="1mo", n_periodos=n_periodos)
     if retornos_df.empty:
         st.warning("⚠️ Nenhum dado de retorno setorial disponível para regressão setorial.")
