@@ -526,13 +526,13 @@ def classificar_cenario_macro(ipca, selic, dolar, pib,
 
     # Ajusta escala de classificação
     media_score = total_score / 7
-    if media_score >= 8:
+    if media_score >= 9:
         return "Expansão Forte"
-    elif media_score >= 6.5:
+    elif media_score >= 7:
         return "Expansão Moderada"
-    elif media_score >= 5:
+    elif media_score >= 6:
         return "Estável"
-    elif media_score >= 3.5:
+    elif media_score >= 4:
         return "Contração Moderada"
     else:
         return "Contração Forte"
