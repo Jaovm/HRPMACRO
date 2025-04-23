@@ -261,7 +261,7 @@ def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
         return None
 
     base_url = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
-    url = f"{base_url}ExpectativasMercadoTop5Anuais?$top=10000&$filter=Indicador eq '{nome_indicador}'&$format=json&$select=Indicador,Data,DataReferencia,Mediana"
+    url = f"{base_url}ExpectativasMercadoTop5Anuais?$top=100000&$filter=Indicador eq '{nome_indicador}'&$format=json&$select=Indicador,Data,DataReferencia,Mediana"
 
     try:
         response = requests.get(url)
