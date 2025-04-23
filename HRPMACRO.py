@@ -357,27 +357,25 @@ def pontuar_pib(pib):
 
 
 def pontuar_soja(soja):
-    ideal = 13.0  # referência média
-    desvio = abs(preco_soja - ideal)
+    ideal = 13.0  # referência média (US$/bushel)
+    desvio = abs(soja - ideal)
     return max(0, 10 - desvio * 1.5)
 
-# Pontuar preço do Milho (em US$/bushel)
 def pontuar_milho(milho):
-    ideal = 5.5  # referência média
-    desvio = abs(preco_milho - ideal)
+    ideal = 5.5  # referência média (US$/bushel)
+    desvio = abs(milho - ideal)
     return max(0, 10 - desvio * 2)
 
-# Pontuar preço do Minério de Ferro (em US$/tonelada)
 def pontuar_minerio(minerio):
-    ideal = 110.0  # referência média
-    desvio = abs(preco_minerio - ideal)
+    ideal = 110.0  # referência média (US$/tonelada)
+    desvio = abs(minerio - ideal)
     return max(0, 10 - desvio * 0.1)
 
-# Pontuar preço do Petróleo Brent (em US$/barril)
 def pontuar_petroleo(petroleo):
-    ideal = 85.0  # referência média
-    desvio = abs(preco_petroleo - ideal)
+    ideal = 85.0  # referência média (US$/barril)
+    desvio = abs(petroleo - ideal)
     return max(0, 10 - desvio * 0.2)
+
 
 def pontuar_macro(m):
     score = {}
@@ -390,6 +388,9 @@ def pontuar_macro(m):
     score["commodities_petroleo"] = pontuar_petroleo(m.get("petroleo"))
     return score
 
+
+def pontuar_soja_milho(soja, milho):
+    return (pontuar_soja(soja) + pontuar_milho(milho)) / 2
 
 
 # Funções para preço-alvo e preço atual
@@ -752,7 +753,17 @@ st.markdown("---")
 
 
 macro = obter_macro()
-cenario = classificar_cenario_macro(pontuar_macro(macro))
+cenario = classificar_cenario_macro(
+    ipca=macro.get("ipca"),
+    selic=macro.get("selic"),
+    dolar=macro.get("dolar"),
+    pib=macro.get("pib"),
+    preco_soja=macro.get("soja"),
+    preco_milho=macro.get("milho"),
+    preco_minerio=macro.get("minerio"),
+    preco_petroleo=macro.get("petroleo")
+)
+
 score_macro = pontuar_macro(macro)
 score_medio = round(np.mean(list(score_macro.values())), 2)
 st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}**")
