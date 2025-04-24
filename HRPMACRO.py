@@ -62,14 +62,21 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
             "ipca": macro_df.loc[data, "ipca"],
             "selic": macro_df.loc[data, "selic"],
             "dolar": macro_df.loc[data, "dolar"],
-            "petroleo": macro_df.loc[data, "petroleo"]
+            "pib": 2,
+            "petroleo": macro_df.loc[data, "petroleo"],
+            "soja": None,
+            "milho": None,
+            "minerio": None
         }
         cenario = classificar_cenario_macro(
-            ipca=macro.get("ipca"),
-            selic=macro.get("selic"),
-            dolar=macro.get("dolar"),
-            pib=2,  # Pode ajustar para histórico real se quiser
-            preco_soja=None, preco_milho=None, preco_minerio=None, preco_petroleo=macro.get("petroleo")
+            ipca=macro["ipca"],
+            selic=macro["selic"],
+            dolar=macro["dolar"],
+            pib=macro["pib"],
+            preco_soja=macro["soja"],
+            preco_milho=macro["milho"],
+            preco_minerio=macro["minerio"],
+            preco_petroleo=macro["petroleo"]
         )
         score_macro = pontuar_macro(macro)
         for ticker in tickers:
@@ -428,6 +435,8 @@ def pontuar_dolar(dolar):
 # Função para pontuar o PIB
 def pontuar_pib(pib):
     ideal = 2.0
+    if pib is None:
+        return 0
     if pib >= ideal:
         return min(10, 8 + (pib - ideal) * 2)
     else:
@@ -435,7 +444,9 @@ def pontuar_pib(pib):
 
 
 def pontuar_soja(soja):
-    ideal = 13.0  # referência média (US$/bushel)
+    if soja is None:
+        return 0
+    ideal = 13.0
     desvio = abs(soja - ideal)
     return max(0, 10 - desvio * 1.5)
 
@@ -453,7 +464,9 @@ def pontuar_petroleo(petroleo):
     ideal = 85.0  # referência média (US$/barril)
     desvio = abs(petroleo - ideal)
     return max(0, 10 - desvio * 0.2)
-
+    
+def pontuar_soja_milho(soja, milho):
+    return (pontuar_soja(soja) + pontuar_milho(milho)) / 2
 
 def pontuar_macro(m):
     score = {}
@@ -467,8 +480,7 @@ def pontuar_macro(m):
     return score
 
 
-def pontuar_soja_milho(soja, milho):
-    return (pontuar_soja(soja) + pontuar_milho(milho)) / 2
+
 
 
 # Funções para preço-alvo e preço atual
