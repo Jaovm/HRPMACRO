@@ -35,16 +35,20 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
     hoje = datetime.date.today()
     inicio = pd.to_datetime(start)
     final = hoje
-    datas = pd.date_range(inicio, final, freq='M')
-
+    datas = pd.date_range(inicio, final, freq='M').normalize()
+    
     # Baixar séries macro históricas do BCB
     selic_hist = get_bcb_hist(432, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
     ipca_hist = get_bcb_hist(433, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
     dolar_hist = get_bcb_hist(1, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
-    # Petróleo
     petroleo_hist = obter_preco_petroleo_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
-
-    # Preencher e alinhar datas
+    
+    # Normalizar todos os índices para garantir compatibilidade
+    selic_hist.index = pd.to_datetime(selic_hist.index).normalize()
+    ipca_hist.index = pd.to_datetime(ipca_hist.index).normalize()
+    dolar_hist.index = pd.to_datetime(dolar_hist.index).normalize()
+    petroleo_hist.index = pd.to_datetime(petroleo_hist.index).normalize()
+    
     macro_df = pd.DataFrame(index=datas)
     macro_df['selic'] = selic_hist.reindex(datas, method='ffill')
     macro_df['ipca'] = ipca_hist.reindex(datas, method='ffill')
