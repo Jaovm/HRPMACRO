@@ -866,7 +866,22 @@ def otimizar_carteira_hrp(tickers, carteira_atual, favorecimentos=None):
 
     return completar_pesos(tickers, pesos_hrp)
 
+historico_7anos = montar_historico_7anos(
+    tickers=list(setores_por_ticker.keys()),
+    setores_por_ticker=setores_por_ticker,
+    start='2018-01-01'
+)
 
+cenario_atual = classificar_cenario_macro(
+    ipca=macro.get("ipca"),
+    selic=macro.get("selic"),
+    dolar=macro.get("dolar"),
+    pib=macro.get("pib"),
+    preco_soja=macro.get("soja"),
+    preco_milho=macro.get("milho"),
+    preco_minerio=macro.get("minerio"),
+    preco_petroleo=macro.get("petroleo")
+)
 
 
 
@@ -1062,18 +1077,21 @@ if st.button("Gerar Alocação Otimizada"):
                 st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
                 # ---- Top 5 empresas destaque histórico ---
-                if not df_validos.empty:
-                    destaque = (
-                        df_validos.groupby(["ticker", "setor"])
+# Filtrar histórico para cenários iguais ao atual
+                historico_cenario = historico_7anos[historico_7anos["cenario"] == cenario_atual]
+                
+                if not historico_cenario.empty:
+                    destaque_hist = (
+                        historico_cenario.groupby(["ticker", "setor"])
                         .agg(media_favorecido=("favorecido", "mean"),
                              ocorrencias=("favorecido", "count"))
                         .reset_index()
                         .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
                     )
-                    st.subheader("🏅 Top 5 empresas que mais se destacaram neste aporte")
-                    st.dataframe(destaque.head(5), use_container_width=True)
+                    st.subheader(f"🏅 Top 5 empresas que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
+                    st.dataframe(destaque_hist.head(5), use_container_width=True)
                 else:
-                    st.info("Sem dados de destaque para exibir neste aporte.")
+                    st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
 
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
