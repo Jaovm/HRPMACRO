@@ -1159,8 +1159,7 @@ if st.button("Gerar Alocação Otimizada"):
 
                 # ---- Top 5 empresas destaque histórico ---
 # Filtrar histórico para cenários iguais ao atual
-                historico_cenario = historico_7anos[historico_7anos["cenario"] == cenario_atual]
-                
+                historico_cenario = historico_7anos[historico_7anos["cenario"] == cenario_atual]  
                 if not historico_cenario.empty:
                     destaque_hist = (
                         historico_cenario.groupby(["ticker", "setor"])
@@ -1169,7 +1168,10 @@ if st.button("Gerar Alocação Otimizada"):
                         .reset_index()
                         .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
                     )
-                    st.subheader(f"🏅 Top 100 empresas que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
+                    # Filtrar apenas empresas presentes na carteira recomendada (peso otimizado > 0)
+                    tickers_carteira = set(df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"])
+                    destaque_hist = destaque_hist[destaque_hist["ticker"].isin(tickers_carteira)]
+                    st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
                     st.dataframe(destaque_hist.head(100), use_container_width=True)
                 else:
                     st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
