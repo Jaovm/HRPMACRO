@@ -900,6 +900,14 @@ def otimizar_carteira_hrp(tickers, carteira_atual, favorecimentos=None):
         df_historico = pd.DataFrame(historico)
         df_historico.to_csv("historico_7anos.csv", index=False)
 
+
+def carregar_historico_cenarios():
+    import os
+    if os.path.exists("historico_cenarios.csv"):
+        return pd.read_csv("historico_cenarios.csv")
+    else:
+        return pd.DataFrame()
+
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 st.title("📊 Sugestão e Otimização de Carteira: Cenário Projetado")
