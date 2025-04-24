@@ -912,36 +912,60 @@ cenario_atual = classificar_cenario_macro(
 def calcular_cagr(valor_final, valor_inicial, anos):
     return (valor_final / valor_inicial) ** (1 / anos) - 1
 
+def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2018-01-01'):
+    # Download dos dados ajustados e normais dos ativos
+    df_adj = yf.download(tickers, start=start_date, auto_adjust=True, progress=False)['Close']
+    df_close = yf.download(tickers, start=start_date, auto_adjust=False, progress=False)['Close']
 
-def backtest_portfolio_vs_ibov(tickers, pesos, start_date='2018-01-01'):
-    # Baixar histórico dos ativos
-    df_prices = yf.download(tickers, start=start_date, auto_adjust=True, progress=False)['Close']
-    df_prices = df_prices.ffill().dropna()
-    
-    # Baixar histórico do IBOV
-    ibov = yf.download('^BVSP', start=start_date, auto_adjust=True, progress=False)['Close']
-    ibov = ibov.ffill().dropna()
-    
+    df_adj = df_adj.ffill().dropna()
+    df_close = df_close.ffill().dropna()
+
+    # Download do IBOV ajustado e normal
+    ibov_adj = yf.download('^BVSP', start=start_date, auto_adjust=True, progress=False)['Close']
+    ibov_close = yf.download('^BVSP', start=start_date, auto_adjust=False, progress=False)['Close']
+
+    ibov_adj = ibov_adj.ffill().dropna()
+    ibov_close = ibov_close.ffill().dropna()
+
     # Alinhar datas
-    common_index = df_prices.index.intersection(ibov.index)
-    df_prices = df_prices.loc[common_index]
-    ibov = ibov.loc[common_index]
-    
-    # Normalizar valores iniciais
-    df_prices = df_prices / df_prices.iloc[0]
-    ibov = ibov / ibov.iloc[0]
+    idx = df_adj.index.intersection(df_close.index).intersection(ibov_adj.index).intersection(ibov_close.index)
+    df_adj, df_close = df_adj.loc[idx], df_close.loc[idx]
+    ibov_adj, ibov_close = ibov_adj.loc[idx], ibov_close.loc[idx]
 
-    # Calcula portfólio (buy & hold dos pesos atuais)
-    # Ajusta tamanho dos pesos se necessário
+    # Normalizar valores iniciais
+    df_adj_norm = df_adj / df_adj.iloc[0]
+    df_close_norm = df_close / df_close.iloc[0]
+    ibov_adj_norm = ibov_adj / ibov_adj.iloc[0]
+    ibov_close_norm = ibov_close / ibov_close.iloc[0]
+
+    # Pesos
     pesos = np.array(pesos)
-    if len(pesos) != df_prices.shape[1]:
-        pesos = np.ones(df_prices.shape[1]) / df_prices.shape[1]
-    portfolio = (df_prices * pesos).sum(axis=1)
-    
-    # Plot
-    fig, ax = plt.subplots(figsize=(10,5))
-    portfolio.plot(ax=ax, label='Carteira Recomendada')
-    ibov.plot(ax=ax, label='IBOV')
+    if len(pesos) != df_adj.shape[1]:
+        pesos = np.ones(df_adj.shape[1]) / df_adj.shape[1]
+
+    # Carteira ajustada e normal
+    port_adj = (df_adj_norm * pesos).sum(axis=1)
+    port_close = (df_close_norm * pesos).sum(axis=1)
+
+    # Cálculo do CAGR
+    anos = (port_adj.index[-1] - port_adj.index[0]).days / 365.25
+    cagr_port_adj = calcular_cagr(port_adj.iloc[-1], port_adj.iloc[0], anos)
+    cagr_port_close = calcular_cagr(port_close.iloc[-1], port_close.iloc[0], anos)
+    cagr_ibov_adj = calcular_cagr(ibov_adj_norm.iloc[-1], ibov_adj_norm.iloc[0], anos)
+    cagr_ibov_close = calcular_cagr(ibov_close_norm.iloc[-1], ibov_close_norm.iloc[0], anos)
+
+    # Exibir resultados
+    st.markdown(f"**CAGR Carteira Recomendada (Ajustado):** {100*cagr_port_adj:.2f}% ao ano")
+    st.markdown(f"**CAGR Carteira Recomendada (Close):** {100*cagr_port_close:.2f}% ao ano")
+    st.markdown(f"**CAGR IBOV (Ajustado):** {100*cagr_ibov_adj:.2f}% ao ano")
+    st.markdown(f"**CAGR IBOV (Close):** {100*cagr_ibov_close:.2f}% ao ano")
+
+    # Plotar
+    fig, ax = plt.subplots(figsize=(10, 6))
+    port_adj.plot(ax=ax, label='Carteira Recomendada (Ajustado)')
+    port_close.plot(ax=ax, label='Carteira Recomendada (Close)')
+    ibov_adj_norm.plot(ax=ax, label='IBOV (Ajustado)')
+    ibov_close_norm.plot(ax=ax, label='IBOV (Close)')
     ax.set_title('Backtest: Carteira Recomendada vs IBOV (7 anos)')
     ax.set_ylabel('Retorno acumulado')
     ax.set_xlabel('Ano')
@@ -1158,14 +1182,13 @@ if st.button("Gerar Alocação Otimizada"):
                     st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
 
                 # Backtest: Carteira Recomendada vs IBOV
-                # Backtest: Carteira Recomendada vs IBOV
-                st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos)")
+                st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos) — Ajustado e Close")
                 
                 tickers_validos = df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"].tolist()
                 pesos_otimizados = df_resultado[df_resultado["peso_otimizado"] > 0]["peso_otimizado"].values
                 
                 if len(tickers_validos) >= 2:
-                    backtest_portfolio_vs_ibov(tickers_validos, pesos_otimizados)
+                    backtest_portfolio_vs_ibov_duplo(tickers_validos, pesos_otimizados)
                 else:
                     st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
 
