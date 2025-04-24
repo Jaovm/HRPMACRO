@@ -31,8 +31,7 @@ def obter_preco_petroleo_hist(start, end):
     return pd.Series(dtype=float)
 
 def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
-    """Gera ou atualiza historico_7anos.csv automaticamente dentro do app."""
-    file_hist = "historico_7anos.csv"
+    """Gera DataFrame de histórico dos últimos 7 anos (em memória, sem salvar em CSV)."""
     hoje = datetime.date.today()
     inicio = pd.to_datetime(start)
     final = hoje
@@ -53,14 +52,19 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
     macro_df['petroleo'] = petroleo_hist.reindex(datas, method='ffill')
     macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
 
-    # Monta histórico
-
-        # Funções do seu script:
+    historico = []
+    for data in datas:
+        macro = {
+            "ipca": macro_df.loc[data, "ipca"],
+            "selic": macro_df.loc[data, "selic"],
+            "dolar": macro_df.loc[data, "dolar"],
+            "petroleo": macro_df.loc[data, "petroleo"]
+        }
         cenario = classificar_cenario_macro(
             ipca=macro.get("ipca"),
             selic=macro.get("selic"),
             dolar=macro.get("dolar"),
-            pib=2,  # PIB fixo (pode integrar histórico se quiser)
+            pib=2,  # PIB fixo (ou pode calcular histórico)
             preco_soja=None, preco_milho=None, preco_minerio=None, preco_petroleo=macro.get("petroleo")
         )
         score_macro = pontuar_macro(macro)
@@ -75,7 +79,6 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
                 "favorecido": favorecido
             })
     df_hist = pd.DataFrame(historico)
-    df_hist.to_csv(file_hist, index=False)
     return df_hist
 
 # ========= DICIONÁRIOS ==========
