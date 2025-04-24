@@ -31,7 +31,7 @@ def obter_preco_petroleo_hist(start, end):
     return pd.Series(dtype=float)
 
 def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
-    """Gera DataFrame de histórico dos últimos 7 anos (em memória, sem salvar em CSV)."""
+    """Gera histórico dos últimos 7 anos (em memória, sem salvar em CSV)."""
     hoje = datetime.date.today()
     inicio = pd.to_datetime(start)
     final = hoje
@@ -41,7 +41,7 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
     selic_hist = get_bcb_hist(432, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
     ipca_hist = get_bcb_hist(433, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
     dolar_hist = get_bcb_hist(1, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
-    # Petroleo
+    # Petróleo
     petroleo_hist = obter_preco_petroleo_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
 
     # Preencher e alinhar datas
@@ -64,7 +64,7 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
             ipca=macro.get("ipca"),
             selic=macro.get("selic"),
             dolar=macro.get("dolar"),
-            pib=2,  # PIB fixo (ou pode calcular histórico)
+            pib=2,  # Pode ajustar para histórico real se quiser
             preco_soja=None, preco_milho=None, preco_minerio=None, preco_petroleo=macro.get("petroleo")
         )
         score_macro = pontuar_macro(macro)
@@ -1061,8 +1061,7 @@ if st.button("Gerar Alocação Otimizada"):
                 st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
                 st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
-                # ---- Top 5 empresas destaque histórico ----
-                df_novos = pd.DataFrame(novos_registros)
+                # ---- Top 5 empresas destaque histórico ---
                 if not df_validos.empty:
                     destaque = (
                         df_validos.groupby(["ticker", "setor"])
