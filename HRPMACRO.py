@@ -909,58 +909,51 @@ cenario_atual = classificar_cenario_macro(
 )
 
 
+import matplotlib.pyplot as plt
+
 def calcular_cagr(valor_final, valor_inicial, anos):
     return (valor_final / valor_inicial) ** (1 / anos) - 1
 
 def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2018-01-01'):
-    # Download dos dados ajustados e normais dos ativos
     df_adj = yf.download(tickers, start=start_date, auto_adjust=True, progress=False)['Close']
     df_close = yf.download(tickers, start=start_date, auto_adjust=False, progress=False)['Close']
 
     df_adj = df_adj.ffill().dropna()
     df_close = df_close.ffill().dropna()
 
-    # Download do IBOV ajustado e normal
     ibov_adj = yf.download('^BVSP', start=start_date, auto_adjust=True, progress=False)['Close']
     ibov_close = yf.download('^BVSP', start=start_date, auto_adjust=False, progress=False)['Close']
 
     ibov_adj = ibov_adj.ffill().dropna()
     ibov_close = ibov_close.ffill().dropna()
 
-    # Alinhar datas
     idx = df_adj.index.intersection(df_close.index).intersection(ibov_adj.index).intersection(ibov_close.index)
     df_adj, df_close = df_adj.loc[idx], df_close.loc[idx]
     ibov_adj, ibov_close = ibov_adj.loc[idx], ibov_close.loc[idx]
 
-    # Normalizar valores iniciais
     df_adj_norm = df_adj / df_adj.iloc[0]
     df_close_norm = df_close / df_close.iloc[0]
     ibov_adj_norm = ibov_adj / ibov_adj.iloc[0]
     ibov_close_norm = ibov_close / ibov_close.iloc[0]
 
-    # Pesos
     pesos = np.array(pesos)
     if len(pesos) != df_adj.shape[1]:
         pesos = np.ones(df_adj.shape[1]) / df_adj.shape[1]
 
-    # Carteira ajustada e normal
     port_adj = (df_adj_norm * pesos).sum(axis=1)
     port_close = (df_close_norm * pesos).sum(axis=1)
 
-    # Cálculo do CAGR
     anos = (port_adj.index[-1] - port_adj.index[0]).days / 365.25
-    cagr_port_adj = calcular_cagr(port_adj.iloc[-1], port_adj.iloc[0], anos)
-    cagr_port_close = calcular_cagr(port_close.iloc[-1], port_close.iloc[0], anos)
-    cagr_ibov_adj = calcular_cagr(ibov_adj_norm.iloc[-1], ibov_adj_norm.iloc[0], anos)
-    cagr_ibov_close = calcular_cagr(ibov_close_norm.iloc[-1], ibov_close_norm.iloc[0], anos)
+    cagr_port_adj = calcular_cagr(float(port_adj.iloc[-1]), float(port_adj.iloc[0]), anos)
+    cagr_port_close = calcular_cagr(float(port_close.iloc[-1]), float(port_close.iloc[0]), anos)
+    cagr_ibov_adj = calcular_cagr(float(ibov_adj_norm.iloc[-1]), float(ibov_adj_norm.iloc[0]), anos)
+    cagr_ibov_close = calcular_cagr(float(ibov_close_norm.iloc[-1]), float(ibov_close_norm.iloc[0]), anos)
 
-    # Exibir resultados
-    st.markdown(f"**CAGR Carteira Recomendada (Ajustado):** {100*cagr_port_adj:.2f}% ao ano")
-    st.markdown(f"**CAGR Carteira Recomendada (Close):** {100*cagr_port_close:.2f}% ao ano")
-    st.markdown(f"**CAGR IBOV (Ajustado):** {100*cagr_ibov_adj:.2f}% ao ano")
-    st.markdown(f"**CAGR IBOV (Close):** {100*cagr_ibov_close:.2f}% ao ano")
+    st.markdown(f"**CAGR Carteira Recomendada (Ajustado):** {100*float(cagr_port_adj):.2f}% ao ano")
+    st.markdown(f"**CAGR Carteira Recomendada (Close):** {100*float(cagr_port_close):.2f}% ao ano")
+    st.markdown(f"**CAGR IBOV (Ajustado):** {100*float(cagr_ibov_adj):.2f}% ao ano")
+    st.markdown(f"**CAGR IBOV (Close):** {100*float(cagr_ibov_close):.2f}% ao ano")
 
-    # Plotar
     fig, ax = plt.subplots(figsize=(10, 6))
     port_adj.plot(ax=ax, label='Carteira Recomendada (Ajustado)')
     port_close.plot(ax=ax, label='Carteira Recomendada (Close)')
