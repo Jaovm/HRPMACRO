@@ -1112,8 +1112,8 @@ if st.button("Gerar Alocação Otimizada"):
                         .reset_index()
                         .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
                     )
-                    st.subheader(f"🏅 Top 5 empresas que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
-                    st.dataframe(destaque_hist.head(5), use_container_width=True)
+                    st.subheader(f"🏅 Top 20 empresas que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
+                    st.dataframe(destaque_hist.head(20), use_container_width=True)
                 else:
                     st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
 
