@@ -407,61 +407,69 @@ def obter_preco_petroleo():
 # Funções de pontuação individual
 
 def pontuar_ipca(ipca):
+    if ipca is None or pd.isna(ipca):
+        return 0
     meta = 3.0
     tolerancia = 1.5
     if meta - tolerancia <= ipca <= meta + tolerancia:
         return 10
     elif ipca < meta - tolerancia:
-        return 7  # inflação baixa (risco de deflação)
+        return 7
     else:
         return max(0, 10 - (ipca - (meta + tolerancia)) * 2)
 
-# Função para pontuar a Selic
 def pontuar_selic(selic):
+    if selic is None or pd.isna(selic):
+        return 0
     neutra = 9.0
     if selic == neutra:
         return 10
     elif selic < neutra:
-        return max(5, 10 - (neutra - selic) * 1.5)  # juros estimulativos
+        return max(5, 10 - (neutra - selic) * 1.5)
     else:
-        return max(0, 10 - (selic - neutra) * 1.5)  # juros contracionistas
+        return max(0, 10 - (selic - neutra) * 1.5)
 
-# Função para pontuar o Câmbio
 def pontuar_dolar(dolar):
+    if dolar is None or pd.isna(dolar):
+        return 0
     ideal = 5.90
     desvio = abs(dolar - ideal)
     return max(0, 10 - desvio * 2)
 
-# Função para pontuar o PIB
 def pontuar_pib(pib):
-    ideal = 2.0
-    if pib is None:
+    if pib is None or pd.isna(pib):
         return 0
+    ideal = 2.0
     if pib >= ideal:
         return min(10, 8 + (pib - ideal) * 2)
     else:
         return max(0, 8 - (ideal - pib) * 3)
 
-
 def pontuar_soja(soja):
-    if soja is None:
+    if soja is None or pd.isna(soja):
         return 0
     ideal = 13.0
     desvio = abs(soja - ideal)
     return max(0, 10 - desvio * 1.5)
 
 def pontuar_milho(milho):
-    ideal = 5.5  # referência média (US$/bushel)
+    if milho is None or pd.isna(milho):
+        return 0
+    ideal = 5.5
     desvio = abs(milho - ideal)
     return max(0, 10 - desvio * 2)
 
 def pontuar_minerio(minerio):
-    ideal = 110.0  # referência média (US$/tonelada)
+    if minerio is None or pd.isna(minerio):
+        return 0
+    ideal = 110.0
     desvio = abs(minerio - ideal)
     return max(0, 10 - desvio * 0.1)
 
 def pontuar_petroleo(petroleo):
-    ideal = 85.0  # referência média (US$/barril)
+    if petroleo is None or pd.isna(petroleo):
+        return 0
+    ideal = 85.0
     desvio = abs(petroleo - ideal)
     return max(0, 10 - desvio * 0.2)
     
