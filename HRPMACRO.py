@@ -54,14 +54,7 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
     macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
 
     # Monta histórico
-    historico = []
-    for data, row in macro_df.iterrows():
-        macro = {
-            "ipca": row['ipca'],
-            "selic": row['selic'],
-            "dolar": row['dolar'],
-            "petroleo": row.get('petroleo', None),
-        }
+
         # Funções do seu script:
         cenario = classificar_cenario_macro(
             ipca=macro.get("ipca"),
@@ -870,45 +863,9 @@ def otimizar_carteira_hrp(tickers, carteira_atual, favorecimentos=None):
 
     return completar_pesos(tickers, pesos_hrp)
 
-    def montar_historico_sete_anos(tickers, setores_por_ticker, setores_por_cenario):
-        historico = []
-        hoje = datetime.date.today()
-        inicio = hoje - datetime.timedelta(days=365*7)
-        datas = pd.date_range(inicio, hoje, freq='M')
-        for data in datas:
-            macro = obter_macro_em_data(data)  # Você precisa adaptar para pegar macro de cada mês
-            cenario = classificar_cenario_macro(
-                ipca=macro.get("ipca"),
-                selic=macro.get("selic"),
-                dolar=macro.get("dolar"),
-                pib=macro.get("pib"),
-                preco_soja=macro.get("soja"),
-                preco_milho=macro.get("milho"),
-                preco_minerio=macro.get("minerio"),
-                preco_petroleo=macro.get("petroleo"))
-            score_macro = pontuar_macro(macro)
-            for ticker in tickers:
-                setor = setores_por_ticker.get(ticker, None)
-                favorecido = calcular_favorecimento_continuo(setor, score_macro)
-                historico.append({
-                    "data": str(data.date()),
-                    "cenario": cenario,
-                    "ticker": ticker,
-                    "setor": setor,
-                    "favorecido": favorecido
-                })
-        df_historico = pd.DataFrame(historico)
-        df_historico.to_csv("historico_7anos.csv", index=False)
 
 
-def carregar_historico_cenarios(caminho="historico_cenarios.csv"):
-    if os.path.exists(caminho):
-        return pd.read_csv(caminho)
-    else:
-        return pd.DataFrame()
 
-def salvar_historico_cenarios(historico, caminho="historico_cenarios.csv"):
-    historico.to_csv(caminho, index=False)
 
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
@@ -1030,27 +987,9 @@ favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
-    historico = carregar_historico_cenarios()
-
-    # Monta novo registro para cada ativo válido
-    hoje = datetime.datetime.now().strftime("%Y-%m-%d")
-    novos_registros = []
-    for ativo in ativos_validos:
-        novos_registros.append({
-            "data": hoje,
-            "cenario": cenario,
-            "ticker": ativo["ticker"],
-            "setor": ativo["setor"],
-            "score": ativo["score"],
-            "favorecido": ativo["favorecido"]
-        })
     
-    # Atualiza DataFrame e salva, evitando warning do pandas
-    df_novos = pd.DataFrame(novos_registros)
-    if not df_novos.empty:
-        historico = pd.concat([historico, df_novos], ignore_index=True)
-        salvar_historico_cenarios(historico)
 
+    
     if not ativos_validos:
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
     else:
@@ -1120,33 +1059,19 @@ if st.button("Gerar Alocação Otimizada"):
                 st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
                 # ---- Top 5 empresas destaque histórico ----
-                file_hist7 = "historico_7anos.csv"
-                try:
-                    historico_7anos = pd.read_csv(file_hist7)
-                except FileNotFoundError:
-                    st.info("O histórico dos últimos 7 anos ainda não foi gerado.")
-                    historico_7anos = pd.DataFrame()
-
-                st.subheader("🏅 Top 5 empresas que mais se destacaram em cenários similares nos últimos 7 anos")
-
-                if historico_7anos.empty:
-                    st.info("Sem dados históricos para exibir. Rode o app novamente, ou confira conexão.")
+                df_novos = pd.DataFrame(novos_registros)
+                if not df_validos.empty:
+                    destaque = (
+                        df_validos.groupby(["ticker", "setor"])
+                        .agg(media_favorecido=("favorecido", "mean"),
+                             ocorrencias=("favorecido", "count"))
+                        .reset_index()
+                        .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
+                    )
+                    st.subheader("🏅 Top 5 empresas que mais se destacaram neste aporte")
+                    st.dataframe(destaque.head(5), use_container_width=True)
                 else:
-                    similares = historico_7anos[
-                        (historico_7anos["cenario"] == cenario) &
-                        (historico_7anos["ticker"].isin(carteira.keys()))
-                    ]
-                    if similares.empty:
-                        st.info("Nenhum destaque histórico para esse cenário e carteira nos últimos 7 anos.")
-                    else:
-                        destaque = (
-                            similares.groupby(["ticker", "setor"])
-                            .agg(media_favorecido=("favorecido", "mean"),
-                                 ocorrencias=("favorecido", "count"))
-                            .reset_index()
-                            .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
-                        )
-                        st.dataframe(destaque.head(5), use_container_width=True)
+                    st.info("Sem dados de destaque para exibir neste aporte.")
 
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
