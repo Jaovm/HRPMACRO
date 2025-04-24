@@ -377,8 +377,6 @@ def obter_macro():
         "minerio": obter_preco_commodity("BZ=F", nome="Minério de Ferro")
     
     }
-
-
     return macro
 
 
@@ -889,6 +887,8 @@ def otimizar_carteira_hrp(tickers, carteira_atual, favorecimentos=None):
         pesos_hrp = pesos_hrp / pesos_hrp.sum()
 
     return completar_pesos(tickers, pesos_hrp)
+
+macro = obter_macro()
 
 historico_7anos = montar_historico_7anos(
     tickers=list(setores_por_ticker.keys()),
