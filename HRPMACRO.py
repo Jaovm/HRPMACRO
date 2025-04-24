@@ -909,6 +909,8 @@ cenario_atual = classificar_cenario_macro(
 )
 
 
+def calcular_cagr(valor_final, valor_inicial, anos):
+    return (valor_final / valor_inicial) ** (1 / anos) - 1
 
 
 def backtest_portfolio_vs_ibov(tickers, pesos, start_date='2018-01-01'):
@@ -1156,9 +1158,9 @@ if st.button("Gerar Alocação Otimizada"):
                     st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
 
                 # Backtest: Carteira Recomendada vs IBOV
+                # Backtest: Carteira Recomendada vs IBOV
                 st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos)")
                 
-                # Obter tickers e pesos otimizados usados para o novo aporte
                 tickers_validos = df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"].tolist()
                 pesos_otimizados = df_resultado[df_resultado["peso_otimizado"] > 0]["peso_otimizado"].values
                 
@@ -1166,7 +1168,6 @@ if st.button("Gerar Alocação Otimizada"):
                     backtest_portfolio_vs_ibov(tickers_validos, pesos_otimizados)
                 else:
                     st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
-
 
 
         except Exception as e:
