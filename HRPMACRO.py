@@ -610,18 +610,18 @@ def classificar_cenario_macro(ipca, selic, dolar, pib,
         if preco is not None:
             total_score += func(preco)
 
-    # ESCALA AJUSTADA:
-    if total_score >= 37:
+
+    # ESCALA MAIS NATURAL E ROBUSTA:
+    if total_score >= 38:
         return "Expansão Forte"
     elif total_score >= 35:
         return "Expansão Moderada"
-    elif total_score >= 33:
+    elif total_score >= 32:
         return "Estável"
-    elif total_score >= 31:
+    elif total_score >= 28:
         return "Contração Moderada"
     else:
         return "Contração Forte"
-
 
 
 
