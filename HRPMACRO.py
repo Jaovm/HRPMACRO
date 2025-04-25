@@ -502,7 +502,12 @@ def pontuar_macro(m):
     return score
 
 
-
+def calcular_favorecimento_continuo(setor, score_macro):
+    if setor not in sensibilidade_setorial:
+        return 0
+    sens = sensibilidade_setorial[setor]
+    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
+    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
 
 
 # Funções para preço-alvo e preço atual
@@ -723,12 +728,7 @@ retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, seto
 # sensibilidade_setorial é gerada automaticamente e calibrada:
 sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
 
-def calcular_favorecimento_continuo(setor, score_macro):
-    if setor not in sensibilidade_setorial:
-        return 0
-    sens = sensibilidade_setorial[setor]
-    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
-    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
+
 
 
     
