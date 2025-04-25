@@ -1180,7 +1180,7 @@ if st.button("Gerar Alocação Otimizada"):
 
                 # ---- Top 5 empresas destaque histórico ---
 # Filtrar histórico para cenários iguais ao atual
-                historico_cenario = historico_7anos[historico_7anos["cenario"] == cenario_atual]  
+                historico_cenario = historico_7anos[historico_7anos["cenario"] == cenario]  
                 if not historico_cenario.empty:
                     destaque_hist = (
                         historico_cenario.groupby(["ticker", "setor"])
