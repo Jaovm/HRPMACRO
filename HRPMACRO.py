@@ -12,6 +12,73 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
 
+def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01'):
+    # 1. Baixar preços ajustados diários
+    df_prices = obter_preco_diario_ajustado(tickers)
+    df_prices = df_prices.ffill().bfill()
+
+    # 2. Gerar retornos logarítmicos mensais
+    df_prices_monthly = df_prices.resample('M').last()
+    df_returns = np.log(df_prices_monthly / df_prices_monthly.shift(1)).dropna()
+
+    # 3. Retorno médio mensal por setor
+    df_setores = pd.DataFrame({t: setores_por_ticker.get(t, None) for t in df_returns.columns}, index=df_returns.columns, columns=["setor"])
+    retorno_setorial = df_returns.groupby(df_setores["setor"], axis=1).mean()
+
+    # 4. Fatores macro: ajuste nomes conforme suas colunas reais!
+    # O macro_df deve ser mensal, indexado por data, e ter as colunas abaixo:
+    macro_df = macro_df.reindex(retorno_setorial.index).ffill().bfill()
+    fatores_macro = macro_df.rename(columns={
+        'selic': 'juros',
+        'ipca': 'inflação',
+        'dolar': 'dolar',
+        'pib': 'pib',
+        'petroleo': 'commodities_petroleo',
+        'soja': 'commodities_agro',      # Use a média de soja/milho se preferir!
+        'milho': 'commodities_agro',     # Alternativamente, crie uma coluna média: macro_df["commodities_agro"] = (macro_df["soja"] + macro_df["milho"])/2
+        'minerio': 'commodities_minerio'
+    })
+    # Se quiser usar a média de soja/milho, faça:
+    # fatores_macro["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
+    fatores_macro = fatores_macro[[
+        'juros', 'inflação', 'dolar', 'pib',
+        'commodities_agro', 'commodities_minerio', 'commodities_petroleo'
+    ]]
+
+    return retorno_setorial, fatores_macro
+
+def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
+    setores = retorno_setorial.columns
+    fatores = fatores_macro.columns
+    sens_dict = {}
+    for setor in setores:
+        y = retorno_setorial[setor].values
+        X = fatores_macro.values
+        mask = ~np.isnan(y) & ~np.any(np.isnan(X), axis=1)
+        if mask.sum() < 12:  # mínimo de 1 ano de dados
+            continue
+        reg = LinearRegression().fit(X[mask], y[mask])
+        # Normaliza os coeficientes para soma (abs) = 1 (opcional)
+        coefs = reg.coef_ / np.sum(np.abs(reg.coef_)) if np.sum(np.abs(reg.coef_)) > 0 else reg.coef_
+        sens_dict[setor] = dict(zip(fatores, coefs))
+    return sens_dict
+
+# ... depois de montar macro_df e de definir setores_por_ticker
+
+tickers = list(setores_por_ticker.keys())
+
+# Se você já tem macro_df pronto (veja no montar_historico_7anos), use:
+macro_df = montar_historico_7anos(
+    tickers=list(setores_por_ticker.keys()),
+    setores_por_ticker=setores_por_ticker,
+    start='2018-01-01'
+)
+# Se macro_df não for retornado, ajuste a função para retornar macro_df junto com df_hist.
+
+# Monte os dataframes para regressão:
+retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
+# sensibilidade_setorial é gerada automaticamente e calibrada:
+sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
 
 def calcular_favorecimento_continuo(setor, score_macro):
     if setor not in sensibilidade_setorial:
@@ -661,76 +728,11 @@ def completar_pesos(tickers_originais, pesos_calculados):
     return pesos_completos
 
 
-def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01'):
-    # 1. Baixar preços ajustados diários
-    df_prices = obter_preco_diario_ajustado(tickers)
-    df_prices = df_prices.ffill().bfill()
 
-    # 2. Gerar retornos logarítmicos mensais
-    df_prices_monthly = df_prices.resample('M').last()
-    df_returns = np.log(df_prices_monthly / df_prices_monthly.shift(1)).dropna()
-
-    # 3. Retorno médio mensal por setor
-    df_setores = pd.DataFrame({t: setores_por_ticker.get(t, None) for t in df_returns.columns}, index=df_returns.columns, columns=["setor"])
-    retorno_setorial = df_returns.groupby(df_setores["setor"], axis=1).mean()
-
-    # 4. Fatores macro: ajuste nomes conforme suas colunas reais!
-    # O macro_df deve ser mensal, indexado por data, e ter as colunas abaixo:
-    macro_df = macro_df.reindex(retorno_setorial.index).ffill().bfill()
-    fatores_macro = macro_df.rename(columns={
-        'selic': 'juros',
-        'ipca': 'inflação',
-        'dolar': 'dolar',
-        'pib': 'pib',
-        'petroleo': 'commodities_petroleo',
-        'soja': 'commodities_agro',      # Use a média de soja/milho se preferir!
-        'milho': 'commodities_agro',     # Alternativamente, crie uma coluna média: macro_df["commodities_agro"] = (macro_df["soja"] + macro_df["milho"])/2
-        'minerio': 'commodities_minerio'
-    })
-    # Se quiser usar a média de soja/milho, faça:
-    # fatores_macro["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
-    fatores_macro = fatores_macro[[
-        'juros', 'inflação', 'dolar', 'pib',
-        'commodities_agro', 'commodities_minerio', 'commodities_petroleo'
-    ]]
-
-    return retorno_setorial, fatores_macro
-
-def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
-    setores = retorno_setorial.columns
-    fatores = fatores_macro.columns
-    sens_dict = {}
-    for setor in setores:
-        y = retorno_setorial[setor].values
-        X = fatores_macro.values
-        mask = ~np.isnan(y) & ~np.any(np.isnan(X), axis=1)
-        if mask.sum() < 12:  # mínimo de 1 ano de dados
-            continue
-        reg = LinearRegression().fit(X[mask], y[mask])
-        # Normaliza os coeficientes para soma (abs) = 1 (opcional)
-        coefs = reg.coef_ / np.sum(np.abs(reg.coef_)) if np.sum(np.abs(reg.coef_)) > 0 else reg.coef_
-        sens_dict[setor] = dict(zip(fatores, coefs))
-    return sens_dict
-
-# ... depois de montar macro_df e de definir setores_por_ticker
-
-tickers = list(setores_por_ticker.keys())
-
-# Se você já tem macro_df pronto (veja no montar_historico_7anos), use:
-macro_df = montar_historico_7anos(
-    tickers=list(setores_por_ticker.keys()),
-    setores_por_ticker=setores_por_ticker,
-    start='2018-01-01'
-)
-# Se macro_df não for retornado, ajuste a função para retornar macro_df junto com df_hist.
-
-# Monte os dataframes para regressão:
-retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
-# sensibilidade_setorial é gerada automaticamente e calibrada:
-sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
+
 
 
 
