@@ -299,19 +299,25 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
     agro_hist = obter_preco_agro_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
     
     # Normalizar todos os índices para garantir compatibilidade
-    selic_hist.index = pd.to_datetime(selic_hist.index).normalize()
-    ipca_hist.index = pd.to_datetime(ipca_hist.index).normalize()
-    dolar_hist.index = pd.to_datetime(dolar_hist.index).normalize()
-    petroleo_hist.index = pd.to_datetime(petroleo_hist.index).normalize()
+    datas = pd.date_range('2018-01-01', datetime.date.today(), freq='M').normalize()
+    selic_hist = get_bcb_hist(432, datas.min().strftime('%d/%m/%Y'), datas.max().strftime('%d/%m/%Y'))
+    ipca_hist = get_bcb_hist(433, datas.min().strftime('%d/%m/%Y'), datas.max().strftime('%d/%m/%Y'))
+    dolar_hist = get_bcb_hist(1, datas.min().strftime('%d/%m/%Y'), datas.max().strftime('%d/%m/%Y'))
+    petroleo_hist = obter_preco_petroleo_hist(datas.min().strftime('%Y-%m-%d'), datas.max().strftime('%Y-%m-%d'))
+    
+    # Adicione se quiser fatores agro e minério
+    soja_hist = obter_preco_commodity("ZS=F", nome="Soja")  # Ajuste para baixar histórico mensal
+    milho_hist = obter_preco_commodity("ZC=F", nome="Milho") # Ajuste para baixar histórico mensal
+    minerio_hist = obter_preco_commodity("BZ=F", nome="Minério de Ferro") # Ajuste para baixar histórico mensal
     
     macro_df = pd.DataFrame(index=datas)
     macro_df['selic'] = selic_hist.reindex(datas, method='ffill')
     macro_df['ipca'] = ipca_hist.reindex(datas, method='ffill')
     macro_df['dolar'] = dolar_hist.reindex(datas, method='ffill')
     macro_df['petroleo'] = petroleo_hist.reindex(datas, method='ffill')
-    macro_df['soja'] = soja_hist.reindex(datas, method='ffill')
-    macro_df['milho'] = milho_hist.reindex(datas, method='ffill')
-    macro_df['minerio'] = minerio_hist.reindex(datas, method='ffill')
+    macro_df['soja'] = soja_hist.reindex(datas, method='ffill') if soja_hist is not None else np.nan
+    macro_df['milho'] = milho_hist.reindex(datas, method='ffill') if milho_hist is not None else np.nan
+    macro_df['minerio'] = minerio_hist.reindex(datas, method='ffill') if minerio_hist is not None else np.nan
     macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
     macro_df["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
 
@@ -350,6 +356,10 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
             })
     df_hist = pd.DataFrame(historico)
     return df_hist
+
+tickers = list(setores_por_ticker.keys())
+retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
+sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
 
 def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01'):
     # 1. Baixar preços ajustados diários
@@ -407,9 +417,7 @@ def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
 
 
 # Se você já tem macro_df pronto (veja no montar_historico_7anos), use:
-tickers = list(setores_por_ticker.keys())
-retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
-sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
+
 
 historico_7anos = montar_historico_7anos(
     tickers=tickers,
