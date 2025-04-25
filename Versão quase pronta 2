@@ -405,11 +405,24 @@ def obter_preco_petroleo():
 
 # Funções de pontuação individual
 
+PARAMS = {
+    "selic_neutra": 7.0,  # Ajuste conforme consenso/Focus
+    "ipca_meta": 3.25,    # Meta do BC para 2025
+    "ipca_tolerancia": 1.5,
+    "dolar_ideal": 5.30,  # Mais próximo do câmbio médio recente
+    "soja_ideal": 13.0,
+    "milho_ideal": 5.5,
+    "minerio_ideal": 110.0,
+    "petroleo_ideal": 85.0,
+}
+
+# ============ FUNÇÕES DE PONTUAÇÃO MELHORADAS ============
+
 def pontuar_ipca(ipca):
     if ipca is None or pd.isna(ipca):
         return 0
-    meta = 3.0
-    tolerancia = 1.5
+    meta = PARAMS["ipca_meta"]
+    tolerancia = PARAMS["ipca_tolerancia"]
     if meta - tolerancia <= ipca <= meta + tolerancia:
         return 10
     elif ipca < meta - tolerancia:
@@ -420,7 +433,7 @@ def pontuar_ipca(ipca):
 def pontuar_selic(selic):
     if selic is None or pd.isna(selic):
         return 0
-    neutra = 7.0
+    neutra = PARAMS["selic_neutra"]
     if selic == neutra:
         return 10
     elif selic < neutra:
@@ -431,9 +444,9 @@ def pontuar_selic(selic):
 def pontuar_dolar(dolar):
     if dolar is None or pd.isna(dolar):
         return 0
-    ideal = 5.90
+    ideal = PARAMS["dolar_ideal"]
     desvio = abs(dolar - ideal)
-    return max(0, 10 - desvio * 2)
+    return max(0, 10 - desvio * 2)  # Sugerido suavizar para *1.5 para menor penalização
 
 def pontuar_pib(pib):
     if pib is None or pd.isna(pib):
@@ -447,31 +460,31 @@ def pontuar_pib(pib):
 def pontuar_soja(soja):
     if soja is None or pd.isna(soja):
         return 0
-    ideal = 13.0
+    ideal = PARAMS["soja_ideal"]
     desvio = abs(soja - ideal)
     return max(0, 10 - desvio * 1.5)
 
 def pontuar_milho(milho):
     if milho is None or pd.isna(milho):
         return 0
-    ideal = 5.5
+    ideal = PARAMS["milho_ideal"]
     desvio = abs(milho - ideal)
     return max(0, 10 - desvio * 2)
 
 def pontuar_minerio(minerio):
     if minerio is None or pd.isna(minerio):
         return 0
-    ideal = 110.0
+    ideal = PARAMS["minerio_ideal"]
     desvio = abs(minerio - ideal)
     return max(0, 10 - desvio * 0.1)
 
 def pontuar_petroleo(petroleo):
     if petroleo is None or pd.isna(petroleo):
         return 0
-    ideal = 85.0
+    ideal = PARAMS["petroleo_ideal"]
     desvio = abs(petroleo - ideal)
     return max(0, 10 - desvio * 0.2)
-    
+
 def pontuar_soja_milho(soja, milho):
     return (pontuar_soja(soja) + pontuar_milho(milho)) / 2
 
@@ -484,6 +497,7 @@ def pontuar_macro(m):
     score["commodities_agro"] = pontuar_soja_milho(m.get("soja"), m.get("milho"))
     score["commodities_minerio"] = pontuar_minerio(m.get("minerio"))
     score["commodities_petroleo"] = pontuar_petroleo(m.get("petroleo"))
+    score["media_global"] = np.mean(list(score.values()))
     return score
 
 
@@ -560,30 +574,31 @@ def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, 
         return -float("inf"), "Preço atual igual a zero"
 
     upside = (preco_alvo - preco_atual) / preco_atual
-    base_score = upside * 10
+    # Sugestão: Suavizar o score base para evitar distorções por outliers
+    base_score = np.sign(upside) * np.log1p(abs(upside)) * 10  # logarítmico, menos sensível a upsides extremos
 
     score_macro = 0
     if setor in sensibilidade_setorial and usar_pesos_macroeconomicos:
         s = sensibilidade_setorial[setor]
-        score_indicadores = pontuar_macro(macro)  # já normalizado
+        score_indicadores = pontuar_macro(macro)
         for indicador, peso in s.items():
             score_macro += peso * score_indicadores.get(indicador, 0)
 
     score_macro = np.clip(score_macro, -10, 10)
 
+    # Bônus para exportadoras
     bonus = 0
     if ticker in empresas_exportadoras:
-        if macro.get('dolar') and macro['dolar'] > 5:
-            bonus += 0.05
-        if macro.get('petroleo') and macro['petroleo'] > 80:
-            bonus += 0.05
+        if macro.get('dolar') and macro['dolar'] > PARAMS["dolar_ideal"]:
+            bonus += 0.07
+        if macro.get('petroleo') and macro['petroleo'] > PARAMS["petroleo_ideal"]:
+            bonus += 0.03
     bonus = np.clip(bonus, 0, 0.1)
 
     score_total = base_score + (0.05 * score_macro) + bonus + (favorecimento_score * 1.5 if usar_pesos_macroeconomicos else 0)
     detalhe = f"upside={upside:.2f}, base={base_score:.2f}, macro={score_macro:.2f}, bonus={bonus:.2f}, favorecimento={favorecimento_score:.2f}"
 
     return (score_total, detalhe) if return_details else score_total
-
 
 
 
@@ -639,30 +654,29 @@ def completar_pesos(tickers_originais, pesos_calculados):
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
 sensibilidade_setorial = {
-    'Bancos':                          {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 1, 'commodities_minerio': 1},
-    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0, 'commodities_minerio': 0},
-    'Bolsas e Serviços Financeiros':  {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': 0, 'commodities_minerio': 0},
-    'Energia Elétrica':               {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1},
-    'Petróleo, Gás e Biocombustíveis':{'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Mineração e Siderurgia':         {'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 2},
-    'Indústria e Bens de Capital':    {'juros': -1, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Agronegócio':                    {'juros': 0,  'inflação': -1, 'dolar': 2,  'pib': 1,  'commodities_agro': 2,  'commodities_minerio': 0},
-    'Saúde':                          {'juros': 0,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Tecnologia':                     {'juros': -2, 'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
-    'Consumo Discricionário':         {'juros': -2, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
-    'Consumo Básico':                 {'juros': 1,  'inflação': -2, 'dolar': -1, 'pib': 1,  'commodities_agro': -1, 'commodities_minerio': -1},
-    'Comunicação':                    {'juros': 0,  'inflação': 0,  'dolar': -1, 'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
+    'Bancos':                          {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': .7, 'commodities_minerio': .6},
+    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Bolsas e Serviços Financeiros':   {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Energia Elétrica':                {'juros': 1.5, 'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1},
+    'Petróleo, Gás e Biocombustíveis': {'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,   'commodities_minerio': 0},
+    'Mineração e Siderurgia':          {'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,   'commodities_minerio': 2},
+    'Indústria e Bens de Capital':     {'juros': -1, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': 0,   'commodities_minerio': 0},
+    'Agronegócio':                     {'juros': 0,  'inflação': -1, 'dolar': 2,  'pib': 1,  'commodities_agro': 2,   'commodities_minerio': 0},
+    'Saúde':                           {'juros': 0,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0,   'commodities_minerio': 0},
+    'Tecnologia':                      {'juros': -2, 'inflação': 0,  'dolar': -0.5,'pib': 2, 'commodities_agro': -0.5,'commodities_minerio': -0.5},
+    'Consumo Discricionário':          {'juros': -2, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': -1,  'commodities_minerio': -1},
+    'Consumo Básico':                  {'juros': 1,  'inflação': -2, 'dolar': -1, 'pib': 1,  'commodities_agro': -1,  'commodities_minerio': -1},
+    'Comunicação':                     {'juros': 0,  'inflação': 0,  'dolar': -1, 'pib': 1,  'commodities_agro': 0,   'commodities_minerio': 0},
+    'Utilidades Públicas':             {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1,  'commodities_minerio': -1}
 }
+# Sugestão: documente/calcule a origem destes valores, e revise-os periodicamente.
 
 def calcular_favorecimento_continuo(setor, score_macro):
     if setor not in sensibilidade_setorial:
         return 0
     sens = sensibilidade_setorial[setor]
     bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
-    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
-
-
+    return np.tanh(bruto / 5) * 2  # manter suavização
     
 
 
