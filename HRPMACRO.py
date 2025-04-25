@@ -12,6 +12,16 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
 
+
+def calcular_favorecimento_continuo(setor, score_macro):
+    if setor not in sensibilidade_setorial:
+        return 0
+    sens = sensibilidade_setorial[setor]
+    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
+    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
+
+
+
 def get_bcb_hist(code, start, end):
     """Baixa série histórica mensal do BCB para um código SGS."""
     url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados?formato=json&dataInicial={start}&dataFinal={end}"
@@ -502,12 +512,6 @@ def pontuar_macro(m):
     return score
 
 
-def calcular_favorecimento_continuo(setor, score_macro):
-    if setor not in sensibilidade_setorial:
-        return 0
-    sens = sensibilidade_setorial[setor]
-    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
-    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
 
 
 # Funções para preço-alvo e preço atual
