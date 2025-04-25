@@ -1120,6 +1120,7 @@ def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2018-01-01'):
 # ========= STREAMLIT ==========
 # ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
+
 st.title("📊 Sugestão e Otimização de Carteira: Cenário Projetado")
 
 st.markdown("---")
