@@ -6,6 +6,7 @@ import requests
 import datetime
 import os
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
 from sklearn.covariance import LedoitWolf
 from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
@@ -650,26 +651,69 @@ def completar_pesos(tickers_originais, pesos_calculados):
         pesos_completos[ticker] = pesos_calculados[ticker]
     return pesos_completos
 
-        
+
+def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01'):
+    # 1. Baixar preços ajustados diários
+    df_prices = obter_preco_diario_ajustado(tickers)
+    df_prices = df_prices.ffill().bfill()
+
+    # 2. Gerar retornos logarítmicos mensais
+    df_prices_monthly = df_prices.resample('M').last()
+    df_returns = np.log(df_prices_monthly / df_prices_monthly.shift(1)).dropna()
+
+    # 3. Retorno médio mensal por setor
+    df_setores = pd.DataFrame({t: setores_por_ticker.get(t, None) for t in df_returns.columns}, index=df_returns.columns, columns=["setor"])
+    retorno_setorial = df_returns.groupby(df_setores["setor"], axis=1).mean()
+
+    # 4. Fatores macro: use o macro_df já criado no seu script!
+    # O ideal é macro_df já mensal, index com datas, colunas: selic, ipca, dolar, pib, petroleo
+    macro_df = macro_df.reindex(retorno_setorial.index).ffill().bfill()
+    fatores_macro = macro_df.rename(columns={
+        'selic': 'juros',
+        'ipca': 'inflação',
+        'dolar': 'dolar',
+        'pib': 'pib',
+        'petroleo': 'commodities_petroleo'
+    })
+    # Se quiser adicionar commodities_agro/minerio, basta incluir mais colunas
+
+    return retorno_setorial, fatores_macro
+
+def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
+    setores = retorno_setorial.columns
+    fatores = fatores_macro.columns
+    sens_dict = {}
+    for setor in setores:
+        y = retorno_setorial[setor].values
+        X = fatores_macro.values
+        mask = ~np.isnan(y) & ~np.any(np.isnan(X), axis=1)
+        if mask.sum() < 12:  # mínimo de 1 ano de dados
+            continue
+        reg = LinearRegression().fit(X[mask], y[mask])
+        # Normaliza os coeficientes para soma (abs) = 1 (opcional)
+        coefs = reg.coef_ / np.sum(np.abs(reg.coef_)) if np.sum(np.abs(reg.coef_)) > 0 else reg.coef_
+        sens_dict[setor] = dict(zip(fatores, coefs))
+    return sens_dict
+
+# ... depois de montar macro_df e de definir setores_por_ticker
+
+tickers = list(setores_por_ticker.keys())
+
+# Se você já tem macro_df pronto (veja no montar_historico_7anos), use:
+macro_df = montar_historico_7anos(
+    tickers=list(setores_por_ticker.keys()),
+    setores_por_ticker=setores_por_ticker,
+    start='2018-01-01'
+)
+# Se macro_df não for retornado, ajuste a função para retornar macro_df junto com df_hist.
+
+# Monte os dataframes para regressão:
+retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
-sensibilidade_setorial = {
-    'Bancos':                          {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 1, 'commodities_minerio': 1},
-    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0, 'commodities_minerio': 0},
-    'Bolsas e Serviços Financeiros':  {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': 0, 'commodities_minerio': 0},
-    'Energia Elétrica':               {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1},
-    'Petróleo, Gás e Biocombustíveis':{'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Mineração e Siderurgia':         {'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 2},
-    'Indústria e Bens de Capital':    {'juros': -1, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Agronegócio':                    {'juros': 0,  'inflação': -1, 'dolar': 2,  'pib': 1,  'commodities_agro': 2,  'commodities_minerio': 0},
-    'Saúde':                          {'juros': 0,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Tecnologia':                     {'juros': -2, 'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
-    'Consumo Discricionário':         {'juros': -2, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
-    'Consumo Básico':                 {'juros': 1,  'inflação': -2, 'dolar': -1, 'pib': 1,  'commodities_agro': -1, 'commodities_minerio': -1},
-    'Comunicação':                    {'juros': 0,  'inflação': 0,  'dolar': -1, 'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
-    'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
-}
+# sensibilidade_setorial é gerada automaticamente e calibrada:
+sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
 
 def calcular_favorecimento_continuo(setor, score_macro):
     if setor not in sensibilidade_setorial:
