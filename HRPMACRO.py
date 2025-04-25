@@ -331,7 +331,7 @@ setores_por_cenario = {
 
 # Funções para obter dados do BCB
 
-@st.cache_data(ttl=86400)  # Cache por 1 dia
+@st.cache_data(ttl=86400)
 def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
     indicador_map = {
         "IPCA": "IPCA",
@@ -339,32 +339,24 @@ def buscar_projecoes_focus(indicador, ano=datetime.datetime.now().year):
         "PIB Total": "PIB Total",
         "Câmbio": "Câmbio"
     }
-    
     nome_indicador = indicador_map.get(indicador)
     if not nome_indicador:
         return None
-
     base_url = "https://olinda.bcb.gov.br/olinda/servico/Expectativas/versao/v1/odata/"
     url = f"{base_url}ExpectativasMercadoTop5Anuais?$top=100000&$filter=Indicador eq '{nome_indicador}'&$format=json&$select=Indicador,Data,DataReferencia,Mediana"
-
     try:
         response = requests.get(url)
         response.raise_for_status()
         dados = response.json()["value"]
-
         df = pd.DataFrame(dados)
         df = df[df["DataReferencia"].str.contains(str(ano))]
         df = df.sort_values("Data", ascending=False)
-
         if df.empty:
             raise ValueError(f"Nenhum dado encontrado para {indicador} em {ano}.")
-
         return float(df.iloc[0]["Mediana"])
-    
     except Exception as e:
         print(f"Erro ao buscar {indicador} no Boletim Focus: {e}")
         return None
-
 
 def obter_macro():
     macro = {
@@ -376,12 +368,9 @@ def obter_macro():
         "soja": obter_preco_commodity("ZS=F", nome="Soja"),
         "milho": obter_preco_commodity("ZC=F", nome="Milho"),
         "minerio": obter_preco_commodity("BZ=F", nome="Minério de Ferro")
-    
     }
     return macro
 
-
-# Função genérica para obter preços via yfinance
 @st.cache_data(ttl=86400)
 def obter_preco_yf(ticker, nome="Ativo"):
     try:
@@ -394,7 +383,7 @@ def obter_preco_yf(ticker, nome="Ativo"):
     except Exception as e:
         st.error(f"Erro ao obter preço de {nome} ({ticker}): {e}")
         return None
-        
+
 @st.cache_data(ttl=86400)
 def obter_preco_commodity(ticker, nome="Commodity"):
     return obter_preco_yf(ticker, nome)
@@ -406,17 +395,17 @@ def obter_preco_petroleo():
 # Funções de pontuação individual
 
 PARAMS = {
-    "selic_neutra": 7.0,  # Ajuste conforme consenso/Focus
-    "ipca_meta": 3.25,    # Meta do BC para 2025
+    "selic_neutra": 7.0,
+    "ipca_meta": 3.25,
     "ipca_tolerancia": 1.5,
-    "dolar_ideal": 5.30,  # Mais próximo do câmbio médio recente
+    "dolar_ideal": 5.30,
     "soja_ideal": 13.0,
     "milho_ideal": 5.5,
     "minerio_ideal": 110.0,
     "petroleo_ideal": 85.0,
 }
 
-# ============ FUNÇÕES DE PONTUAÇÃO MELHORADAS ============
+# ==================== FUNÇÕES DE PONTUAÇÃO ====================
 
 def pontuar_ipca(ipca):
     if ipca is None or pd.isna(ipca):
@@ -446,7 +435,7 @@ def pontuar_dolar(dolar):
         return 0
     ideal = PARAMS["dolar_ideal"]
     desvio = abs(dolar - ideal)
-    return max(0, 10 - desvio * 2)  # Sugerido suavizar para *1.5 para menor penalização
+    return max(0, 10 - desvio * 2)
 
 def pontuar_pib(pib):
     if pib is None or pd.isna(pib):
@@ -499,7 +488,6 @@ def pontuar_macro(m):
     score["commodities_petroleo"] = pontuar_petroleo(m.get("petroleo"))
     score["media_global"] = np.mean(list(score.values()))
     return score
-
 
 
 
@@ -623,13 +611,13 @@ def classificar_cenario_macro(ipca, selic, dolar, pib,
             total_score += func(preco)
 
     # ESCALA AJUSTADA:
-    if total_score >= 65:
+    if total_score >= 37:
         return "Expansão Forte"
-    elif total_score >= 55:
-        return "Expansão Moderada"
-    elif total_score >= 45:
-        return "Estável"
     elif total_score >= 35:
+        return "Expansão Moderada"
+    elif total_score >= 33:
+        return "Estável"
+    elif total_score >= 31:
         return "Contração Moderada"
     else:
         return "Contração Forte"
@@ -979,18 +967,8 @@ st.title("📊 Sugestão e Otimização de Carteira: Cenário Projetado")
 
 st.markdown("---")
 
-
+# Sempre use o macro atualizado
 macro = obter_macro()
-cenario = classificar_cenario_macro(
-    ipca=macro.get("ipca"),
-    selic=macro.get("selic"),
-    dolar=macro.get("dolar"),
-    pib=macro.get("pib"),
-    preco_soja=macro.get("soja"),
-    preco_milho=macro.get("milho"),
-    preco_minerio=macro.get("minerio"),
-    preco_petroleo=macro.get("petroleo")
-)
 
 with st.sidebar:
     st.header("Ajuste Manual dos Indicadores Macro")
@@ -1005,19 +983,7 @@ with st.sidebar:
     if usar_macro_manual:
         macro.update(macro_manual)
 
-# REFAÇA O CÁLCULO DO CENÁRIO APÓS POSSÍVEL AJUSTE
-cenario = classificar_cenario_macro(
-    ipca=macro.get("ipca"),
-    selic=macro.get("selic"),
-    dolar=macro.get("dolar"),
-    pib=macro.get("pib"),
-    preco_soja=macro.get("soja"),
-    preco_milho=macro.get("milho"),
-    preco_minerio=macro.get("minerio"),
-    preco_petroleo=macro.get("petroleo")
-)
-
-
+# CENÁRIO ATUAL (SEMPRE COM O MACRO ATUALIZADO!)
 cenario_atual = classificar_cenario_macro(
     ipca=macro.get("ipca"),
     selic=macro.get("selic"),
@@ -1031,22 +997,19 @@ cenario_atual = classificar_cenario_macro(
 
 score_macro = pontuar_macro(macro)
 score_medio = round(np.mean(list(score_macro.values())), 2)
-st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario}**")
+st.markdown(f"### 🧭 Cenário Macroeconômico Atual: **{cenario_atual}**")
 st.markdown("### 📉 Indicadores Macroeconômicos")
 col1, col2, col3, col4, col5 = st.columns(5)
-col1.metric("Selic (%)", f"{macro['selic']:.2f}")
-col2.metric("IPCA (%)", f"{macro['ipca']:.2f}")
-col3.metric("PIB (%)", f"{macro['pib']:.2f}")
-col4.metric("Dólar (R$)", f"{macro['dolar']:.2f}")
-col5.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro['petroleo'] else "N/A")
-
+col1.metric("Selic (%)", f"{macro['selic']:.2f}" if macro.get("selic") is not None else "N/A")
+col2.metric("IPCA (%)", f"{macro['ipca']:.2f}" if macro.get("ipca") is not None else "N/A")
+col3.metric("PIB (%)", f"{macro['pib']:.2f}" if macro.get("pib") is not None else "N/A")
+col4.metric("Dólar (R$)", f"{macro['dolar']:.2f}" if macro.get("dolar") is not None else "N/A")
+col5.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro.get("petroleo") else "N/A")
 
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("Parâmetros")
     st.markdown("### Dados dos Ativos")
-
-    # Tickers e pesos default
     tickers_default = [
         "AGRO3.SA", "BBAS3.SA", "BBSE3.SA", "BPAC11.SA", "EGIE3.SA",
         "ITUB4.SA", "PRIO3.SA", "PSSA3.SA", "SAPR11.SA", "SBSP3.SA",
@@ -1057,11 +1020,8 @@ with st.sidebar:
         0.07, 0.12, 0.09, 0.06, 0.04,
         0.1, 0.18, 0.04, 0.01, 0.02
     ]
-
-    # Número de ativos controlado por estado da sessão
     if "num_ativos" not in st.session_state:
         st.session_state.num_ativos = len(tickers_default)
-
     col1, col2 = st.columns([1, 1])
     with col1:
         if st.button("( + )", key="add_ativo"):
@@ -1069,11 +1029,8 @@ with st.sidebar:
     with col2:
         if st.button("( - )", key="remove_ativo") and st.session_state.num_ativos > 1:
             st.session_state.num_ativos -= 1
-
-    # Lista para armazenar inputs
     tickers = []
     pesos = []
-
     for i in range(st.session_state.num_ativos):
         col1, col2 = st.columns(2)
         with col1:
@@ -1085,8 +1042,6 @@ with st.sidebar:
         if ticker:
             tickers.append(ticker)
             pesos.append(peso)
-
-    # Normalização
     pesos_array = np.array(pesos)
     if pesos_array.sum() > 0:
         pesos_atuais = pesos_array / pesos_array.sum()
@@ -1094,32 +1049,20 @@ with st.sidebar:
         st.error("A soma dos pesos deve ser maior que 0.")
         st.stop()
 
+# ==================== GERAÇÃO DO RANKING E OTIMIZAÇÃO ====================
 
-
-# Gerar ranking geral com base no score macro + preço alvo
 st.subheader("🏆 Ranking Geral de Ações (com base no score)")
 carteira = dict(zip(tickers, pesos_atuais))
 ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 
-
-
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
 
-
-
-
-# Utilize o valor selecionado na otimização e filtragem de ativos
 ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
-
-    
 favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
-    
-
-    
     if not ativos_validos:
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
     else:
@@ -1129,68 +1072,53 @@ if st.button("Gerar Alocação Otimizada"):
                 pesos = otimizar_carteira_hrp(tickers_validos, carteira)
             else:
                 pesos = otimizar_carteira_sharpe(tickers_validos, carteira)
-
             if pesos is not None:
                 tickers_completos = set(carteira)
                 tickers_usados = set(tickers_validos)
                 tickers_zerados = tickers_completos - tickers_usados
-
                 if tickers_zerados:
                     st.subheader("📉 Ativos da carteira atual sem recomendação de aporte")
                     st.write(", ".join(tickers_zerados))
-
-                # Cria DataFrame com todos os tickers da carteira original
                 todos_os_tickers = list(carteira.keys())
                 df_resultado_completo = pd.DataFrame({'ticker': todos_os_tickers})
-
-                # Junta com os dados dos ativos válidos (os que passaram nos filtros)
                 df_validos = pd.DataFrame(ativos_validos)
                 df_resultado = df_resultado_completo.merge(df_validos, on='ticker', how='left')
-
-                # Preenche colunas faltantes para os ativos zerados
                 df_resultado["preco_atual"] = df_resultado["preco_atual"].fillna(0)
                 df_resultado["preco_alvo"] = df_resultado["preco_alvo"].fillna(0)
                 df_resultado["score"] = df_resultado["score"].fillna(0)
                 df_resultado["setor"] = df_resultado["setor"].fillna("Não recomendado")
-
-                # Mapeia os pesos calculados para os tickers (os ausentes recebem 0)
                 pesos_dict = dict(zip(tickers_validos, pesos))
                 df_resultado["peso_otimizado"] = df_resultado["ticker"].map(pesos_dict).fillna(0)
-
-                # Calcula valor alocado bruto e quantidade de ações
                 df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
                 df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"])\
                     .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
                 df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
-
-                # Cálculo de novos pesos considerando carteira anterior + novo aporte
                 tickers_resultado = df_resultado["ticker"].tolist()
                 pesos_atuais_dict = dict(zip(carteira, pesos_atuais))
                 pesos_atuais_filtrados = np.array([pesos_atuais_dict[t] for t in tickers_resultado])
-                valores_atuais = pesos_atuais_filtrados * 1_000_000  # exemplo: carteira anterior de 1 milhão
-
+                valores_atuais = pesos_atuais_filtrados * 1_000_000
                 valores_aporte = df_resultado["Valor Alocado (R$)"].to_numpy()
                 valores_totais = valores_atuais + valores_aporte
                 pesos_finais = valores_totais / valores_totais.sum()
-
                 df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
-
-                # Exibe a tabela final
                 st.subheader("📈 Ativos Recomendados para Novo Aporte")
                 st.dataframe(df_resultado[[
                     "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
                     "Valor Alocado (R$)", "% na Carteira Final"
                 ]], use_container_width=True)
-
-                # Troco do aporte
                 valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
                 troco = aporte - valor_utilizado
                 st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
                 st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
                 # ---- Top 5 empresas destaque histórico ---
-# Filtrar histórico para cenários iguais ao atual
-                historico_cenario = historico_7anos[historico_7anos["cenario"] == cenario_atual] 
+                # Sempre use cenario_atual atualizado!
+                historico_7anos_df = montar_historico_7anos(
+                    tickers=list(setores_por_ticker.keys()),
+                    setores_por_ticker=setores_por_ticker,
+                    start='2018-01-01'
+                )
+                historico_cenario = historico_7anos_df[historico_7anos_df["cenario"] == cenario_atual]  
                 if not historico_cenario.empty:
                     destaque_hist = (
                         historico_cenario.groupby(["ticker", "setor"])
@@ -1199,7 +1127,6 @@ if st.button("Gerar Alocação Otimizada"):
                         .reset_index()
                         .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
                     )
-                    # Filtrar apenas empresas presentes na carteira recomendada (peso otimizado > 0)
                     tickers_carteira = set(df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"])
                     destaque_hist = destaque_hist[destaque_hist["ticker"].isin(tickers_carteira)]
                     st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
@@ -1207,18 +1134,13 @@ if st.button("Gerar Alocação Otimizada"):
                 else:
                     st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
 
-                # Backtest: Carteira Recomendada vs IBOV
                 st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos) — Ajustado e Close")
-                
                 tickers_validos = df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"].tolist()
                 pesos_otimizados = df_resultado[df_resultado["peso_otimizado"] > 0]["peso_otimizado"].values
-                
                 if len(tickers_validos) >= 2:
                     backtest_portfolio_vs_ibov_duplo(tickers_validos, pesos_otimizados)
                 else:
                     st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
-
-
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
             
