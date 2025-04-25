@@ -876,7 +876,58 @@ def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001, f
         pesos_uniformes = pd.Series(np.ones(n) / n, index=tickers_validos)
         return completar_pesos(tickers, pesos_uniformes)
 
+def otimizar_carteira_retorno_maximo(tickers, carteira_atual, favorecimentos=None):
+    """
+    Otimiza a carteira para máximo retorno esperado com limitação máxima de 20% por ativo.
+    """
+    dados = obter_preco_diario_ajustado(tickers)
+    dados = dados.ffill().bfill()
 
+    retornos = np.log(dados / dados.shift(1)).dropna()
+    tickers_validos = retornos.columns.tolist()
+    n = len(tickers_validos)
+
+    if n == 0:
+        st.error("Nenhum dado de retorno válido disponível para os ativos selecionados.")
+        return pd.Series(0.0, index=tickers)
+
+    media_retorno = retornos.mean()
+    # Pesos iniciais proporcionais ao retorno esperado (ou uniformes)
+    if (media_retorno > 0).any():
+        pesos_iniciais = np.maximum(media_retorno, 0)
+        if pesos_iniciais.sum() > 0:
+            pesos_iniciais = pesos_iniciais / pesos_iniciais.sum()
+        else:
+            pesos_iniciais = np.ones(n) / n
+    else:
+        pesos_iniciais = np.ones(n) / n
+
+    # Limite estrito de 20% por ativo
+    limites = [(0.0, 0.20) for _ in range(n)]
+
+    # Restrição: soma dos pesos = 1
+    restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
+
+    # Função objetivo: maximize retorno esperado (minimize negativo do retorno)
+    def neg_retorno(pesos):
+        return -np.dot(pesos, media_retorno)
+
+    resultado = minimize(
+        neg_retorno,
+        pesos_iniciais,
+        method='SLSQP',
+        bounds=limites,
+        constraints=restricoes,
+        options={'disp': False, 'maxiter': 1000}
+    )
+
+    if resultado.success and not np.isnan(resultado.fun):
+        pesos_otimizados = pd.Series(resultado.x, index=tickers_validos)
+        return completar_pesos(tickers, pesos_otimizados)
+    else:
+        st.warning("Otimização falhou ou retornou valor inválido. Usando pesos uniformes.")
+        pesos_uniformes = pd.Series(np.ones(n) / n, index=tickers_validos)
+        return completar_pesos(tickers, pesos_uniformes)
 
 
 def otimizar_carteira_hrp(tickers, carteira_atual, favorecimentos=None):
@@ -1010,6 +1061,7 @@ def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2018-01-01'):
 
 
 # ========= STREAMLIT ==========
+# ========= STREAMLIT ==========
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 st.title("📊 Sugestão e Otimização de Carteira: Cenário Projetado")
 
@@ -1031,7 +1083,6 @@ with st.sidebar:
     if usar_macro_manual:
         macro.update(macro_manual)
 
-# CENÁRIO ATUAL (SEMPRE COM O MACRO ATUALIZADO!)
 cenario_atual = classificar_cenario_macro(
     ipca=macro.get("ipca"),
     selic=macro.get("selic"),
@@ -1104,7 +1155,17 @@ carteira = dict(zip(tickers, pesos_atuais))
 ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
-usar_hrp = st.checkbox("Utilizar HRP em vez de Sharpe máximo")
+
+# Novo: seleção do método de otimização
+metodo_otimizacao = st.selectbox(
+    "Selecione o método de otimização de carteira:",
+    (
+        "Sharpe Máximo (risco/retorno)",
+        "Retorno Máximo (limite 20% por ativo)",
+        "HRP (Hierarchical Risk Parity)"
+    ),
+    index=0
+)
 
 ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
 favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
@@ -1116,10 +1177,17 @@ if st.button("Gerar Alocação Otimizada"):
     else:
         tickers_validos = [a['ticker'] for a in ativos_validos]
         try:
-            if usar_hrp:
+            # Escolha do método:
+            if metodo_otimizacao == "Sharpe Máximo (risco/retorno)":
+                pesos = otimizar_carteira_sharpe(tickers_validos, carteira)
+            elif metodo_otimizacao == "Retorno Máximo (limite 20% por ativo)":
+                pesos = otimizar_carteira_retorno_maximo(tickers_validos, carteira)
+            elif metodo_otimizacao == "HRP (Hierarchical Risk Parity)":
                 pesos = otimizar_carteira_hrp(tickers_validos, carteira)
             else:
-                pesos = otimizar_carteira_sharpe(tickers_validos, carteira)
+                st.error("Método de otimização desconhecido.")
+                st.stop()
+
             if pesos is not None:
                 tickers_completos = set(carteira)
                 tickers_usados = set(tickers_validos)
@@ -1160,7 +1228,6 @@ if st.button("Gerar Alocação Otimizada"):
                 st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
                 # ---- Top 5 empresas destaque histórico ---
-                # Sempre use cenario_atual atualizado!
                 historico_7anos_df = montar_historico_7anos(
                     tickers=list(setores_por_ticker.keys()),
                     setores_por_ticker=setores_por_ticker,
