@@ -1018,6 +1018,16 @@ cenario = classificar_cenario_macro(
 )
 
 
+cenario_atual = classificar_cenario_macro(
+    ipca=macro.get("ipca"),
+    selic=macro.get("selic"),
+    dolar=macro.get("dolar"),
+    pib=macro.get("pib"),
+    preco_soja=macro.get("soja"),
+    preco_milho=macro.get("milho"),
+    preco_minerio=macro.get("minerio"),
+    preco_petroleo=macro.get("petroleo")
+)
 
 score_macro = pontuar_macro(macro)
 score_medio = round(np.mean(list(score_macro.values())), 2)
@@ -1180,7 +1190,7 @@ if st.button("Gerar Alocação Otimizada"):
 
                 # ---- Top 5 empresas destaque histórico ---
 # Filtrar histórico para cenários iguais ao atual
-                historico_cenario = historico_7anos[historico_7anos["cenario"] == cenario]  
+                historico_cenario = historico_7anos[historico_7anos["cenario"] == cenario_atual] 
                 if not historico_cenario.empty:
                     destaque_hist = (
                         historico_cenario.groupby(["ticker", "setor"])
