@@ -302,27 +302,26 @@ empresas_exportadoras = [
     'CMIN3.SA',  # Mineração
 ]
 
+
 setores_por_cenario = {
     "Expansão Forte": [
-        'Consumo Discricionário', 'Tecnologia',
-        'Indústria e Bens de Capital', 'Agronegócio'
+        'Consumo Discricionário', 'Tecnologia', 'Indústria e Bens de Capital', 'Agronegócio',
+        'Mineração e Siderurgia', 'Petróleo, Gás e Biocombustíveis'
     ],
     "Expansão Moderada": [
-        'Consumo Discricionário', 'Tecnologia',
-        'Indústria e Bens de Capital', 'Agronegócio', 'Saúde',
-        'Mineração e Siderurgia', 'Petróleo, Gás e Biocombustíveis'  # Novo!
+        'Consumo Discricionário', 'Tecnologia', 'Indústria e Bens de Capital', 'Agronegócio',
+        'Mineração e Siderurgia', 'Petróleo, Gás e Biocombustíveis', 'Saúde'
     ],
     "Estável": [
-        'Saúde', 'Bancos', 'Seguradoras',
-        'Bolsas e Serviços Financeiros', 'Utilidades Públicas', 'Consumo Básico'
+        'Saúde', 'Bancos', 'Seguradoras', 'Bolsas e Serviços Financeiros', 'Consumo Básico',
+        'Utilidades Públicas', 'Comunicação'
     ],
     "Contração Moderada": [
-        'Energia Elétrica', 'Petróleo, Gás e Biocombustíveis',
-        'Mineração e Siderurgia', 'Consumo Básico', 'Comunicação'
+        'Bancos', 'Seguradoras', 'Consumo Básico', 'Utilidades Públicas', 'Saúde',
+        'Energia Elétrica', 'Comunicação'
     ],
     "Contração Forte": [
-        'Energia Elétrica', 'Petróleo, Gás e Biocombustíveis',
-        'Mineração e Siderurgia', 'Consumo Básico'
+        'Utilidades Públicas', 'Consumo Básico', 'Energia Elétrica', 'Saúde'
     ]
 }
 
@@ -643,20 +642,69 @@ def completar_pesos(tickers_originais, pesos_calculados):
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
 sensibilidade_setorial = {
-    'Bancos':                          {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0.7, 'commodities_minerio': 0.6, 'commodities_petroleo': 0},
-    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0,   'commodities_minerio': 0, 'commodities_petroleo': 0},
-    'Bolsas e Serviços Financeiros':   {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': 0,   'commodities_minerio': 0, 'commodities_petroleo': 0},
-    'Energia Elétrica':                {'juros': 1.5,'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1,  'commodities_minerio': -1,'commodities_petroleo': 0.2},
-    'Petróleo, Gás e Biocombustíveis': {'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,   'commodities_minerio': 0, 'commodities_petroleo': 2},
-    'Mineração e Siderurgia':          {'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,   'commodities_minerio': 2, 'commodities_petroleo': 1},
-    'Indústria e Bens de Capital':     {'juros': -1, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': 0,   'commodities_minerio': 0, 'commodities_petroleo': 0},
-    'Agronegócio':                     {'juros': 0,  'inflação': -1, 'dolar': 2,  'pib': 1,  'commodities_agro': 2,   'commodities_minerio': 0, 'commodities_petroleo': 1},
-    'Saúde':                           {'juros': 0,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0,   'commodities_minerio': 0, 'commodities_petroleo': 0},
-    'Tecnologia':                      {'juros': -2, 'inflação': 0,  'dolar': -0.5, 'pib': 2, 'commodities_agro': -0.5, 'commodities_minerio': -0.5, 'commodities_petroleo': 0},
-    'Consumo Discricionário':          {'juros': -2, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': -1,  'commodities_minerio': -1, 'commodities_petroleo': -0.2},
-    'Consumo Básico':                  {'juros': 1,  'inflação': -2, 'dolar': -1, 'pib': 1,  'commodities_agro': -1,  'commodities_minerio': -1, 'commodities_petroleo': -0.2},
-    'Comunicação':                     {'juros': 0,  'inflação': 0,  'dolar': -1, 'pib': 1,  'commodities_agro': 0,   'commodities_minerio': 0, 'commodities_petroleo': 0},
-    'Utilidades Públicas':             {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1,  'commodities_minerio': -1, 'commodities_petroleo': 0},
+    # Setores pró-cíclicos (beneficiam muito de crescimento/expansão, sensíveis ao PIB e commodities)
+    'Consumo Discricionário': {
+        'juros': -2, 'inflação': -1, 'dolar': -1, 'pib': 2.5,
+        'commodities_agro': -0.5, 'commodities_minerio': -0.5, 'commodities_petroleo': -0.2
+    },
+    'Tecnologia': {
+        'juros': -1.5, 'inflação': 0, 'dolar': -1, 'pib': 2,
+        'commodities_agro': -0.2, 'commodities_minerio': -0.2, 'commodities_petroleo': 0
+    },
+    'Indústria e Bens de Capital': {
+        'juros': -1, 'inflação': -0.5, 'dolar': -0.5, 'pib': 2.2,
+        'commodities_agro': 0, 'commodities_minerio': 0.2, 'commodities_petroleo': 0
+    },
+    'Mineração e Siderurgia': {
+        'juros': 0, 'inflação': 0, 'dolar': 2, 'pib': 1.2,
+        'commodities_agro': 0, 'commodities_minerio': 2.5, 'commodities_petroleo': 0.6
+    },
+    'Petróleo, Gás e Biocombustíveis': {
+        'juros': 0, 'inflação': 0, 'dolar': 1.5, 'pib': 1,
+        'commodities_agro': 0, 'commodities_minerio': 0, 'commodities_petroleo': 2.7
+    },
+    'Agronegócio': {
+        'juros': -0.5, 'inflação': -0.6, 'dolar': 1.7, 'pib': 1.1,
+        'commodities_agro': 2.7, 'commodities_minerio': 0, 'commodities_petroleo': 0.4
+    },
+
+    # Setores defensivos (resilientes em qualquer ciclo, mas pouco sensíveis positivamente ao PIB)
+    'Saúde': {
+        'juros': 0, 'inflação': 0, 'dolar': 0, 'pib': 0.6,
+        'commodities_agro': 0, 'commodities_minerio': 0, 'commodities_petroleo': 0
+    },
+    'Consumo Básico': {
+        'juros': 0.7, 'inflação': -1.2, 'dolar': -0.7, 'pib': 0.6,
+        'commodities_agro': -0.2, 'commodities_minerio': -0.2, 'commodities_petroleo': -0.1
+    },
+    'Utilidades Públicas': {
+        'juros': 1.2, 'inflação': 0.7, 'dolar': -0.6, 'pib': -0.6,
+        'commodities_agro': -0.2, 'commodities_minerio': -0.2, 'commodities_petroleo': 0
+    },
+    'Energia Elétrica': {
+        'juros': 0.5, 'inflação': 0.5, 'dolar': -0.7, 'pib': -0.7,
+        'commodities_agro': -0.3, 'commodities_minerio': -0.2, 'commodities_petroleo': 0.1
+    },
+
+    # Setores financeiros (Bancos, Seguradoras, Bolsas)
+    'Bancos': {
+        'juros': 1.6, 'inflação': -0.1, 'dolar': -0.3, 'pib': 1.1,
+        'commodities_agro': 0.3, 'commodities_minerio': 0.2, 'commodities_petroleo': 0
+    },
+    'Seguradoras': {
+        'juros': 2, 'inflação': 0.2, 'dolar': 0, 'pib': 0.7,
+        'commodities_agro': 0, 'commodities_minerio': 0, 'commodities_petroleo': 0
+    },
+    'Bolsas e Serviços Financeiros': {
+        'juros': 1, 'inflação': 0, 'dolar': 0, 'pib': 1.5,
+        'commodities_agro': 0, 'commodities_minerio': 0, 'commodities_petroleo': 0
+    },
+
+    # Outros setores típicos
+    'Comunicação': {
+        'juros': 0, 'inflação': 0, 'dolar': -0.3, 'pib': 0.5,
+        'commodities_agro': 0, 'commodities_minerio': 0, 'commodities_petroleo': 0
+    }
 }
 # Sugestão: documente/calcule a origem destes valores, e revise-os periodicamente.
 
