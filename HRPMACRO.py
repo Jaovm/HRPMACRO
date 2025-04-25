@@ -665,17 +665,25 @@ def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, star
     df_setores = pd.DataFrame({t: setores_por_ticker.get(t, None) for t in df_returns.columns}, index=df_returns.columns, columns=["setor"])
     retorno_setorial = df_returns.groupby(df_setores["setor"], axis=1).mean()
 
-    # 4. Fatores macro: use o macro_df já criado no seu script!
-    # O ideal é macro_df já mensal, index com datas, colunas: selic, ipca, dolar, pib, petroleo
+    # 4. Fatores macro: ajuste nomes conforme suas colunas reais!
+    # O macro_df deve ser mensal, indexado por data, e ter as colunas abaixo:
     macro_df = macro_df.reindex(retorno_setorial.index).ffill().bfill()
     fatores_macro = macro_df.rename(columns={
         'selic': 'juros',
         'ipca': 'inflação',
         'dolar': 'dolar',
         'pib': 'pib',
-        'petroleo': 'commodities_petroleo'
+        'petroleo': 'commodities_petroleo',
+        'soja': 'commodities_agro',      # Use a média de soja/milho se preferir!
+        'milho': 'commodities_agro',     # Alternativamente, crie uma coluna média: macro_df["commodities_agro"] = (macro_df["soja"] + macro_df["milho"])/2
+        'minerio': 'commodities_minerio'
     })
-    # Se quiser adicionar commodities_agro/minerio, basta incluir mais colunas
+    # Se quiser usar a média de soja/milho, faça:
+    # fatores_macro["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
+    fatores_macro = fatores_macro[[
+        'juros', 'inflação', 'dolar', 'pib',
+        'commodities_agro', 'commodities_minerio', 'commodities_petroleo'
+    ]]
 
     return retorno_setorial, fatores_macro
 
