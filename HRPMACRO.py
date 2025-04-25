@@ -358,8 +358,7 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
     return df_hist
 
 tickers = list(setores_por_ticker.keys())
-retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
-sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
+
 
 def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01'):
     # 1. Baixar preços ajustados diários
@@ -396,6 +395,9 @@ def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, star
 
     return retorno_setorial, fatores_macro
 
+retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
+
+
 def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
     setores = retorno_setorial.columns
     fatores = fatores_macro.columns
@@ -412,6 +414,7 @@ def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
         sens_dict[setor] = dict(zip(fatores, coefs))
     return sens_dict
 
+sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
 # ... depois de montar macro_df e de definir setores_por_ticker
 
 
