@@ -468,7 +468,7 @@ def obter_precos_ideais():
     return {
         "soja_ideal": calcular_media_movel("ZS=F", periodo="12mo", intervalo="1mo"),    # Soja
         "milho_ideal": calcular_media_movel("ZC=F", periodo="12mo", intervalo="1mo"),   # Milho
-        "minerio_ideal": calcular_media_movel("TIOc1.SI", periodo="12mo", intervalo="1mo"), # Minério de ferro (use o ticker correto para o seu caso)
+        "minerio_ideal": calcular_media_movel("TIOc1", periodo="12mo", intervalo="1mo"), # Minério de ferro (use o ticker correto para o seu caso)
         "petroleo_ideal": calcular_media_movel("BZ=F", periodo="12mo", intervalo="1mo") # Petróleo Brent
     }
 
