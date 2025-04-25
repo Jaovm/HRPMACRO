@@ -914,16 +914,6 @@ historico_7anos = montar_historico_7anos(
     start='2018-01-01'
 )
 
-cenario_atual = classificar_cenario_macro(
-    ipca=macro.get("ipca"),
-    selic=macro.get("selic"),
-    dolar=macro.get("dolar"),
-    pib=macro.get("pib"),
-    preco_soja=macro.get("soja"),
-    preco_milho=macro.get("milho"),
-    preco_minerio=macro.get("minerio"),
-    preco_petroleo=macro.get("petroleo")
-)
 
 
 import matplotlib.pyplot as plt
@@ -1026,6 +1016,8 @@ cenario = classificar_cenario_macro(
     preco_minerio=macro.get("minerio"),
     preco_petroleo=macro.get("petroleo")
 )
+
+
 
 score_macro = pontuar_macro(macro)
 score_medio = round(np.mean(list(score_macro.values())), 2)
