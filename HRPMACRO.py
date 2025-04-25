@@ -173,17 +173,15 @@ def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
 
 
 # Se você já tem macro_df pronto (veja no montar_historico_7anos), use:
-macro_df = montar_historico_7anos(
-    tickers=list(setores_por_ticker.keys()),
+tickers = list(setores_por_ticker.keys())
+retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
+sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
+
+historico_7anos = montar_historico_7anos(
+    tickers=tickers,
     setores_por_ticker=setores_por_ticker,
     start='2018-01-01'
 )
-# Se macro_df não for retornado, ajuste a função para retornar macro_df junto com df_hist.
-
-# Monte os dataframes para regressão:
-retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
-# sensibilidade_setorial é gerada automaticamente e calibrada:
-sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
 
 # ========= DICIONÁRIOS ==========
 
@@ -593,9 +591,6 @@ def pontuar_macro(m):
     return score
 
 
-
-tickers = list(setores_por_ticker.keys())
-# Funções para preço-alvo e preço atual
 
 def obter_preco_alvo(ticker):
     try:
