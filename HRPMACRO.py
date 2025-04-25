@@ -14,174 +14,7 @@ from scipy.optimize import minimize
 
 
 
-def calcular_favorecimento_continuo(setor, score_macro):
-    if setor not in sensibilidade_setorial:
-        return 0
-    sens = sensibilidade_setorial[setor]
-    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
-    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
 
-
-
-def get_bcb_hist(code, start, end):
-    """Baixa série histórica mensal do BCB para um código SGS."""
-    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados?formato=json&dataInicial={start}&dataFinal={end}"
-    r = requests.get(url)
-    if r.status_code == 200:
-        df = pd.DataFrame(r.json())
-        df['data'] = pd.to_datetime(df['data'], dayfirst=True)
-        df['valor'] = df['valor'].str.replace(",", ".").astype(float)
-        return df.set_index('data')['valor']
-    else:
-        return pd.Series(dtype=float)
-
-def obter_preco_petroleo_hist(start, end):
-    """Baixa preço histórico mensal do petróleo Brent (BZ=F) do Yahoo Finance."""
-    df = yf.download("BZ=F", start=start, end=end, interval="1mo", progress=False)
-    if not df.empty:
-        df.index = pd.to_datetime(df.index)
-        return df['Close']
-    return pd.Series(dtype=float)
-
-def obter_preco_agro_hist(start, end):
-    df = yf.download("ZS=F", start=start, end=end, interval="1mo", progress=False)
-    if not df.empty:
-        df.index = pd.to_datetime(df.index)
-        return df['Close']
-    return pd.Series(dtype=float)
-
-def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
-    """Gera histórico dos últimos 7 anos (em memória, sem salvar em CSV)."""
-    hoje = datetime.date.today()
-    inicio = pd.to_datetime(start)
-    final = hoje
-    datas = pd.date_range(inicio, final, freq='M').normalize()
-    
-    # Baixar séries macro históricas do BCB
-    selic_hist = get_bcb_hist(432, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
-    ipca_hist = get_bcb_hist(433, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
-    dolar_hist = get_bcb_hist(1, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
-    petroleo_hist = obter_preco_petroleo_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
-    agro_hist = obter_preco_agro_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
-    
-    # Normalizar todos os índices para garantir compatibilidade
-    selic_hist.index = pd.to_datetime(selic_hist.index).normalize()
-    ipca_hist.index = pd.to_datetime(ipca_hist.index).normalize()
-    dolar_hist.index = pd.to_datetime(dolar_hist.index).normalize()
-    petroleo_hist.index = pd.to_datetime(petroleo_hist.index).normalize()
-    
-    macro_df = pd.DataFrame(index=datas)
-    macro_df['selic'] = selic_hist.reindex(datas, method='ffill')
-    macro_df['ipca'] = ipca_hist.reindex(datas, method='ffill')
-    macro_df['dolar'] = dolar_hist.reindex(datas, method='ffill')
-    macro_df['petroleo'] = petroleo_hist.reindex(datas, method='ffill')
-    macro_df['soja'] = soja_hist.reindex(datas, method='ffill')
-    macro_df['milho'] = milho_hist.reindex(datas, method='ffill')
-    macro_df['minerio'] = minerio_hist.reindex(datas, method='ffill')
-    macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
-    macro_df["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
-
-    historico = []
-    for data in datas:
-        macro = {
-            "ipca": macro_df.loc[data, "ipca"],
-            "selic": macro_df.loc[data, "selic"],
-            "dolar": macro_df.loc[data, "dolar"],
-            "pib": 2,
-            "petroleo": macro_df.loc[data, "petroleo"],
-            "soja": None,
-            "milho": None,
-            "minerio": None
-        }
-        cenario = classificar_cenario_macro(
-            ipca=macro["ipca"],
-            selic=macro["selic"],
-            dolar=macro["dolar"],
-            pib=macro["pib"],
-            preco_soja=macro["soja"],
-            preco_milho=macro["milho"],
-            preco_minerio=macro["minerio"],
-            preco_petroleo=macro["petroleo"]
-        )
-        score_macro = pontuar_macro(macro)
-        for ticker in tickers:
-            setor = setores_por_ticker.get(ticker, None)
-            favorecido = calcular_favorecimento_continuo(setor, score_macro)
-            historico.append({
-                "data": str(data.date()),
-                "cenario": cenario,
-                "ticker": ticker,
-                "setor": setor,
-                "favorecido": favorecido
-            })
-    df_hist = pd.DataFrame(historico)
-    return df_hist
-
-def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01'):
-    # 1. Baixar preços ajustados diários
-    df_prices = obter_preco_diario_ajustado(tickers)
-    df_prices = df_prices.ffill().bfill()
-
-    # 2. Gerar retornos logarítmicos mensais
-    df_prices_monthly = df_prices.resample('M').last()
-    df_returns = np.log(df_prices_monthly / df_prices_monthly.shift(1)).dropna()
-
-    # 3. Retorno médio mensal por setor
-    df_setores = pd.DataFrame({t: setores_por_ticker.get(t, None) for t in df_returns.columns}, index=df_returns.columns, columns=["setor"])
-    retorno_setorial = df_returns.groupby(df_setores["setor"], axis=1).mean()
-
-    # 4. Fatores macro: ajuste nomes conforme suas colunas reais!
-    # O macro_df deve ser mensal, indexado por data, e ter as colunas abaixo:
-    macro_df = macro_df.reindex(retorno_setorial.index).ffill().bfill()
-    fatores_macro = macro_df.rename(columns={
-        'selic': 'juros',
-        'ipca': 'inflação',
-        'dolar': 'dolar',
-        'pib': 'pib',
-        'petroleo': 'commodities_petroleo',
-        'soja': 'commodities_agro',      # Use a média de soja/milho se preferir!
-        'milho': 'commodities_agro',     # Alternativamente, crie uma coluna média: macro_df["commodities_agro"] = (macro_df["soja"] + macro_df["milho"])/2
-        'minerio': 'commodities_minerio'
-    })
-    # Se quiser usar a média de soja/milho, faça:
-    # fatores_macro["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
-    fatores_macro = fatores_macro[[
-        'juros', 'inflação', 'dolar', 'pib',
-        'commodities_agro', 'commodities_minerio', 'commodities_petroleo'
-    ]]
-
-    return retorno_setorial, fatores_macro
-
-def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
-    setores = retorno_setorial.columns
-    fatores = fatores_macro.columns
-    sens_dict = {}
-    for setor in setores:
-        y = retorno_setorial[setor].values
-        X = fatores_macro.values
-        mask = ~np.isnan(y) & ~np.any(np.isnan(X), axis=1)
-        if mask.sum() < 12:  # mínimo de 1 ano de dados
-            continue
-        reg = LinearRegression().fit(X[mask], y[mask])
-        # Normaliza os coeficientes para soma (abs) = 1 (opcional)
-        coefs = reg.coef_ / np.sum(np.abs(reg.coef_)) if np.sum(np.abs(reg.coef_)) > 0 else reg.coef_
-        sens_dict[setor] = dict(zip(fatores, coefs))
-    return sens_dict
-
-# ... depois de montar macro_df e de definir setores_por_ticker
-
-
-
-# Se você já tem macro_df pronto (veja no montar_historico_7anos), use:
-tickers = list(setores_por_ticker.keys())
-retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
-sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
-
-historico_7anos = montar_historico_7anos(
-    tickers=tickers,
-    setores_por_ticker=setores_por_ticker,
-    start='2018-01-01'
-)
 
 # ========= DICIONÁRIOS ==========
 
@@ -415,7 +248,174 @@ setores_por_cenario = {
     ]
 }
 
+def calcular_favorecimento_continuo(setor, score_macro):
+    if setor not in sensibilidade_setorial:
+        return 0
+    sens = sensibilidade_setorial[setor]
+    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
+    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
 
+
+
+def get_bcb_hist(code, start, end):
+    """Baixa série histórica mensal do BCB para um código SGS."""
+    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados?formato=json&dataInicial={start}&dataFinal={end}"
+    r = requests.get(url)
+    if r.status_code == 200:
+        df = pd.DataFrame(r.json())
+        df['data'] = pd.to_datetime(df['data'], dayfirst=True)
+        df['valor'] = df['valor'].str.replace(",", ".").astype(float)
+        return df.set_index('data')['valor']
+    else:
+        return pd.Series(dtype=float)
+
+def obter_preco_petroleo_hist(start, end):
+    """Baixa preço histórico mensal do petróleo Brent (BZ=F) do Yahoo Finance."""
+    df = yf.download("BZ=F", start=start, end=end, interval="1mo", progress=False)
+    if not df.empty:
+        df.index = pd.to_datetime(df.index)
+        return df['Close']
+    return pd.Series(dtype=float)
+
+def obter_preco_agro_hist(start, end):
+    df = yf.download("ZS=F", start=start, end=end, interval="1mo", progress=False)
+    if not df.empty:
+        df.index = pd.to_datetime(df.index)
+        return df['Close']
+    return pd.Series(dtype=float)
+
+def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
+    """Gera histórico dos últimos 7 anos (em memória, sem salvar em CSV)."""
+    hoje = datetime.date.today()
+    inicio = pd.to_datetime(start)
+    final = hoje
+    datas = pd.date_range(inicio, final, freq='M').normalize()
+    
+    # Baixar séries macro históricas do BCB
+    selic_hist = get_bcb_hist(432, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
+    ipca_hist = get_bcb_hist(433, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
+    dolar_hist = get_bcb_hist(1, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
+    petroleo_hist = obter_preco_petroleo_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
+    agro_hist = obter_preco_agro_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
+    
+    # Normalizar todos os índices para garantir compatibilidade
+    selic_hist.index = pd.to_datetime(selic_hist.index).normalize()
+    ipca_hist.index = pd.to_datetime(ipca_hist.index).normalize()
+    dolar_hist.index = pd.to_datetime(dolar_hist.index).normalize()
+    petroleo_hist.index = pd.to_datetime(petroleo_hist.index).normalize()
+    
+    macro_df = pd.DataFrame(index=datas)
+    macro_df['selic'] = selic_hist.reindex(datas, method='ffill')
+    macro_df['ipca'] = ipca_hist.reindex(datas, method='ffill')
+    macro_df['dolar'] = dolar_hist.reindex(datas, method='ffill')
+    macro_df['petroleo'] = petroleo_hist.reindex(datas, method='ffill')
+    macro_df['soja'] = soja_hist.reindex(datas, method='ffill')
+    macro_df['milho'] = milho_hist.reindex(datas, method='ffill')
+    macro_df['minerio'] = minerio_hist.reindex(datas, method='ffill')
+    macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
+    macro_df["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
+
+    historico = []
+    for data in datas:
+        macro = {
+            "ipca": macro_df.loc[data, "ipca"],
+            "selic": macro_df.loc[data, "selic"],
+            "dolar": macro_df.loc[data, "dolar"],
+            "pib": 2,
+            "petroleo": macro_df.loc[data, "petroleo"],
+            "soja": None,
+            "milho": None,
+            "minerio": None
+        }
+        cenario = classificar_cenario_macro(
+            ipca=macro["ipca"],
+            selic=macro["selic"],
+            dolar=macro["dolar"],
+            pib=macro["pib"],
+            preco_soja=macro["soja"],
+            preco_milho=macro["milho"],
+            preco_minerio=macro["minerio"],
+            preco_petroleo=macro["petroleo"]
+        )
+        score_macro = pontuar_macro(macro)
+        for ticker in tickers:
+            setor = setores_por_ticker.get(ticker, None)
+            favorecido = calcular_favorecimento_continuo(setor, score_macro)
+            historico.append({
+                "data": str(data.date()),
+                "cenario": cenario,
+                "ticker": ticker,
+                "setor": setor,
+                "favorecido": favorecido
+            })
+    df_hist = pd.DataFrame(historico)
+    return df_hist
+
+def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01'):
+    # 1. Baixar preços ajustados diários
+    df_prices = obter_preco_diario_ajustado(tickers)
+    df_prices = df_prices.ffill().bfill()
+
+    # 2. Gerar retornos logarítmicos mensais
+    df_prices_monthly = df_prices.resample('M').last()
+    df_returns = np.log(df_prices_monthly / df_prices_monthly.shift(1)).dropna()
+
+    # 3. Retorno médio mensal por setor
+    df_setores = pd.DataFrame({t: setores_por_ticker.get(t, None) for t in df_returns.columns}, index=df_returns.columns, columns=["setor"])
+    retorno_setorial = df_returns.groupby(df_setores["setor"], axis=1).mean()
+
+    # 4. Fatores macro: ajuste nomes conforme suas colunas reais!
+    # O macro_df deve ser mensal, indexado por data, e ter as colunas abaixo:
+    macro_df = macro_df.reindex(retorno_setorial.index).ffill().bfill()
+    fatores_macro = macro_df.rename(columns={
+        'selic': 'juros',
+        'ipca': 'inflação',
+        'dolar': 'dolar',
+        'pib': 'pib',
+        'petroleo': 'commodities_petroleo',
+        'soja': 'commodities_agro',      # Use a média de soja/milho se preferir!
+        'milho': 'commodities_agro',     # Alternativamente, crie uma coluna média: macro_df["commodities_agro"] = (macro_df["soja"] + macro_df["milho"])/2
+        'minerio': 'commodities_minerio'
+    })
+    # Se quiser usar a média de soja/milho, faça:
+    # fatores_macro["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
+    fatores_macro = fatores_macro[[
+        'juros', 'inflação', 'dolar', 'pib',
+        'commodities_agro', 'commodities_minerio', 'commodities_petroleo'
+    ]]
+
+    return retorno_setorial, fatores_macro
+
+def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
+    setores = retorno_setorial.columns
+    fatores = fatores_macro.columns
+    sens_dict = {}
+    for setor in setores:
+        y = retorno_setorial[setor].values
+        X = fatores_macro.values
+        mask = ~np.isnan(y) & ~np.any(np.isnan(X), axis=1)
+        if mask.sum() < 12:  # mínimo de 1 ano de dados
+            continue
+        reg = LinearRegression().fit(X[mask], y[mask])
+        # Normaliza os coeficientes para soma (abs) = 1 (opcional)
+        coefs = reg.coef_ / np.sum(np.abs(reg.coef_)) if np.sum(np.abs(reg.coef_)) > 0 else reg.coef_
+        sens_dict[setor] = dict(zip(fatores, coefs))
+    return sens_dict
+
+# ... depois de montar macro_df e de definir setores_por_ticker
+
+
+
+# Se você já tem macro_df pronto (veja no montar_historico_7anos), use:
+tickers = list(setores_por_ticker.keys())
+retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
+sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
+
+historico_7anos = montar_historico_7anos(
+    tickers=tickers,
+    setores_por_ticker=setores_por_ticker,
+    start='2018-01-01'
+)
 
 # ========= MACRO ==========
 
