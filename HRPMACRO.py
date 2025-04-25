@@ -6,15 +6,92 @@ import requests
 import datetime
 import os
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
 from sklearn.covariance import LedoitWolf
 from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from scipy.optimize import minimize
 
+def get_bcb_hist(code, start, end):
+    """Baixa série histórica mensal do BCB para um código SGS."""
+    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados?formato=json&dataInicial={start}&dataFinal={end}"
+    r = requests.get(url)
+    if r.status_code == 200:
+        df = pd.DataFrame(r.json())
+        df['data'] = pd.to_datetime(df['data'], dayfirst=True)
+        df['valor'] = df['valor'].str.replace(",", ".").astype(float)
+        return df.set_index('data')['valor']
+    else:
+        return pd.Series(dtype=float)
 
+def obter_preco_petroleo_hist(start, end):
+    """Baixa preço histórico mensal do petróleo Brent (BZ=F) do Yahoo Finance."""
+    df = yf.download("BZ=F", start=start, end=end, interval="1mo", progress=False)
+    if not df.empty:
+        df.index = pd.to_datetime(df.index)
+        return df['Close']
+    return pd.Series(dtype=float)
 
+def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
+    """Gera histórico dos últimos 7 anos (em memória, sem salvar em CSV)."""
+    hoje = datetime.date.today()
+    inicio = pd.to_datetime(start)
+    final = hoje
+    datas = pd.date_range(inicio, final, freq='M').normalize()
+    
+    # Baixar séries macro históricas do BCB
+    selic_hist = get_bcb_hist(432, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
+    ipca_hist = get_bcb_hist(433, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
+    dolar_hist = get_bcb_hist(1, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
+    petroleo_hist = obter_preco_petroleo_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
+    
+    # Normalizar todos os índices para garantir compatibilidade
+    selic_hist.index = pd.to_datetime(selic_hist.index).normalize()
+    ipca_hist.index = pd.to_datetime(ipca_hist.index).normalize()
+    dolar_hist.index = pd.to_datetime(dolar_hist.index).normalize()
+    petroleo_hist.index = pd.to_datetime(petroleo_hist.index).normalize()
+    
+    macro_df = pd.DataFrame(index=datas)
+    macro_df['selic'] = selic_hist.reindex(datas, method='ffill')
+    macro_df['ipca'] = ipca_hist.reindex(datas, method='ffill')
+    macro_df['dolar'] = dolar_hist.reindex(datas, method='ffill')
+    macro_df['petroleo'] = petroleo_hist.reindex(datas, method='ffill')
+    macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
 
+    historico = []
+    for data in datas:
+        macro = {
+            "ipca": macro_df.loc[data, "ipca"],
+            "selic": macro_df.loc[data, "selic"],
+            "dolar": macro_df.loc[data, "dolar"],
+            "pib": 2,
+            "petroleo": macro_df.loc[data, "petroleo"],
+            "soja": None,
+            "milho": None,
+            "minerio": None
+        }
+        cenario = classificar_cenario_macro(
+            ipca=macro["ipca"],
+            selic=macro["selic"],
+            dolar=macro["dolar"],
+            pib=macro["pib"],
+            preco_soja=macro["soja"],
+            preco_milho=macro["milho"],
+            preco_minerio=macro["minerio"],
+            preco_petroleo=macro["petroleo"]
+        )
+        score_macro = pontuar_macro(macro)
+        for ticker in tickers:
+            setor = setores_por_ticker.get(ticker, None)
+            favorecido = calcular_favorecimento_continuo(setor, score_macro)
+            historico.append({
+                "data": str(data.date()),
+                "cenario": cenario,
+                "ticker": ticker,
+                "setor": setor,
+                "favorecido": favorecido
+            })
+    df_hist = pd.DataFrame(historico)
+    return df_hist
 
 # ========= DICIONÁRIOS ==========
 
@@ -248,185 +325,7 @@ setores_por_cenario = {
     ]
 }
 
-def calcular_favorecimento_continuo(setor, score_macro):
-    if setor not in sensibilidade_setorial:
-        return 0
-    sens = sensibilidade_setorial[setor]
-    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
-    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
 
-
-
-def get_bcb_hist(code, start, end):
-    """Baixa série histórica mensal do BCB para um código SGS."""
-    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados?formato=json&dataInicial={start}&dataFinal={end}"
-    r = requests.get(url)
-    if r.status_code == 200:
-        df = pd.DataFrame(r.json())
-        df['data'] = pd.to_datetime(df['data'], dayfirst=True)
-        df['valor'] = df['valor'].str.replace(",", ".").astype(float)
-        return df.set_index('data')['valor']
-    else:
-        return pd.Series(dtype=float)
-
-def obter_preco_petroleo_hist(start, end):
-    """Baixa preço histórico mensal do petróleo Brent (BZ=F) do Yahoo Finance."""
-    df = yf.download("BZ=F", start=start, end=end, interval="1mo", progress=False)
-    if not df.empty:
-        df.index = pd.to_datetime(df.index)
-        return df['Close']
-    return pd.Series(dtype=float)
-
-def obter_preco_agro_hist(start, end):
-    df = yf.download("ZS=F", start=start, end=end, interval="1mo", progress=False)
-    if not df.empty:
-        df.index = pd.to_datetime(df.index)
-        return df['Close']
-    return pd.Series(dtype=float)
-
-def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
-    """Gera histórico dos últimos 7 anos (em memória, sem salvar em CSV)."""
-    hoje = datetime.date.today()
-    inicio = pd.to_datetime(start)
-    final = hoje
-    datas = pd.date_range(inicio, final, freq='M').normalize()
-    
-    # Baixar séries macro históricas do BCB
-    selic_hist = get_bcb_hist(432, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
-    ipca_hist = get_bcb_hist(433, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
-    dolar_hist = get_bcb_hist(1, inicio.strftime('%d/%m/%Y'), final.strftime('%d/%m/%Y'))
-    petroleo_hist = obter_preco_petroleo_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
-    agro_hist = obter_preco_agro_hist(inicio.strftime('%Y-%m-%d'), final.strftime('%Y-%m-%d'))
-    
-    # Normalizar todos os índices para garantir compatibilidade
-    datas = pd.date_range('2018-01-01', datetime.date.today(), freq='M').normalize()
-    selic_hist = get_bcb_hist(432, datas.min().strftime('%d/%m/%Y'), datas.max().strftime('%d/%m/%Y'))
-    ipca_hist = get_bcb_hist(433, datas.min().strftime('%d/%m/%Y'), datas.max().strftime('%d/%m/%Y'))
-    dolar_hist = get_bcb_hist(1, datas.min().strftime('%d/%m/%Y'), datas.max().strftime('%d/%m/%Y'))
-    petroleo_hist = obter_preco_petroleo_hist(datas.min().strftime('%Y-%m-%d'), datas.max().strftime('%Y-%m-%d'))
-    
-    # Adicione se quiser fatores agro e minério
-    soja_hist = obter_preco_commodity("ZS=F", nome="Soja")  # Ajuste para baixar histórico mensal
-    milho_hist = obter_preco_commodity("ZC=F", nome="Milho") # Ajuste para baixar histórico mensal
-    minerio_hist = obter_preco_commodity("BZ=F", nome="Minério de Ferro") # Ajuste para baixar histórico mensal
-    
-    macro_df = pd.DataFrame(index=datas)
-    macro_df['selic'] = selic_hist.reindex(datas, method='ffill')
-    macro_df['ipca'] = ipca_hist.reindex(datas, method='ffill')
-    macro_df['dolar'] = dolar_hist.reindex(datas, method='ffill')
-    macro_df['petroleo'] = petroleo_hist.reindex(datas, method='ffill')
-    macro_df['soja'] = soja_hist.reindex(datas, method='ffill') if soja_hist is not None else np.nan
-    macro_df['milho'] = milho_hist.reindex(datas, method='ffill') if milho_hist is not None else np.nan
-    macro_df['minerio'] = minerio_hist.reindex(datas, method='ffill') if minerio_hist is not None else np.nan
-    macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
-    macro_df["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
-
-    historico = []
-    for data in datas:
-        macro = {
-            "ipca": macro_df.loc[data, "ipca"],
-            "selic": macro_df.loc[data, "selic"],
-            "dolar": macro_df.loc[data, "dolar"],
-            "pib": 2,
-            "petroleo": macro_df.loc[data, "petroleo"],
-            "soja": None,
-            "milho": None,
-            "minerio": None
-        }
-        cenario = classificar_cenario_macro(
-            ipca=macro["ipca"],
-            selic=macro["selic"],
-            dolar=macro["dolar"],
-            pib=macro["pib"],
-            preco_soja=macro["soja"],
-            preco_milho=macro["milho"],
-            preco_minerio=macro["minerio"],
-            preco_petroleo=macro["petroleo"]
-        )
-        score_macro = pontuar_macro(macro)
-        for ticker in tickers:
-            setor = setores_por_ticker.get(ticker, None)
-            favorecido = calcular_favorecimento_continuo(setor, score_macro)
-            historico.append({
-                "data": str(data.date()),
-                "cenario": cenario,
-                "ticker": ticker,
-                "setor": setor,
-                "favorecido": favorecido
-            })
-    df_hist = pd.DataFrame(historico)
-    return df_hist
-
-tickers = list(setores_por_ticker.keys())
-
-
-def montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01'):
-    # 1. Baixar preços ajustados diários
-    df_prices = obter_preco_diario_ajustado(tickers)
-    df_prices = df_prices.ffill().bfill()
-
-    # 2. Gerar retornos logarítmicos mensais
-    df_prices_monthly = df_prices.resample('M').last()
-    df_returns = np.log(df_prices_monthly / df_prices_monthly.shift(1)).dropna()
-
-    # 3. Retorno médio mensal por setor
-    df_setores = pd.DataFrame({t: setores_por_ticker.get(t, None) for t in df_returns.columns}, index=df_returns.columns, columns=["setor"])
-    retorno_setorial = df_returns.groupby(df_setores["setor"], axis=1).mean()
-
-    # 4. Fatores macro: ajuste nomes conforme suas colunas reais!
-    # O macro_df deve ser mensal, indexado por data, e ter as colunas abaixo:
-    macro_df = macro_df.reindex(retorno_setorial.index).ffill().bfill()
-    fatores_macro = macro_df.rename(columns={
-        'selic': 'juros',
-        'ipca': 'inflação',
-        'dolar': 'dolar',
-        'pib': 'pib',
-        'petroleo': 'commodities_petroleo',
-        'soja': 'commodities_agro',      # Use a média de soja/milho se preferir!
-        'milho': 'commodities_agro',     # Alternativamente, crie uma coluna média: macro_df["commodities_agro"] = (macro_df["soja"] + macro_df["milho"])/2
-        'minerio': 'commodities_minerio'
-    })
-    # Se quiser usar a média de soja/milho, faça:
-    # fatores_macro["commodities_agro"] = macro_df[["soja", "milho"]].mean(axis=1)
-    fatores_macro = fatores_macro[[
-        'juros', 'inflação', 'dolar', 'pib',
-        'commodities_agro', 'commodities_minerio', 'commodities_petroleo'
-    ]]
-
-    return retorno_setorial, fatores_macro
-
-retorno_setorial, fatores_macro = montar_dataframes_regressao_auto(tickers, setores_por_ticker, macro_df, start='2018-01-01')
-
-
-def calcular_sensibilidade_setorial(retorno_setorial, fatores_macro):
-    setores = retorno_setorial.columns
-    fatores = fatores_macro.columns
-    sens_dict = {}
-    for setor in setores:
-        y = retorno_setorial[setor].values
-        X = fatores_macro.values
-        mask = ~np.isnan(y) & ~np.any(np.isnan(X), axis=1)
-        if mask.sum() < 12:  # mínimo de 1 ano de dados
-            continue
-        reg = LinearRegression().fit(X[mask], y[mask])
-        # Normaliza os coeficientes para soma (abs) = 1 (opcional)
-        coefs = reg.coef_ / np.sum(np.abs(reg.coef_)) if np.sum(np.abs(reg.coef_)) > 0 else reg.coef_
-        sens_dict[setor] = dict(zip(fatores, coefs))
-    return sens_dict
-
-sensibilidade_setorial = calcular_sensibilidade_setorial(retorno_setorial, fatores_macro)
-# ... depois de montar macro_df e de definir setores_por_ticker
-
-
-
-# Se você já tem macro_df pronto (veja no montar_historico_7anos), use:
-
-
-historico_7anos = montar_historico_7anos(
-    tickers=tickers,
-    setores_por_ticker=setores_por_ticker,
-    start='2018-01-01'
-)
 
 # ========= MACRO ==========
 
@@ -506,24 +405,11 @@ def obter_preco_petroleo():
 
 # Funções de pontuação individual
 
-PARAMS = {
-    "selic_neutra": 7.0,  # Ajuste conforme consenso/Focus
-    "ipca_meta": 3.,    # Meta do BC para 2025
-    "ipca_tolerancia": 1.5,
-    "dolar_ideal": 5.30,  # Mais próximo do câmbio médio recente
-    "soja_ideal": 13.0,
-    "milho_ideal": 5.5,
-    "minerio_ideal": 110.0,
-    "petroleo_ideal": 85.0,
-}
-
-# ============ FUNÇÕES DE PONTUAÇÃO MELHORADAS ============
-
 def pontuar_ipca(ipca):
     if ipca is None or pd.isna(ipca):
         return 0
-    meta = PARAMS["ipca_meta"]
-    tolerancia = PARAMS["ipca_tolerancia"]
+    meta = 3.0
+    tolerancia = 1.5
     if meta - tolerancia <= ipca <= meta + tolerancia:
         return 10
     elif ipca < meta - tolerancia:
@@ -534,7 +420,7 @@ def pontuar_ipca(ipca):
 def pontuar_selic(selic):
     if selic is None or pd.isna(selic):
         return 0
-    neutra = PARAMS["selic_neutra"]
+    neutra = 7.0
     if selic == neutra:
         return 10
     elif selic < neutra:
@@ -545,9 +431,9 @@ def pontuar_selic(selic):
 def pontuar_dolar(dolar):
     if dolar is None or pd.isna(dolar):
         return 0
-    ideal = PARAMS["dolar_ideal"]
+    ideal = 5.90
     desvio = abs(dolar - ideal)
-    return max(0, 10 - desvio * 2)  # Sugerido suavizar para *1.5 para menor penalização
+    return max(0, 10 - desvio * 2)
 
 def pontuar_pib(pib):
     if pib is None or pd.isna(pib):
@@ -561,31 +447,31 @@ def pontuar_pib(pib):
 def pontuar_soja(soja):
     if soja is None or pd.isna(soja):
         return 0
-    ideal = PARAMS["soja_ideal"]
+    ideal = 13.0
     desvio = abs(soja - ideal)
     return max(0, 10 - desvio * 1.5)
 
 def pontuar_milho(milho):
     if milho is None or pd.isna(milho):
         return 0
-    ideal = PARAMS["milho_ideal"]
+    ideal = 5.5
     desvio = abs(milho - ideal)
     return max(0, 10 - desvio * 2)
 
 def pontuar_minerio(minerio):
     if minerio is None or pd.isna(minerio):
         return 0
-    ideal = PARAMS["minerio_ideal"]
+    ideal = 110.0
     desvio = abs(minerio - ideal)
     return max(0, 10 - desvio * 0.1)
 
 def pontuar_petroleo(petroleo):
     if petroleo is None or pd.isna(petroleo):
         return 0
-    ideal = PARAMS["petroleo_ideal"]
+    ideal = 85.0
     desvio = abs(petroleo - ideal)
     return max(0, 10 - desvio * 0.2)
-
+    
 def pontuar_soja_milho(soja, milho):
     return (pontuar_soja(soja) + pontuar_milho(milho)) / 2
 
@@ -598,10 +484,13 @@ def pontuar_macro(m):
     score["commodities_agro"] = pontuar_soja_milho(m.get("soja"), m.get("milho"))
     score["commodities_minerio"] = pontuar_minerio(m.get("minerio"))
     score["commodities_petroleo"] = pontuar_petroleo(m.get("petroleo"))
-    score["media_global"] = np.mean(list(score.values()))
     return score
 
 
+
+
+
+# Funções para preço-alvo e preço atual
 
 def obter_preco_alvo(ticker):
     try:
@@ -671,25 +560,23 @@ def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, 
         return -float("inf"), "Preço atual igual a zero"
 
     upside = (preco_alvo - preco_atual) / preco_atual
-    # Sugestão: Suavizar o score base para evitar distorções por outliers
-    base_score = np.sign(upside) * np.log1p(abs(upside)) * 10  # logarítmico, menos sensível a upsides extremos
+    base_score = upside * 10
 
     score_macro = 0
     if setor in sensibilidade_setorial and usar_pesos_macroeconomicos:
         s = sensibilidade_setorial[setor]
-        score_indicadores = pontuar_macro(macro)
+        score_indicadores = pontuar_macro(macro)  # já normalizado
         for indicador, peso in s.items():
             score_macro += peso * score_indicadores.get(indicador, 0)
 
     score_macro = np.clip(score_macro, -10, 10)
 
-    # Bônus para exportadoras
     bonus = 0
     if ticker in empresas_exportadoras:
-        if macro.get('dolar') and macro['dolar'] > PARAMS["dolar_ideal"]:
-            bonus += 0.07
-        if macro.get('petroleo') and macro['petroleo'] > PARAMS["petroleo_ideal"]:
-            bonus += 0.03
+        if macro.get('dolar') and macro['dolar'] > 5:
+            bonus += 0.05
+        if macro.get('petroleo') and macro['petroleo'] > 80:
+            bonus += 0.05
     bonus = np.clip(bonus, 0, 0.1)
 
     score_total = base_score + (0.05 * score_macro) + bonus + (favorecimento_score * 1.5 if usar_pesos_macroeconomicos else 0)
@@ -747,14 +634,33 @@ def completar_pesos(tickers_originais, pesos_calculados):
         pesos_completos[ticker] = pesos_calculados[ticker]
     return pesos_completos
 
-
-
+        
 
 # ========= FILTRAR AÇÕES ==========
 # Novo modelo com commodities separadas
+sensibilidade_setorial = {
+    'Bancos':                          {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 1, 'commodities_minerio': 1},
+    'Seguradoras':                     {'juros': 2,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0, 'commodities_minerio': 0},
+    'Bolsas e Serviços Financeiros':  {'juros': 1,  'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': 0, 'commodities_minerio': 0},
+    'Energia Elétrica':               {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1},
+    'Petróleo, Gás e Biocombustíveis':{'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Mineração e Siderurgia':         {'juros': 0,  'inflação': 0,  'dolar': 2,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 2},
+    'Indústria e Bens de Capital':    {'juros': -1, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Agronegócio':                    {'juros': 0,  'inflação': -1, 'dolar': 2,  'pib': 1,  'commodities_agro': 2,  'commodities_minerio': 0},
+    'Saúde':                          {'juros': 0,  'inflação': 0,  'dolar': 0,  'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Tecnologia':                     {'juros': -2, 'inflação': 0,  'dolar': 0,  'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
+    'Consumo Discricionário':         {'juros': -2, 'inflação': -1, 'dolar': -1, 'pib': 2,  'commodities_agro': -1, 'commodities_minerio': -1},
+    'Consumo Básico':                 {'juros': 1,  'inflação': -2, 'dolar': -1, 'pib': 1,  'commodities_agro': -1, 'commodities_minerio': -1},
+    'Comunicação':                    {'juros': 0,  'inflação': 0,  'dolar': -1, 'pib': 1,  'commodities_agro': 0,  'commodities_minerio': 0},
+    'Utilidades Públicas':            {'juros': 2,  'inflação': 1,  'dolar': -1, 'pib': -1, 'commodities_agro': -1, 'commodities_minerio': -1}
+}
 
-
-
+def calcular_favorecimento_continuo(setor, score_macro):
+    if setor not in sensibilidade_setorial:
+        return 0
+    sens = sensibilidade_setorial[setor]
+    bruto = sum(score_macro.get(k, 0) * peso for k, peso in sens.items())
+    return np.tanh(bruto / 5) * 2  # suaviza com tangente hiperbólica
 
 
     
