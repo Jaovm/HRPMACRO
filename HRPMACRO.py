@@ -612,11 +612,11 @@ def classificar_cenario_macro(ipca, selic, dolar, pib,
 
 
     # ESCALA MAIS NATURAL E ROBUSTA:
-    if total_score >= 38:
+    if total_score >= 70:
         return "Expansão Forte"
-    elif total_score >= 35:
+    elif total_score >= 55:
         return "Expansão Moderada"
-    elif total_score >= 32:
+    elif total_score >= 40:
         return "Estável"
     elif total_score >= 28:
         return "Contração Moderada"
