@@ -420,7 +420,7 @@ def pontuar_ipca(ipca):
 def pontuar_selic(selic):
     if selic is None or pd.isna(selic):
         return 0
-    neutra = 9.0
+    neutra = 7.0
     if selic == neutra:
         return 10
     elif selic < neutra:
