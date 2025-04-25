@@ -398,10 +398,6 @@ PARAMS = {
     "ipca_meta": 3.25,
     "ipca_tolerancia": 1.5,
     "dolar_ideal": 5.30,
-    "soja_ideal": 13.0,
-    "milho_ideal": 5.5,
-    "minerio_ideal": 110.0,
-    "petroleo_ideal": 85.0,
 }
 
 # ==================== FUNÇÕES DE PONTUAÇÃO ====================
@@ -445,6 +441,49 @@ def pontuar_pib(pib):
     else:
         return max(0, 8 - (ideal - pib) * 3)
 
+# Atualize as funções de preço ideal para usar médias móveis
+
+@st.cache_data(ttl=86400)
+def calcular_media_movel(ticker, periodo="6mo", intervalo="1mo"):
+    """
+    Calcula a média móvel do preço de um ativo (ex.: soja, milho, petróleo, minério).
+    - ticker: código do ativo no Yahoo Finance (ex.: "ZS=F" para soja).
+    - periodo: período histórico para calcular a média (ex.: "6mo", "1y").
+    - intervalo: intervalo dos dados históricos (ex.: "1mo" para mensal).
+    """
+    try:
+        # Baixar os preços históricos do Yahoo Finance
+        dados = yf.download(ticker, period=periodo, interval=intervalo, progress=False)
+        if not dados.empty:
+            media_movel = dados['Close'].mean()  # Média dos preços de fechamento
+            return media_movel
+        else:
+            st.warning(f"Dados históricos indisponíveis para {ticker}.")
+            return None
+    except Exception as e:
+        st.error(f"Erro ao calcular média móvel para {ticker}: {e}")
+        return None
+
+# Atualize os preços ideais dinamicamente com médias móveis
+def obter_precos_ideais():
+    """
+    Define os preços ideais (para pontuação) com base em médias móveis históricas.
+    """
+    precos_ideais = {
+        "soja_ideal": calcular_media_movel("ZS=F", periodo="12mo", intervalo="1mo"),  # Soja
+        "milho_ideal": calcular_media_movel("ZC=F", periodo="12mo", intervalo="1mo"),  # Milho
+        "minerio_ideal": calcular_media_movel("BZ=F", periodo="12mo", intervalo="1mo"),  # Minério
+        "petroleo_ideal": calcular_media_movel("BZ=F", periodo="12mo", intervalo="1mo")  # Petróleo Brent
+    }
+    return precos_ideais
+
+# Atualize os parâmetros globais dinamicamente
+def atualizar_parametros_com_medias_moveis():
+    precos_ideais = obter_precos_ideais()
+    PARAMS.update(precos_ideais)  # Atualiza os preços ideais dinamicamente
+    return PARAMS
+
+# Atualize as funções de pontuação para usar preços ideais dinâmicos
 def pontuar_soja(soja):
     if soja is None or pd.isna(soja):
         return 0
@@ -473,8 +512,11 @@ def pontuar_petroleo(petroleo):
     desvio = abs(petroleo - ideal)
     return max(0, 10 - desvio * 0.2)
 
-def pontuar_soja_milho(soja, milho):
-    return (pontuar_soja(soja) + pontuar_milho(milho)) / 2
+# Atualizar os parâmetros antes de começar a análise
+PARAMS = atualizar_parametros_com_medias_moveis()
+
+# Atualize o Streamlit para mostrar os preços ideais
+
 
 def pontuar_macro(m):
     score = {}
