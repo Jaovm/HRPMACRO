@@ -482,7 +482,7 @@ def pontuar_soja(soja):
         return 0
     if isinstance(soja, pd.Series):
         soja = float(soja.iloc[0])
-    ideal = PARAMS["soja_ideal"]
+    ideal = PARAMS.get("soja_ideal", 13.0)
     if ideal is None or pd.isna(ideal):
         return 0
     desvio = abs(soja - ideal)
@@ -493,12 +493,16 @@ def pontuar_milho(milho):
         return 0
     if isinstance(milho, pd.Series):
         milho = float(milho.iloc[0])
-    ideal = PARAMS["milho_ideal"]
+    ideal = PARAMS.get("milho_ideal", 5.5)
     if ideal is None or pd.isna(ideal):
         return 0
     desvio = abs(milho - ideal)
     return max(0, 10 - desvio * 2)
 
+def pontuar_soja_milho(soja, milho):
+    """Pontua a média entre soja e milho, para commodities agro."""
+    return (pontuar_soja(soja) + pontuar_milho(milho)) / 2
+    
 def pontuar_minerio(minerio):
     if minerio is None or pd.isna(minerio):
         return 0
@@ -520,6 +524,8 @@ def pontuar_petroleo(petroleo):
         return 0
     desvio = abs(petroleo - ideal)
     return max(0, 10 - desvio * 0.2)
+
+
 
 # --- Garanta que os parâmetros estejam atualizados antes do uso ---
 PARAMS = atualizar_parametros_com_medias_moveis()
