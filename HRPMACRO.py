@@ -303,6 +303,7 @@ empresas_exportadoras = [
     'CSNA3.SA',  # Siderurgia
     'GGBR4.SA',  # Siderurgia
     'CMIN3.SA',  # Mineração
+    'TUPY3.SA',
 ]
 
 
