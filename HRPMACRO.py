@@ -151,6 +151,7 @@ setores_por_ticker = {
     'SUZB3.SA': 'Indústria e Bens de Capital',
     'UNIP6.SA': 'Indústria e Bens de Capital',
     'KEPL3.SA': 'Indústria e Bens de Capital',
+    'TUPY3.SA': 'Indústria e Bens de Capital',
 
     # Agronegócio
     'AGRO3.SA': 'Agronegócio',
