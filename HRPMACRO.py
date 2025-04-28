@@ -537,18 +537,28 @@ PARAMS = atualizar_parametros_com_medias_moveis()
 # Atualize o Streamlit para mostrar os preços ideais
 
 
-def pontuar_macro(m):
-    score = {}
-    score["juros"] = pontuar_selic(m.get("selic"))
-    score["inflação"] = pontuar_ipca(m.get("ipca"))
-    score["dolar"] = pontuar_dolar(m.get("dolar"))
-    score["pib"] = pontuar_pib(m.get("pib"))
-    score["commodities_agro"] = pontuar_soja_milho(m.get("soja"), m.get("milho"))
-    score["commodities_minerio"] = pontuar_minerio(m.get("minerio"))
-    score["commodities_petroleo"] = pontuar_petroleo(m.get("petroleo"))
-    score["media_global"] = np.mean(list(score.values()))
+def pontuar_macro(m, pesos=None):
+    """
+    Calcula scores macroeconômicos normalizados e média ponderada.
+    m: dict com indicadores macroeconômicos
+    pesos: dict opcional com pesos dos indicadores
+    """
+    validar_macro(m)
+    score = {
+        "juros": pontuar_selic(m["selic"]),
+        "inflação": pontuar_ipca(m["ipca"]),
+        "dolar": pontuar_dolar(m["dolar"]),
+        "pib": pontuar_pib(m["pib"]),
+        "commodities_agro": pontuar_soja_milho(m["soja"], m["milho"]),
+        "commodities_minerio": pontuar_minerio(m["minerio"]),
+        "commodities_petroleo": pontuar_petroleo(m["petroleo"]),
+    }
+    # Normalização e pesos
+    pesos = pesos or {k: 1 for k in score}
+    total_peso = sum(pesos.values())
+    media_global = sum(score[k] * pesos.get(k, 1) for k in score) / total_peso
+    score["media_global"] = media_global
     return score
-
 
 
 
@@ -672,13 +682,13 @@ def classificar_cenario_macro(ipca, selic, dolar, pib,
 
 
     # ESCALA MAIS NATURAL E ROBUSTA:
-    if total_score >= 70:
+    if total_score >= 18:
         return "Expansão Forte"
-    elif total_score >= 55:
+    elif total_score >= 10:
         return "Expansão Moderada"
-    elif total_score >= 40:
+    elif total_score >= -5:
         return "Estável"
-    elif total_score >= 28:
+    elif total_score >= -15:
         return "Contração Moderada"
     else:
         return "Contração Forte"
