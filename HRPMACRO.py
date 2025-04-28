@@ -745,7 +745,6 @@ def classificar_cenario_macro(
     score_pib = pontuar_pib(pib)
     total_score = score_ipca + score_selic + score_dolar + score_pib
 
-    # Commodities
     commodities = [
         ('soja', preco_soja, pontuar_soja),
         ('milho', preco_milho, pontuar_milho),
@@ -756,16 +755,14 @@ def classificar_cenario_macro(
         if preco is not None and not pd.isna(preco):
             total_score += func(preco)
 
-    # ------- ESCALA AJUSTADA PARA O BRASIL -------
-    # Expansão Forte: só anos muito excepcionais ou dados artificialmente inflados.
-    # Estável será o cenário mais frequente.
-    if total_score >= 52:
+    # Mais difícil obter "Estável" ou acima
+    if total_score >= 36:
         return "Expansão Forte"
-    elif total_score >= 44:
+    elif total_score >= 28:
         return "Expansão Moderada"
-    elif total_score >= 32:
+    elif total_score >= 18:
         return "Estável"
-    elif total_score >= 20:
+    elif total_score >= 8:
         return "Contração Moderada"
     else:
         return "Contração Forte"
