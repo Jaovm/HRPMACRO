@@ -446,23 +446,36 @@ def pontuar_ipca(ipca):
         return 0
     meta = PARAMS["ipca_meta"]
     tolerancia = PARAMS["ipca_tolerancia"]
+    # Dentro da meta: 10 pontos
     if meta - tolerancia <= ipca <= meta + tolerancia:
         return 10
-    elif ipca < meta - tolerancia:
-        return 7
+    # Até 1% acima da tolerância: 5 pontos
+    elif ipca <= meta + tolerancia + 1:
+        return 5
+    # Muito acima do teto da meta: penalização pesada
+    elif ipca > meta + tolerancia + 1:
+        return 0
+    # Abaixo da banda: 3 pontos (deflação)
     else:
-        return max(0, 10 - (ipca - (meta + tolerancia)) * 2)
+        return 3
 
 def pontuar_selic(selic):
     if selic is None or pd.isna(selic):
         return 0
     neutra = PARAMS["selic_neutra"]
-    if selic == neutra:
+    # Dentro da neutralidade: 10 pontos
+    if abs(selic - neutra) <= 0.5:
         return 10
-    elif selic < neutra:
-        return max(5, 10 - (neutra - selic) * 1.5)
+    # Até 2% acima: 4 pontos
+    elif selic > neutra and selic <= neutra + 2:
+        return 4
+    # Muito acima da neutra: 0 pontos
+    elif selic > neutra + 2:
+        return 0
+    # Abaixo da neutra: 6 pontos (ainda expansionista)
     else:
-        return max(0, 10 - (selic - neutra) * 1.5)
+        return 6
+
 
 def pontuar_dolar(dolar):
     if dolar is None or pd.isna(dolar):
