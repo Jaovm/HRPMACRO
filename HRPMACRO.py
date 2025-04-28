@@ -307,27 +307,62 @@ empresas_exportadoras = [
 ]
 
 
+# Mapeamento dos setores mais favorecidos em cada fase do ciclo macroeconômico.
+# Ajuste conforme mudanças de conjuntura ou inclusão de novos setores.
 setores_por_cenario = {
+    # Crescimento acelerado, demanda forte e apetite a risco.
     "Expansão Forte": [
-        'Consumo Discricionário', 'Tecnologia', 'Indústria e Bens de Capital', 'Agronegócio',
-        'Mineração e Siderurgia', 'Petróleo, Gás e Biocombustíveis'
+        'Consumo Discricionário',  # Ex: varejo, turismo, educação privada
+        'Tecnologia',
+        'Indústria e Bens de Capital',
+        'Agronegócio',
+        'Mineração e Siderurgia',
+        'Petróleo, Gás e Biocombustíveis'
     ],
+    # Crescimento moderado, ainda com bom apetite, mas já com busca por qualidade.
     "Expansão Moderada": [
-        'Consumo Discricionário', 'Tecnologia', 'Indústria e Bens de Capital', 'Agronegócio',
-        'Mineração e Siderurgia', 'Petróleo, Gás e Biocombustíveis', 'Saúde'
+        'Consumo Discricionário',
+        'Tecnologia',
+        'Indústria e Bens de Capital',
+        'Agronegócio',
+        'Mineração e Siderurgia',
+        'Petróleo, Gás e Biocombustíveis',
+        'Saúde'  # Começa a ganhar tração em cenários menos exuberantes
     ],
+    # Economia estável, equilíbrio entre risco e proteção, preferência por setores defensivos.
     "Estável": [
-        'Saúde', 'Bancos', 'Seguradoras', 'Bolsas e Serviços Financeiros', 'Consumo Básico',
-        'Utilidades Públicas', 'Comunicação'
+        'Saúde',
+        'Bancos',
+        'Seguradoras',
+        'Bolsas e Serviços Financeiros',
+        'Consumo Básico',
+        'Utilidades Públicas',
+        'Comunicação'
     ],
+    # Início de desaceleração, foco em proteção e estabilidade de receita.
     "Contração Moderada": [
-        'Bancos', 'Seguradoras', 'Consumo Básico', 'Utilidades Públicas', 'Saúde',
-        'Energia Elétrica', 'Comunicação'
+        'Bancos',
+        'Seguradoras',
+        'Consumo Básico',
+        'Utilidades Públicas',
+        'Saúde',
+        'Energia Elétrica',
+        'Comunicação'
     ],
+    # Contração severa, recessão; apenas setores mais resilientes.
     "Contração Forte": [
-        'Utilidades Públicas', 'Consumo Básico', 'Energia Elétrica', 'Saúde'
+        'Utilidades Públicas',
+        'Consumo Básico',
+        'Energia Elétrica',
+        'Saúde'
     ]
 }
+
+# DICA: Para obter todos os setores únicos usados em qualquer cenário:
+todos_setores = set()
+for setores in setores_por_cenario.values():
+    todos_setores.update(setores)
+# todos_setores agora contém todos os setores possíveis
 
 
 # ========= MACRO ==========
