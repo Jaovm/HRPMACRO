@@ -749,7 +749,7 @@ def classificar_cenario_macro(
     # - Estável: a maioria dos anos
     # - Contração Moderada: anos ruins ou incerteza
     # - Contração Forte: cenário recessivo/crise
-    if total_score >= 36:
+    if total_score >= 40:
         return "Expansão Forte"
     elif total_score >= 28:
         return "Expansão Moderada"
