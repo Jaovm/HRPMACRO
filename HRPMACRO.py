@@ -1366,15 +1366,17 @@ if st.button("Gerar Alocação Otimizada"):
     if not ativos_validos:
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
     else:
+        # Gere o dicionário de favorecimentos logo após filtrar
+        favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
         tickers_validos = [a['ticker'] for a in ativos_validos]
         try:
             # Escolha do método:
             if metodo_otimizacao == "Sharpe Máximo (risco/retorno)":
-                pesos = otimizar_carteira_sharpe(tickers_validos, carteira)
+                pesos = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
             elif metodo_otimizacao == "Retorno Máximo (limite 20% por ativo)":
-                pesos = otimizar_carteira_retorno_maximo(tickers_validos, carteira)
+                pesos = otimizar_carteira_retorno_maximo(tickers_validos, carteira, favorecimentos=favorecimentos)
             elif metodo_otimizacao == "HRP (Hierarchical Risk Parity)":
-                pesos = otimizar_carteira_hrp(tickers_validos, carteira)
+                pesos = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
             else:
                 st.error("Método de otimização desconhecido.")
                 st.stop()
