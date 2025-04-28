@@ -743,19 +743,16 @@ def classificar_cenario_macro(
         if preco is not None and not pd.isna(preco):
             total_score += func(preco)
 
-    # Escala calibrada para a realidade brasileira:
-    # - Expansão Forte: só possível em boom real (score MUITO alto)
-    # - Expansão Moderada: crescimento robusto, porém não espetacular
-    # - Estável: a maioria dos anos
-    # - Contração Moderada: anos ruins ou incerteza
-    # - Contração Forte: cenário recessivo/crise
-    if total_score >= 40:
+    # ------- ESCALA AJUSTADA PARA O BRASIL -------
+    # Expansão Forte: só anos muito excepcionais ou dados artificialmente inflados.
+    # Estável será o cenário mais frequente.
+    if total_score >= 52:
         return "Expansão Forte"
-    elif total_score >= 28:
+    elif total_score >= 44:
         return "Expansão Moderada"
-    elif total_score >= 16:
+    elif total_score >= 32:
         return "Estável"
-    elif total_score >= 6:
+    elif total_score >= 20:
         return "Contração Moderada"
     else:
         return "Contração Forte"
