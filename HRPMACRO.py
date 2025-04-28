@@ -744,10 +744,10 @@ def classificar_cenario_macro(
     score_dolar = pontuar_dolar(dolar)
     score_pib = pontuar_pib(pib)
     
-    # Soma apenas dos 4 principais
+    # Soma apenas dos 4 principais indicadores macro
     core_score = score_ipca + score_selic + score_dolar + score_pib
-    
-    # Commodities - peso MUITO menor
+
+    # Commodities - peso quase simbólico (apenas 0.1x)
     commodities = [
         ('soja', preco_soja, pontuar_soja),
         ('milho', preco_milho, pontuar_milho),
@@ -757,20 +757,18 @@ def classificar_cenario_macro(
     commodities_score = 0
     for nome, preco, func in commodities:
         if preco is not None and not pd.isna(preco):
-            commodities_score += 0.2 * func(preco)  # Peso reduzido para commodities
+            commodities_score += 0.1 * func(preco)
 
     total_score = core_score + commodities_score
 
-    # ESCALA CONSERVADORA
-    # Máximo prático típico: ~40 (cenário ótimo), ~15-20 em cenário ruim
-    # Estável só se 3 dos 4 pilares estão realmente bons
-    if total_score >= 35:
+    # ESCALA SUPER CONSERVADORA: "Estável" só se tudo está ótimo
+    if total_score >= 38:
         return "Expansão Forte"
-    elif total_score >= 28:
+    elif total_score >= 32:
         return "Expansão Moderada"
-    elif total_score >= 21:
+    elif total_score >= 26:
         return "Estável"
-    elif total_score >= 13:
+    elif total_score >= 14:
         return "Contração Moderada"
     else:
         return "Contração Forte"
