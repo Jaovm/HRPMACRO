@@ -745,6 +745,7 @@ def classificar_cenario_macro(
     score_pib = pontuar_pib(pib)
     total_score = score_ipca + score_selic + score_dolar + score_pib
 
+    # Commodities
     commodities = [
         ('soja', preco_soja, pontuar_soja),
         ('milho', preco_milho, pontuar_milho),
@@ -755,19 +756,20 @@ def classificar_cenario_macro(
         if preco is not None and not pd.isna(preco):
             total_score += func(preco)
 
-    # Mais difícil obter "Estável" ou acima
-    if total_score >= 36:
-        return "Expansão Forte"
-    elif total_score >= 28:
-        return "Expansão Moderada"
-    elif total_score >= 18:
-        return "Estável"
-    elif total_score >= 8:
-        return "Contração Moderada"
+    # -------- ESCALA EXTREMAMENTE RIGOROSA --------
+    # Máximo teórico (com todas as pontuações 10) seria 40+ (com commodities, talvez 50)
+    # Mas situações reais raramente chegam perto disso.
+    # Portanto:
+    if total_score >= 56:
+        return "Expansão Forte"           # Praticamente impossível, só em utopia
+    elif total_score >= 47:
+        return "Expansão Moderada"        # Só em conjuntura muito favorável
+    elif total_score >= 30:
+        return "Estável"                  # Normalidade macro, mesmo com um ou outro indicador ruim
+    elif total_score >= 17:
+        return "Contração Moderada"       # Cenário ruim, mas não crítico
     else:
-        return "Contração Forte"
-
-
+        return "Contração Forte"          # Cenário crítico/recessivo
 
 
 
