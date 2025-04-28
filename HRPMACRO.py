@@ -434,7 +434,7 @@ def obter_preco_petroleo():
 
 PARAMS = {
     "selic_neutra": 7.0,
-    "ipca_meta": 3.25,
+    "ipca_meta": 3,
     "ipca_tolerancia": 1.5,
     "dolar_ideal": 5.30,
 }
