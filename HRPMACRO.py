@@ -665,44 +665,71 @@ def gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True):
 
      
 
-def calcular_score(preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro, usar_pesos_macroeconomicos=True, return_details=False):
-    import numpy as np
+
+def calcular_score(
+    preco_atual, preco_alvo, favorecimento_score, ticker, setor, macro,
+    usar_pesos_macroeconomicos=True, return_details=False
+):
+    """
+    Calcula o score de atratividade do ativo considerando upside, macro, favorecimento setorial e bônus de exportadora.
+    O score final é limitado a [-10, +10] para facilitar comparação.
+    """
 
     if preco_atual == 0:
         return -float("inf"), "Preço atual igual a zero"
 
     upside = (preco_alvo - preco_atual) / preco_atual
-    # Sugestão: Suavizar o score base para evitar distorções por outliers
-    base_score = np.sign(upside) * np.log1p(abs(upside)) * 10  # logarítmico, menos sensível a upsides extremos
 
+    # Upside: peso reduzido, logarítmico (para não distorcer por outlier)
+    base_score = np.sign(upside) * np.log1p(abs(upside)) * 3  # máximo prático ~3 a 4
+
+    # Macro: agora pesa mais
     score_macro = 0
     if setor in sensibilidade_setorial and usar_pesos_macroeconomicos:
         s = sensibilidade_setorial[setor]
         score_indicadores = pontuar_macro(macro)
         for indicador, peso in s.items():
             score_macro += peso * score_indicadores.get(indicador, 0)
-
     score_macro = np.clip(score_macro, -10, 10)
+
+    # Favorecimento setorial: peso relevante
+    favorecimento_peso = 2.0 if usar_pesos_macroeconomicos else 0
 
     # Bônus para exportadoras
     bonus = 0
     if ticker in empresas_exportadoras:
         if macro.get('dolar') and macro['dolar'] > PARAMS["dolar_ideal"]:
-            bonus += 0.07
+            bonus += 0.10
         if macro.get('petroleo') and macro['petroleo'] > PARAMS["petroleo_ideal"]:
-            bonus += 0.03
-    bonus = np.clip(bonus, 0, 0.1)
+            bonus += 0.05
+    bonus = np.clip(bonus, 0, 0.15)
 
-    score_total = base_score + (0.05 * score_macro) + bonus + (favorecimento_score * 1.5 if usar_pesos_macroeconomicos else 0)
-    detalhe = f"upside={upside:.2f}, base={base_score:.2f}, macro={score_macro:.2f}, bonus={bonus:.2f}, favorecimento={favorecimento_score:.2f}"
+    # Score final: pesos calibrados para que nenhum fator domine
+    score_total = (
+        base_score                 # -3 a +3 (upside)
+        + (0.20 * score_macro)     # -2 a +2 (macro)
+        + bonus                    # até +0.15
+        + (favorecimento_score * favorecimento_peso)  # -4 a +4 (favorecimento)
+    )
+    score_total = np.clip(score_total, -10, 10)
+
+    detalhe = (
+        f"upside={upside:.2f}, base={base_score:.2f}, macro={score_macro:.2f}, "
+        f"bonus={bonus:.2f}, favorecimento={favorecimento_score:.2f}, score_final={score_total:.2f}"
+    )
 
     return (score_total, detalhe) if return_details else score_total
 
 
-
-def classificar_cenario_macro(ipca, selic, dolar, pib,
-                              preco_soja=None, preco_milho=None,
-                              preco_minerio=None, preco_petroleo=None):
+def classificar_cenario_macro(
+    ipca, selic, dolar, pib,
+    preco_soja=None, preco_milho=None,
+    preco_minerio=None, preco_petroleo=None
+):
+    """
+    Classifica o cenário macroeconômico brasileiro com base nos principais indicadores e commodities.
+    Faixas calibradas para que 'Estável' seja o cenário mais frequente e extremos ocorram apenas em situações excepcionais.
+    """
     score_ipca = pontuar_ipca(ipca)
     score_selic = pontuar_selic(selic)
     score_dolar = pontuar_dolar(dolar)
@@ -717,18 +744,17 @@ def classificar_cenario_macro(ipca, selic, dolar, pib,
         ('petroleo', preco_petroleo, pontuar_petroleo)
     ]
     for nome, preco, func in commodities:
-        if preco is not None:
+        if preco is not None and not pd.isna(preco):
             total_score += func(preco)
 
-
-    # ESCALA MAIS NATURAL E ROBUSTA:
-    if total_score >= 18:
+    # Escala calibrada (ajuste conforme distribuição dos scores reais do seu app)
+    if total_score >= 15:
         return "Expansão Forte"
-    elif total_score >= 10:
+    elif total_score >= 8:
         return "Expansão Moderada"
     elif total_score >= -5:
         return "Estável"
-    elif total_score >= -15:
+    elif total_score >= -13:
         return "Contração Moderada"
     else:
         return "Contração Forte"
