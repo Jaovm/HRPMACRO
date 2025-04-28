@@ -948,66 +948,60 @@ def obter_preco_diario_ajustado(tickers):
 
 def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001, favorecimentos=None):
     """
-    Otimiza a carteira com base no índice de Sharpe, com melhorias de robustez e controle de concentração.
+    Otimiza a carteira com base no índice de Sharpe, agora ajustando retornos, limites e pesos iniciais
+    conforme o score macro/setorial de cada ativo.
     """
     dados = obter_preco_diario_ajustado(tickers)
-    dados = dados.ffill().bfill()  # Preenche valores faltantes
+    dados = dados.ffill().bfill()
 
     # Retornos logarítmicos
     retornos = np.log(dados / dados.shift(1)).dropna()
     tickers_validos = retornos.columns.tolist()
     n = len(tickers_validos)
-
     if n == 0:
         st.error("Nenhum dado de retorno válido disponível para os ativos selecionados.")
         return pd.Series(0.0, index=tickers)
 
-    media_retorno = retornos.mean()
+    # 1. Normalizar scores para range (ex: 0.7 a 1.3)
+    if favorecimentos:
+        fav_array_raw = np.array([favorecimentos.get(t, 0) for t in tickers_validos])
+        min_fav, max_fav = fav_array_raw.min(), fav_array_raw.max()
+        if max_fav == min_fav:
+            fav_norm = np.ones(n)
+        else:
+            fav_norm = 0.7 + 0.6 * (fav_array_raw - min_fav) / (max_fav - min_fav)
+    else:
+        fav_norm = np.ones(n)
+
+    # 2. Ajuste do retorno esperado pelo score macro
+    media_retorno = retornos.mean() * 252
+    media_retorno_ajustado = media_retorno * fav_norm
+
+    # 3. Limites máximos por ativo ajustados pelo score macro
+    limite_base = 0.20
+    bonus_limite = 0.10
+    limites = []
+    for f in fav_norm:
+        limites.append((0.01, min(1, limite_base + bonus_limite * (f - 1))))
+    limites = tuple(limites)
+
+    # 4. Pesos iniciais proporcionais ao score macro
+    if favorecimentos and fav_norm.sum() > 0:
+        pesos_iniciais = fav_norm / fav_norm.sum()
+    else:
+        pesos_iniciais = np.ones(n) / n
+
+    # 5. Matriz de covariância robusta
     cov_matrix = LedoitWolf().fit(retornos).covariance_
     cov = pd.DataFrame(cov_matrix, index=retornos.columns, columns=retornos.columns)
-    if favorecimentos:
-        fav_array = np.array([max(0, favorecimentos.get(t, 0)) for t in tickers_validos])
-        # Pesos iniciais proporcionais ao favorecimento (ou uniformes se tudo zero)
-        if fav_array.sum() > 0:
-            pesos_iniciais = fav_array / fav_array.sum()
-        else:
-            pesos_iniciais = np.ones(n) / n
-        # Limite máximo 20% + até 10% extra se favorecido (exemplo)
-        max_limits = 0.2 + 0.1 * fav_array / (fav_array.max() if fav_array.max() > 0 else 1)
-        limites = [(0.01, float(mx)) for mx in max_limits]
-        # Opcional: ajustar retorno esperado pelo favorecimento (deixe comentado se não quiser)
-        # media_retorno = media_retorno * (1 + 0.5 * fav_array)
-    else:
-        pesos_iniciais = np.array([carteira_atual.get(t, 0.0) for t in tickers_validos])
-        pesos_iniciais = pesos_iniciais / pesos_iniciais.sum() if pesos_iniciais.sum() > 0 else np.ones(n) / n
-        limites = [(0.01, 0.20) for _ in range(n)]
 
     def sharpe_neg(pesos):
-        retorno_esperado = np.dot(pesos, media_retorno) - taxa_risco_livre
-        volatilidade = np.sqrt(pesos @ cov.values @ pesos.T)
-        return -retorno_esperado / volatilidade if volatilidade != 0 else 0
+        ret = np.dot(pesos, media_retorno_ajustado) - taxa_risco_livre
+        vol = np.sqrt(pesos @ cov.values @ pesos.T)
+        return -ret / vol if vol > 0 else 0
 
-    # Pesos iniciais baseados na carteira atual
-    # --- NOVO: usar favorecimento do cenário ---
-    if favorecimentos:
-        fav_array = np.array([max(0, favorecimentos.get(t, 0)) for t in tickers_validos])
-        # Pesos iniciais proporcionais ao favorecimento (ou uniformes se tudo zero)
-        if fav_array.sum() > 0:
-            pesos_iniciais = fav_array / fav_array.sum()
-        else:
-            pesos_iniciais = np.ones(n) / n
-        # Limite máximo 20% + até 10% extra se favorecido
-        max_limits = 0.2 + 0.1 * fav_array / (fav_array.max() if fav_array.max() > 0 else 1)
-        limites = [(0.01, float(mx)) for mx in max_limits]
-    else:
-        pesos_iniciais = np.array([carteira_atual.get(t, 0.0) for t in tickers_validos])
-        pesos_iniciais = pesos_iniciais / pesos_iniciais.sum() if pesos_iniciais.sum() > 0 else np.ones(n) / n
-        limites = [(0.01, 0.20) for _ in range(n)]
-
-    # Restrição: soma dos pesos = 1
     restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
 
-    # Otimização com método robusto
     resultado = minimize(
         sharpe_neg,
         pesos_iniciais,
@@ -1024,6 +1018,7 @@ def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001, f
         st.warning("Otimização falhou ou retornou valor inválido. Usando pesos uniformes.")
         pesos_uniformes = pd.Series(np.ones(n) / n, index=tickers_validos)
         return completar_pesos(tickers, pesos_uniformes)
+
 
 def otimizar_carteira_retorno_maximo(tickers, carteira_atual, favorecimentos=None):
     """
