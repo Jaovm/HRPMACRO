@@ -775,6 +775,34 @@ def classificar_cenario_macro(
 
 
 
+def get_macro_adjusted_returns(retornos, score_dict):
+    """
+    Ajusta o retorno esperado anualizado de cada ativo usando o score macro/setorial.
+    Os scores são normalizados para evitar distorção excessiva.
+    """
+    media_retorno = retornos.mean() * 252
+    tickers = retornos.columns.tolist()
+    # Normaliza scores para o intervalo [0.5, 1.5]
+    min_score = min(score_dict.values()) if len(score_dict) > 0 else 0
+    max_score = max(score_dict.values()) if len(score_dict) > 0 else 1
+    def norm(s): return 0.5 + (s - min_score) / (max_score - min_score + 1e-9)
+    ajuste_score = np.array([norm(score_dict.get(t, 0)) for t in tickers])
+    return media_retorno * ajuste_score
+
+def macro_bounds(tickers, score_dict, limite_base=0.20, bonus=0.10):
+    """
+    Limita os pesos máximos de cada ativo conforme o score macro.
+    Ativos favorecidos podem receber limite maior.
+    """
+    max_score = max(score_dict.values()) if len(score_dict) > 0 else 1
+    bounds = []
+    for t in tickers:
+        score = score_dict.get(t, 0)
+        bonus_pct = bonus * (score / max_score) if max_score > 0 else 0
+        bounds.append((0, min(1, limite_base + bonus_pct)))
+    return tuple(bounds)
+
+
 #===========PESOS FALTANTES======
 def completar_pesos(tickers_originais, pesos_calculados):
     """
@@ -944,7 +972,25 @@ def obter_preco_diario_ajustado(tickers):
             return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
+def calcular_fronteira_eficiente_macro(retornos, score_dict, n_portfolios=100, taxa_risco_livre=0.0):
+    """
+    Gera portfolios aleatórios usando retornos ajustados pelo score macro.
+    """
+    media_retorno = get_macro_adjusted_returns(retornos, score_dict)
+    cov = retornos.cov() * 252
+    num_ativos = len(media_retorno)
+    resultados = []
 
+    for _ in range(n_portfolios):
+        pesos = np.random.random(num_ativos)
+        pesos /= np.sum(pesos)
+        ret = np.dot(pesos, media_retorno)
+        vol = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+        sharpe = (ret - taxa_risco_livre) / vol if vol > 0 else 0
+        resultados.append((vol, ret, sharpe, pesos.copy()))
+
+    df = pd.DataFrame(resultados, columns=['Volatilidade', 'Retorno', 'Sharpe', 'Pesos'])
+    return df
 
 def otimizar_carteira_sharpe(tickers, carteira_atual, taxa_risco_livre=0.0001, favorecimentos=None):
     """
