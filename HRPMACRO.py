@@ -726,10 +726,6 @@ def classificar_cenario_macro(
     preco_soja=None, preco_milho=None,
     preco_minerio=None, preco_petroleo=None
 ):
-    """
-    Classifica o cenário macroeconômico brasileiro com base nos principais indicadores e commodities.
-    Faixas calibradas para que 'Estável' seja o cenário mais frequente e extremos ocorram apenas em situações excepcionais.
-    """
     score_ipca = pontuar_ipca(ipca)
     score_selic = pontuar_selic(selic)
     score_dolar = pontuar_dolar(dolar)
@@ -747,14 +743,19 @@ def classificar_cenario_macro(
         if preco is not None and not pd.isna(preco):
             total_score += func(preco)
 
-    # Escala calibrada (ajuste conforme distribuição dos scores reais do seu app)
-    if total_score >= 15:
+    # Escala calibrada para a realidade brasileira:
+    # - Expansão Forte: só possível em boom real (score MUITO alto)
+    # - Expansão Moderada: crescimento robusto, porém não espetacular
+    # - Estável: a maioria dos anos
+    # - Contração Moderada: anos ruins ou incerteza
+    # - Contração Forte: cenário recessivo/crise
+    if total_score >= 36:
         return "Expansão Forte"
-    elif total_score >= 8:
+    elif total_score >= 28:
         return "Expansão Moderada"
-    elif total_score >= -5:
+    elif total_score >= 16:
         return "Estável"
-    elif total_score >= -13:
+    elif total_score >= 6:
         return "Contração Moderada"
     else:
         return "Contração Forte"
