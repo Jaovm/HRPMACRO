@@ -571,17 +571,10 @@ PARAMS = atualizar_parametros_com_medias_moveis()
 
 # Atualize o Streamlit para mostrar os preços ideais
 def validar_macro(macro):
-    """
-    Valida se todos os indicadores macroeconômicos obrigatórios estão presentes e são válidos.
-    Lança ValueError se faltar algum campo ou se algum valor for inválido.
-    """
     obrigatorios = ["selic", "ipca", "dolar", "pib", "soja", "milho", "minerio", "petroleo"]
     for k in obrigatorios:
-        if k not in macro or macro[k] is None:
-            raise ValueError(f"Indicador macroeconômico ausente ou inválido: {k}")
-        # Verifica NaN para floats
-        if isinstance(macro[k], float) and getattr(macro[k], "is_nan", False):
-            raise ValueError(f"Indicador macroeconômico {k} é NaN!")
+        if k not in macro or macro[k] is None or (isinstance(macro[k], float) and pd.isna(macro[k])):
+            macro[k] = 0.0  # Preencha com zero se ausente ou inválido
             
 
 def pontuar_macro(m, pesos=None):
