@@ -743,30 +743,34 @@ def classificar_cenario_macro(
     score_selic = pontuar_selic(selic)
     score_dolar = pontuar_dolar(dolar)
     score_pib = pontuar_pib(pib)
-    total_score = score_ipca + score_selic + score_dolar + score_pib
-
-    # Commodities (peso menor - só somam se realmente ajudarem)
+    
+    # Soma apenas dos 4 principais
+    core_score = score_ipca + score_selic + score_dolar + score_pib
+    
+    # Commodities - peso MUITO menor
     commodities = [
         ('soja', preco_soja, pontuar_soja),
         ('milho', preco_milho, pontuar_milho),
         ('minerio', preco_minerio, pontuar_minerio),
         ('petroleo', preco_petroleo, pontuar_petroleo)
     ]
+    commodities_score = 0
     for nome, preco, func in commodities:
         if preco is not None and not pd.isna(preco):
-            total_score += 0.4 * func(preco)  # PESO MENOR nas commodities
+            commodities_score += 0.2 * func(preco)  # Peso reduzido para commodities
 
-    # --------- ESCALA CONSERVADORA PARA O BRASIL -----------
-    # Máximo prático: ~40 (tudo ótimo). Ruim: ~10.
-    # A maioria das situações reais vai oscilar entre 12 e 32.
-    # Só é "Estável" se pelo menos 3 dos 4 principais indicadores estiverem bons!
-    if total_score >= 36:
+    total_score = core_score + commodities_score
+
+    # ESCALA CONSERVADORA
+    # Máximo prático típico: ~40 (cenário ótimo), ~15-20 em cenário ruim
+    # Estável só se 3 dos 4 pilares estão realmente bons
+    if total_score >= 35:
         return "Expansão Forte"
-    elif total_score >= 29:
+    elif total_score >= 28:
         return "Expansão Moderada"
-    elif total_score >= 22:
+    elif total_score >= 21:
         return "Estável"
-    elif total_score >= 14:
+    elif total_score >= 13:
         return "Contração Moderada"
     else:
         return "Contração Forte"
