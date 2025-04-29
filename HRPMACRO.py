@@ -1630,6 +1630,7 @@ if (
 
 
     # --- Mostra a carteira integral após o aporte (com pesos iniciais, finais e recomendados) ---
+    # --- Mostra a carteira integral após o aporte (com pesos iniciais, finais e recomendados corrigidos) ---
     st.subheader("📦 Carteira integral após o aporte")
     
     # Inicializa a carteira integral com os valores e pesos iniciais fornecidos pelo usuário
@@ -1658,13 +1659,14 @@ if (
     valor_total_inicial = sum(
         pesos_atuais[i] * carteira_integral[tickers[i]].get("preco_atual", 0)
         for i in range(len(tickers))
+        if carteira_integral[tickers[i]].get("preco_atual", 0) > 0
     )
     
     # Calcula o valor total final com base nas quantidades e preços após o aporte
     valor_total_final = sum(
         v["quantidade"] * v.get("preco_atual", 0)
         for v in carteira_integral.values()
-        if isinstance(v, dict) and v.get("quantidade", 0) > 0
+        if isinstance(v, dict) and v.get("quantidade", 0) > 0 and v.get("preco_atual", 0) > 0
     )
     
     # Preenche os dados para todos os ativos, incluindo os que não receberam aportes
@@ -1672,8 +1674,9 @@ if (
     for i, t in enumerate(tickers):
         v = carteira_integral.get(t, {"quantidade": 0, "preco_atual": 0})
         preco_atual = v.get("preco_atual", 0)
-        quantidade_inicial = pesos_atuais[i] * valor_total_inicial / preco_atual if preco_atual > 0 else 0
         peso_recomendado = pesos_recomendados.get(t, 0)  # Peso recomendado pela carteira otimizada
+        peso_inicial = pesos_atuais[i] if i < len(pesos_atuais) else 0  # Peso inicial fornecido pelo usuário
+        peso_final = (v.get("quantidade", 0) * preco_atual) / valor_total_final if valor_total_final > 0 else 0
         dados = {
             "ticker": t,
             "setor": v.get("setor", ""),
@@ -1681,9 +1684,9 @@ if (
             "preco_atual": preco_atual,
             "preco_alvo": v.get("preco_alvo", 0),
             "score": v.get("score", 0),
-            "peso_inicial": pesos_atuais[i],  # Peso inicial fornecido pelo usuário
+            "peso_inicial": peso_inicial,  # Peso inicial do usuário
             "peso_recomendado": peso_recomendado,  # Peso recomendado pela carteira otimizada
-            "peso_final": (v.get("quantidade", 0) * preco_atual) / valor_total_final if valor_total_final > 0 else 0,
+            "peso_final": peso_final,  # Peso final após o aporte
         }
         dados_integral.append(dados)
     
