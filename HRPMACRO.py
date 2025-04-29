@@ -1616,5 +1616,5 @@ if st.button("Gerar Alocação Otimizada"):
                 backtest_portfolio_vs_ibov_duplo(tickers_validos_bt, pesos_otimizados_bt)
             else:
                 st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
-        except Exception as e:
-            st.error(f"Erro na otimização: {str(e)}")
+    except Exception as e:
+        st.error(f"Erro na otimização: {str(e)}")
