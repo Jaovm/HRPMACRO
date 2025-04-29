@@ -1629,16 +1629,19 @@ if (
 
     # --- Mostra a carteira integral após o aporte (todas as posições) ---
     st.subheader("📦 Carteira integral após o aporte")
-    carteira_integral = carteira.copy()
-    # Atualize quantidades para cada ativo do aporte
+    carteira_integral = {k: v.copy() for k, v in carteira.items()}  # Cópia profunda dos subdicts
     for idx, row in df_resultado.iterrows():
         ticker = row["ticker"]
-        qtd_nova = row["Qtd. Ações"]
-        if ticker in carteira_integral:
-            carteira_integral[ticker]["quantidade"] += int(qtd_nova)
+        qtd_nova = int(row["Qtd. Ações"])
+        if ticker in carteira_integral and isinstance(carteira_integral[ticker], dict):
+            carteira_integral[ticker]["quantidade"] = int(carteira_integral[ticker].get("quantidade", 0)) + qtd_nova
+            carteira_integral[ticker]["setor"] = row["setor"]
+            carteira_integral[ticker]["preco_atual"] = row["preco_atual"]
+            carteira_integral[ticker]["preco_alvo"] = row["preco_alvo"]
+            carteira_integral[ticker]["score"] = row["score"]
         else:
             carteira_integral[ticker] = {
-                "quantidade": int(qtd_nova),
+                "quantidade": qtd_nova,
                 "setor": row["setor"],
                 "preco_atual": row["preco_atual"],
                 "preco_alvo": row["preco_alvo"],
@@ -1648,9 +1651,12 @@ if (
         {"ticker": t, **v}
         for t, v in carteira_integral.items()
     ])
-    st.dataframe(df_carteira_integral[
-        ["ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score"]
-    ].sort_values(by="quantidade", ascending=False), use_container_width=True)
+    st.dataframe(
+        df_carteira_integral[
+            ["ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score"]
+        ].sort_values(by="quantidade", ascending=False),
+        use_container_width=True
+    )
 
     # --- Backtest plug and play ---
     if len(df_resultado) >= 2:
