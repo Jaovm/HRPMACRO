@@ -1359,11 +1359,14 @@ favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 
 # --- Escolha do método de aporte: fora do botão, garante persistência ---
+
+# --- Lista dos métodos de alocação ---
 metodos_aporte = [
     "Sharpe (macro)",
     "Sharpe (Monte Carlo)",
     "HRP",
-    "Monte Carlo (Melhor Simulada)"
+    "Monte Carlo (Melhor Simulada)",
+    "HRP + Monte Carlo"
 ]
 metodo_escolha = st.selectbox(
     "Qual carteira usar para recomendação de aporte?",
@@ -1371,14 +1374,27 @@ metodo_escolha = st.selectbox(
     key="metodo_aporte"
 )
 
+# Slider para o alpha HRP+MonteCarlo somente se selecionado
+if st.session_state.get("metodo_aporte") == "HRP + Monte Carlo":
+    alpha = st.slider(
+        "Ajuste a combinação: 0 = só Monte Carlo • 1 = só HRP",
+        min_value=0.0, max_value=1.0, value=0.5, step=0.05,
+        help="Ajuste o quanto a alocação final deve ser influenciada pelo HRP ou pelo Monte Carlo"
+    )
+else:
+    alpha = 0.5  # valor padrão
+
 if st.button("Gerar Alocação Otimizada"):
     try:
+        # --- Coletar ativos válidos e retornos ---
         ativos_validos = filtrar_ativos_validos(
             carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score
         )
         if not ativos_validos:
             st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
-            st.session_state['df_resultado_aporte'] = None
+            st.session_state['pesos_opcoes'] = None
+            st.session_state['ativos_validos_aporte'] = None
+            st.session_state['aporte_valor'] = None
             st.stop()
         
         favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
@@ -1387,7 +1403,7 @@ if st.button("Gerar Alocação Otimizada"):
         media_retorno = retornos.mean() * 252
         cov = retornos.cov() * 252
 
-        # Simulação Monte Carlo
+        # --- Simulação Monte Carlo ---
         df_front = calcular_fronteira_eficiente_macro(
             retornos=retornos,
             score_dict=favorecimentos,
@@ -1395,9 +1411,12 @@ if st.button("Gerar Alocação Otimizada"):
         )
         melhor_carteira = df_front.loc[df_front['Sharpe'].idxmax()]
 
-        # Sharpe padrão
-        pesos_sharpe = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
-        # Sharpe Monte Carlo
+        # --- Otimização Sharpe padrão ---
+        pesos_sharpe = otimizar_carteira_sharpe(
+            tickers_validos, carteira, favorecimentos=favorecimentos
+        )
+
+        # --- Otimização Sharpe usando seed Monte Carlo ---
         from scipy.optimize import minimize
         def sharpe_neg(pesos):
             retorno = np.dot(pesos, media_retorno)
@@ -1418,17 +1437,28 @@ if st.button("Gerar Alocação Otimizada"):
             pesos_sharpe_mc = res_mc.x
         else:
             pesos_sharpe_mc = pesos_sharpe.to_numpy()
-        # HRP
-        pesos_hrp = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
 
-        # Monta todos os métodos em um dict para fácil uso
+        # --- HRP ---
+        pesos_hrp = otimizar_carteira_hrp(
+            tickers_validos, carteira, favorecimentos=favorecimentos
+        )
+
+        # --- Monte Carlo puro ---
+        pesos_mc = pd.Series(melhor_carteira['Pesos'], index=retornos.columns)
+        pesos_hrp_series = pesos_hrp if isinstance(pesos_hrp, pd.Series) else pd.Series(pesos_hrp, index=retornos.columns)
+
+        # --- HRP + Monte Carlo combinado ---
+        pesos_combinados = alpha * pesos_hrp_series + (1 - alpha) * pesos_mc
+        pesos_combinados /= pesos_combinados.sum()
+
+        # --- Dicionário de opções ---
         pesos_opcoes = {
             "Sharpe (macro)": pesos_sharpe,
             "Sharpe (Monte Carlo)": pd.Series(pesos_sharpe_mc, index=retornos.columns),
-            "HRP": pesos_hrp,
-            "Monte Carlo (Melhor Simulada)": pd.Series(melhor_carteira['Pesos'], index=retornos.columns)
+            "HRP": pesos_hrp_series,
+            "Monte Carlo (Melhor Simulada)": pesos_mc,
+            "HRP + Monte Carlo": pesos_combinados
         }
-        # Salva resultados intermediários para persistência mesmo ao trocar o selectbox
         st.session_state['pesos_opcoes'] = pesos_opcoes
         st.session_state['ativos_validos_aporte'] = ativos_validos
         st.session_state['aporte_valor'] = aporte
@@ -1436,8 +1466,9 @@ if st.button("Gerar Alocação Otimizada"):
         st.error(f"Erro na otimização: {str(e)}")
         st.session_state['pesos_opcoes'] = None
         st.session_state['ativos_validos_aporte'] = None
+        st.session_state['aporte_valor'] = None
 
-# --- Exibe a tabela de aportes sempre que houver resultado salvo ---
+# --- Exibir tabela de aportes sempre que houver resultado salvo ---
 if (
     st.session_state.get('pesos_opcoes')
     and st.session_state.get('ativos_validos_aporte')
@@ -1466,98 +1497,27 @@ if (
     st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
     st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
+    # --- (OPCIONAL) Exibir composição dos pesos HRP/MonteCarlo/Combinado ---
+    if st.session_state['metodo_aporte'] == "HRP + Monte Carlo":
+        st.subheader("🔗 Pesos Individuais e Combinados")
+        st.write(pd.DataFrame({
+            "HRP": pesos_hrp_series,
+            "Monte Carlo": pesos_mc,
+            "Combinado": pesos_combinados
+        }).round(4))
 
-import matplotlib.pyplot as plt
-
-# --- BACKTEST: Carteira Recomendada vs IBOV ---
-def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2018-01-01'):
-    df_adj = yf.download(tickers, start=start_date, auto_adjust=True, progress=False)['Close']
-    ibov_adj = yf.download('^BVSP', start=start_date, auto_adjust=True, progress=False)['Close']
-    df_adj = df_adj.ffill().dropna()
-    ibov_adj = ibov_adj.ffill().dropna()
-
-    idx = df_adj.index.intersection(ibov_adj.index)
-    df_adj, ibov_adj = df_adj.loc[idx], ibov_adj.loc[idx]
-
-    df_adj_norm = df_adj / df_adj.iloc[0]
-    ibov_adj_norm = ibov_adj / ibov_adj.iloc[0]
-
-    pesos = np.array(pesos)
-    if len(pesos) != df_adj.shape[1]:
-        pesos = np.ones(df_adj.shape[1]) / df_adj.shape[1]
-
-    port_adj = (df_adj_norm * pesos).sum(axis=1)
-
-    anos = (port_adj.index[-1] - port_adj.index[0]).days / 365.25
-    cagr_port_adj = (float(port_adj.iloc[-1]) / float(port_adj.iloc[0])) ** (1 / anos) - 1
-    cagr_ibov_adj = (float(ibov_adj_norm.iloc[-1]) / float(ibov_adj_norm.iloc[0])) ** (1 / anos) - 1
-
-    st.markdown(f"**CAGR Carteira Recomendada:** {100*float(cagr_port_adj):.2f}% ao ano")
-    st.markdown(f"**CAGR IBOV:** {100*float(cagr_ibov_adj):.2f}% ao ano")
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    port_adj.plot(ax=ax, label='Carteira Recomendada')
-    ibov_adj_norm.plot(ax=ax, label='IBOV')
-    ax.set_title('Backtest: Carteira Recomendada vs IBOV (7 anos)')
-    ax.set_ylabel('Retorno acumulado')
-    ax.set_xlabel('Ano')
-    ax.legend()
-    st.pyplot(fig)
-
-# --- HISTÓRICO AJUSTADO ---
-def mostrar_historico_ajustado(tickers, setores_por_ticker, cenario_atual, anos=7):
-    historico_7anos_df = montar_historico_7anos(
-        tickers=tickers,
-        setores_por_ticker=setores_por_ticker,
-        start=(pd.Timestamp.today() - pd.DateOffset(years=anos)).strftime('%Y-%m-%d')
-    )
-    historico_cenario = historico_7anos_df[historico_7anos_df["cenario"] == cenario_atual]
-    if not historico_cenario.empty:
-        destaque_hist = (
-            historico_cenario.groupby(["ticker", "setor"])
-            .agg(media_favorecido=("favorecido", "mean"), ocorrencias=("favorecido", "count"))
-            .reset_index()
-            .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
-        )
-        st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos {anos} anos")
-        st.dataframe(destaque_hist.head(100), use_container_width=True)
-    else:
-        st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos {anos} anos.")
-
-# --- EXEMPLO DE USO APÓS GERAR ALOCAÇÃO OTIMIZADA ---
-
-# Exiba APÓS a tabela de aportes, se houver pelo menos 2 ativos:
-if (
-    st.session_state.get('pesos_opcoes')
-    and st.session_state.get('ativos_validos_aporte')
-    and st.session_state.get('aporte_valor')
-):
-    pesos_recomendados = st.session_state['pesos_opcoes'][st.session_state['metodo_aporte']]
-    ativos_validos = st.session_state['ativos_validos_aporte']
-    aporte = st.session_state['aporte_valor']
-
-    df_validos = pd.DataFrame(ativos_validos)
-    df_resultado = df_validos[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'score']].copy()
-    df_resultado["peso_otimizado"] = df_resultado["ticker"].map(pesos_recomendados).fillna(0)
-    df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
-    df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"])\
-        .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
-    df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
-    df_resultado = df_resultado[df_resultado["Qtd. Ações"] > 0]
-
-    # BACKTEST
-    tickers_validos_bt = df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"].tolist()
-    pesos_otimizados_bt = df_resultado[df_resultado["peso_otimizado"] > 0]["peso_otimizado"].values
-    if len(tickers_validos_bt) >= 2:
+    # --- (OPCIONAL) Backtest plug and play ---
+    if len(df_resultado) >= 2:
         st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos)")
-        backtest_portfolio_vs_ibov_duplo(tickers_validos_bt, pesos_otimizados_bt)
-    else:
-        st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
+        tickers_bt = df_resultado["ticker"].tolist()
+        pesos_bt = df_resultado["peso_otimizado"].values
+        backtest_portfolio_vs_ibov_duplo(tickers_bt, pesos_bt)
 
-    # HISTÓRICO AJUSTADO
-    mostrar_historico_ajustado(
-        tickers=list(setores_por_ticker.keys()),
-        setores_por_ticker=setores_por_ticker,
-        cenario_atual=cenario_atual,
-        anos=7
-    )
+    # --- (OPCIONAL) Histórico ajustado plug and play ---
+    if "cenario_atual" in globals():
+        mostrar_historico_ajustado(
+            tickers=list(setores_por_ticker.keys()),
+            setores_por_ticker=setores_por_ticker,
+            cenario_atual=cenario_atual,
+            anos=7
+        )
