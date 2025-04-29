@@ -1373,70 +1373,87 @@ if st.button("Gerar Alocação Otimizada"):
     else:
         favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
         tickers_validos = [a['ticker'] for a in ativos_validos]
-        try:
-            # Escolha do método de otimização
-            if metodo_otimizacao == "Sharpe Máximo (risco/retorno)":
-                pesos = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
-            elif metodo_otimizacao == "Retorno Máximo (limite 20% por ativo)":
-                pesos = otimizar_carteira_retorno_maximo(tickers_validos, carteira, favorecimentos=favorecimentos)
-            elif metodo_otimizacao == "HRP (Hierarchical Risk Parity)":
-                pesos = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
-            else:
-                st.error("Método de otimização desconhecido.")
-                st.stop()
 
-            # === NOVO: Simulação e visualização da Fronteira Eficiente ===
-            st.subheader("Simulação: Fronteira Eficiente das Carteiras")
-            retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
-            df_front = calcular_fronteira_eficiente_macro(
-                retornos=retornos,
-                score_dict=favorecimentos,
-                n_portfolios=50000
-            )
-            import matplotlib.pyplot as plt
-            fig, ax = plt.subplots(figsize=(10, 6))
-            scatter = ax.scatter(df_front['Volatilidade'], df_front['Retorno'], c=df_front['Sharpe'], cmap='viridis', alpha=0.5)
-            ax.set_xlabel('Volatilidade (Risco)')
-            ax.set_ylabel('Retorno Esperado')
-            ax.set_title('Fronteira Eficiente (Carteiras Aleatórias com Score Macro)')
-            plt.colorbar(scatter, label='Sharpe')
+        # Obtenção dos retornos
+        retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
 
-            # Destaque a carteira otimizada sugerida
-            pesos_otimizados = pesos.to_numpy() if hasattr(pesos, "to_numpy") else np.array(pesos)
-            media_retorno = retornos.mean() * 252
-            cov = retornos.cov() * 252
-            ret_opt = float(np.dot(pesos_otimizados, media_retorno))
-            vol_opt = float(np.sqrt(np.dot(pesos_otimizados.T, np.dot(cov, pesos_otimizados))))
-            ax.scatter(vol_opt, ret_opt, c='red', s=120, marker='*', label='Carteira Otimizada')
-            ax.legend()
-            st.pyplot(fig)
-            st.info(
-                "Cada ponto representa uma carteira simulada aleatoriamente. "
-                "A cor indica o índice de Sharpe (quanto mais claro, melhor). "
-                "A estrela vermelha mostra sua carteira otimizada sugerida para o aporte."
-            )
+        # ====== OTIMIZAÇÃO SHARPE ======
+        pesos_sharpe = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
+        pesos_sharpe_np = pesos_sharpe.to_numpy() if hasattr(pesos_sharpe, "to_numpy") else np.array(pesos_sharpe)
 
-            # === NOVO: Comparação do Sharpe com a melhor simulação ===
-            sharpe_opt = (ret_opt - 0.0) / vol_opt if vol_opt > 0 else 0
-            melhor_carteira = df_front.loc[df_front['Sharpe'].idxmax()]
-            sharpe_sim = melhor_carteira['Sharpe']
-            ret_sim = melhor_carteira['Retorno']
-            vol_sim = melhor_carteira['Volatilidade']
+        # ====== OTIMIZAÇÃO HRP ======
+        pesos_hrp = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
+        pesos_hrp_np = pesos_hrp.to_numpy() if hasattr(pesos_hrp, "to_numpy") else np.array(pesos_hrp)
 
-            st.subheader("🔬 Comparação: Carteira Otimizada x Melhor Simulação Aleatória")
-            st.write(f"**Carteira Otimizada**:   Sharpe = {sharpe_opt:.2f} | Retorno = {ret_opt:.2%} | Risco = {vol_opt:.2%}")
-            st.write(f"**Melhor Simulação**:    Sharpe = {sharpe_sim:.2f} | Retorno = {ret_sim:.2%} | Risco = {vol_sim:.2%}")
+        # ====== SIMULAÇÃO MONTE CARLO ======
+        st.subheader("Simulação: Fronteira Eficiente (Monte Carlo) + Recomendações")
+        df_front = calcular_fronteira_eficiente_macro(
+            retornos=retornos,
+            score_dict=favorecimentos,
+            n_portfolios=50000
+        )
 
-            if sharpe_sim > sharpe_opt + 1e-4:
-                st.warning(
-                    "⚠️ Uma carteira simulada aleatória apresenta Sharpe superior à otimizada. "
-                    "Considere revisar as restrições, parâmetros ou experimentar outro método de otimização."
-                )
-            else:
-                st.success("A carteira otimizada está entre as melhores da simulação (conforme esperado para um otimizador robusto).")
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(10, 6))
+        scatter = ax.scatter(df_front['Volatilidade'], df_front['Retorno'], c=df_front['Sharpe'], cmap='viridis', alpha=0.5)
+        ax.set_xlabel('Volatilidade (Risco)')
+        ax.set_ylabel('Retorno Esperado')
+        ax.set_title('Fronteira Eficiente (Monte Carlo) - Carteiras Aleatórias com Score Macro')
+        plt.colorbar(scatter, label='Sharpe')
 
-            with st.expander("🔍 Ver pesos da melhor carteira simulada"):
-                st.write(dict(zip(retornos.columns, melhor_carteira['Pesos'])))
+        # Dados auxiliares
+        media_retorno = retornos.mean() * 252
+        cov = retornos.cov() * 252
+
+        # Otimizada Sharpe
+        ret_sharpe = float(np.dot(pesos_sharpe_np, media_retorno))
+        vol_sharpe = float(np.sqrt(np.dot(pesos_sharpe_np.T, np.dot(cov, pesos_sharpe_np))))
+        ax.scatter(vol_sharpe, ret_sharpe, c='red', s=120, marker='*', label='Sharpe Máximo')
+
+        # Otimizada HRP
+        ret_hrp = float(np.dot(pesos_hrp_np, media_retorno))
+        vol_hrp = float(np.sqrt(np.dot(pesos_hrp_np.T, np.dot(cov, pesos_hrp_np))))
+        ax.scatter(vol_hrp, ret_hrp, c='blue', s=100, marker='^', label='HRP')
+
+        # Melhor simulação Monte Carlo
+        melhor_carteira = df_front.loc[df_front['Sharpe'].idxmax()]
+        sharpe_mc = melhor_carteira['Sharpe']
+        ret_mc = melhor_carteira['Retorno']
+        vol_mc = melhor_carteira['Volatilidade']
+        ax.scatter(vol_mc, ret_mc, c='orange', s=100, marker='P', label='Monte Carlo (Melhor)')
+
+        ax.legend()
+        st.pyplot(fig)
+        st.info(
+            "A estrela vermelha é a carteira Sharpe Máximo, o triângulo azul é HRP, "
+            "e o losango laranja é a melhor carteira simulada via Monte Carlo."
+        )
+
+        # --- Comparação em tabela
+        st.subheader("🔬 Comparação: Sharpe, HRP e Monte Carlo (Melhor Simulação)")
+        sharpe_sharpe = (ret_sharpe - 0.0) / vol_sharpe if vol_sharpe > 0 else 0
+        sharpe_hrp = (ret_hrp - 0.0) / vol_hrp if vol_hrp > 0 else 0
+
+        st.write(f"**Sharpe Máximo**: Sharpe = {sharpe_sharpe:.2f} | Retorno = {ret_sharpe:.2%} | Risco = {vol_sharpe:.2%}")
+        st.write(f"**HRP**:           Sharpe = {sharpe_hrp:.2f} | Retorno = {ret_hrp:.2%} | Risco = {vol_hrp:.2%}")
+        st.write(f"**Monte Carlo**:   Sharpe = {sharpe_mc:.2f} | Retorno = {ret_mc:.2%} | Risco = {vol_mc:.2%}")
+
+        with st.expander("🔍 Pesos da melhor carteira Monte Carlo"):
+            st.write(dict(zip(retornos.columns, melhor_carteira['Pesos'])))
+
+        # === Escolha da carteira para recomendação final (exemplo: Sharpe, mas pode ser outra)
+        metodo_escolha = st.selectbox(
+            "Qual carteira você deseja usar para a recomendação de aporte?",
+            ("Sharpe Máximo", "HRP", "Monte Carlo (Melhor Simulada)")
+        )
+        if metodo_escolha == "Sharpe Máximo":
+            pesos_recomendados = pesos_sharpe
+        elif metodo_escolha == "HRP":
+            pesos_recomendados = pesos_hrp
+        else:
+            # Para Monte Carlo, criar uma Series com os tickers e os pesos da melhor simulação
+            pesos_mc = pd.Series(melhor_carteira['Pesos'], index=retornos.columns)
+            pesos_recomendados = pesos_mc
 
             # === Continuação: recomendação de aporte ===
             tickers_completos = set(carteira)
