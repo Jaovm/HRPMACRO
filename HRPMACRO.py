@@ -1358,6 +1358,8 @@ favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 
 
+
+
 # Função para exibir histórico ajustado (lembre-se de definir montar_historico_7anos!)
 def mostrar_historico_ajustado(tickers, setores_por_ticker, cenario_atual, anos=7):
     if 'montar_historico_7anos' not in globals():
@@ -1384,6 +1386,21 @@ def mostrar_historico_ajustado(tickers, setores_por_ticker, cenario_atual, anos=
         st.dataframe(destaque_hist.head(100), use_container_width=True)
     else:
         st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos {anos} anos.")
+
+# Função para calcular métricas da carteira (CAGR, risco, Sharpe)
+def calcular_metricas_carteira(tickers, pesos, start_date='2018-01-01', rf=0):
+    import yfinance as yf
+    df_adj = yf.download(tickers, start=start_date, auto_adjust=True, progress=False)['Close']
+    df_adj = df_adj.ffill().dropna()
+    df_adj = df_adj.loc[:, ~df_adj.columns.duplicated()]  # Remove duplicadas
+    df_pct = df_adj.pct_change().dropna()
+    port_retorno = (df_pct * pesos).sum(axis=1)
+    port_valor = (1 + port_retorno).cumprod()
+    anos = (port_valor.index[-1] - port_valor.index[0]).days / 365.25
+    cagr = (float(port_valor.iloc[-1]) / float(port_valor.iloc[0])) ** (1 / anos) - 1
+    risco = port_retorno.std() * np.sqrt(252)
+    sharpe = (port_retorno.mean() * 252 - rf) / risco if risco > 0 else 0
+    return cagr, risco, sharpe
 
 # Função para backtest plug and play (ajuste para seu fluxo)
 def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2018-01-01'):
@@ -1550,8 +1567,21 @@ if (
     ]], use_container_width=True)
     valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
     troco = aporte - valor_utilizado
-    st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
-    st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+
+    # --- Métricas da carteira após aporte ---
+    tickers_aporte = df_resultado["ticker"].tolist()
+    pesos_aporte = df_resultado["peso_otimizado"].values
+    if len(tickers_aporte) >= 2:
+        cagr, risco, sharpe = calcular_metricas_carteira(tickers_aporte, pesos_aporte)
+        st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
+        st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+        st.markdown(f"**CAGR estimado (7 anos):** {100*cagr:.2f}% ao ano")
+        st.markdown(f"**Risco anualizado:** {100*risco:.2f}%")
+        st.markdown(f"**Índice de Sharpe:** {sharpe:.2f}")
+    else:
+        st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
+        st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+        st.info("Métricas da carteira precisam de pelo menos 2 ativos.")
 
     # --- Exibe composição dos pesos HRP/MonteCarlo/Combinado ---
     if st.session_state['metodo_aporte'] == "HRP + Monte Carlo":
@@ -1579,8 +1609,21 @@ if (
         ]], use_container_width=True)
         valor_utilizado_mc = df_resultado_mc["Valor Alocado (R$)"].sum()
         troco_mc = aporte - valor_utilizado_mc
-        st.markdown(f"💰 **Valor utilizado na carteira eficiente:** R$ {valor_utilizado_mc:,.2f}")
-        st.markdown(f"🔁 **Troco (não alocado):** R$ {troco_mc:,.2f}")
+
+        # --- Métricas da carteira Monte Carlo (Fronteira) ---
+        tickers_mc = df_resultado_mc["ticker"].tolist()
+        pesos_mc_vec = df_resultado_mc["peso_monte_carlo"].values
+        if len(tickers_mc) >= 2:
+            cagr_mc, risco_mc, sharpe_mc = calcular_metricas_carteira(tickers_mc, pesos_mc_vec)
+            st.markdown(f"💰 **Valor utilizado na carteira eficiente:** R$ {valor_utilizado_mc:,.2f}")
+            st.markdown(f"🔁 **Troco (não alocado):** R$ {troco_mc:,.2f}")
+            st.markdown(f"**CAGR estimado (7 anos):** {100*cagr_mc:.2f}% ao ano")
+            st.markdown(f"**Risco anualizado:** {100*risco_mc:.2f}%")
+            st.markdown(f"**Índice de Sharpe:** {sharpe_mc:.2f}")
+        else:
+            st.markdown(f"💰 **Valor utilizado na carteira eficiente:** R$ {valor_utilizado_mc:,.2f}")
+            st.markdown(f"🔁 **Troco (não alocado):** R$ {troco_mc:,.2f}")
+            st.info("Métricas da carteira precisam de pelo menos 2 ativos.")
 
     # --- Backtest plug and play ---
     if len(df_resultado) >= 2:
