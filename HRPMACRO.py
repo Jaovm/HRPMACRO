@@ -1675,7 +1675,7 @@ if (
         v = carteira_integral.get(t, {"quantidade": 0, "preco_atual": 0})
         preco_atual = v.get("preco_atual", 0)
         peso_recomendado = pesos_recomendados.get(t, 0)  # Peso recomendado pela carteira otimizada
-        peso_inicial = pesos_atuais[i] if i < len(pesos_atuais) else 0  # Peso inicial fornecido pelo usuário
+        peso_inicial = pesos_iniciais[i] if i < len(pesos_iniciais) else 0  # Peso inicial fornecido pelo usuário
         peso_final = (v.get("quantidade", 0) * preco_atual) / valor_total_final if valor_total_final > 0 else 0
         dados = {
             "ticker": t,
