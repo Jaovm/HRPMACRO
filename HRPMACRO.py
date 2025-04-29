@@ -1629,8 +1629,10 @@ if (
 
 
 
+    # --- Mostra a carteira integral após o aporte (com pesos iniciais, finais e recomendados) ---
     st.subheader("📦 Carteira integral após o aporte")
     
+    # Inicializa a carteira integral com os valores e pesos iniciais fornecidos pelo usuário
     carteira_integral = {k: v.copy() if isinstance(v, dict) else {"quantidade": 0, "preco_atual": 0} for k, v in carteira.items()}
     
     # Atualiza a carteira integral com os novos aportes
@@ -1652,7 +1654,7 @@ if (
                 "score": row.get("score", 0),
             }
     
-    # Calcula o valor total inicial da carteira com base nos preços e pesos fornecidos pelo usuário
+    # Calcula o valor total inicial com base nos pesos fornecidos pelo usuário
     valor_total_inicial = sum(
         pesos_atuais[i] * carteira_integral[tickers[i]].get("preco_atual", 0)
         for i in range(len(tickers))
@@ -1671,6 +1673,7 @@ if (
         v = carteira_integral.get(t, {"quantidade": 0, "preco_atual": 0})
         preco_atual = v.get("preco_atual", 0)
         quantidade_inicial = pesos_atuais[i] * valor_total_inicial / preco_atual if preco_atual > 0 else 0
+        peso_recomendado = pesos_recomendados.get(t, 0)  # Peso recomendado pela carteira otimizada
         dados = {
             "ticker": t,
             "setor": v.get("setor", ""),
@@ -1678,7 +1681,8 @@ if (
             "preco_atual": preco_atual,
             "preco_alvo": v.get("preco_alvo", 0),
             "score": v.get("score", 0),
-            "peso_inicial": pesos_atuais[i],  # Peso fornecido pelo usuário
+            "peso_inicial": pesos_atuais[i],  # Peso inicial fornecido pelo usuário
+            "peso_recomendado": peso_recomendado,  # Peso recomendado pela carteira otimizada
             "peso_final": (v.get("quantidade", 0) * preco_atual) / valor_total_final if valor_total_final > 0 else 0,
         }
         dados_integral.append(dados)
@@ -1686,9 +1690,12 @@ if (
     df_carteira_integral = pd.DataFrame(dados_integral)
     
     # Seleciona as colunas desejadas
-    colunas = [c for c in ["ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score", "peso_inicial", "peso_final"] if c in df_carteira_integral.columns]
+    colunas = [
+        "ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score",
+        "peso_inicial", "peso_recomendado", "peso_final"
+    ]
     
-    # Exibe a tabela com pesos iniciais e finais
+    # Exibe a tabela com pesos iniciais, recomendados e finais
     st.dataframe(
         df_carteira_integral[colunas].sort_values(by="peso_final", ascending=False),
         use_container_width=True
