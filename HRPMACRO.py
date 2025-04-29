@@ -1371,11 +1371,10 @@ if st.button("Gerar Alocação Otimizada"):
     if not ativos_validos:
         st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
     else:
-        # Gere o dicionário de favorecimentos logo após filtrar
         favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
         tickers_validos = [a['ticker'] for a in ativos_validos]
         try:
-            # Escolha do método:
+            # Escolha do método de otimização
             if metodo_otimizacao == "Sharpe Máximo (risco/retorno)":
                 pesos = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
             elif metodo_otimizacao == "Retorno Máximo (limite 20% por ativo)":
@@ -1386,99 +1385,105 @@ if st.button("Gerar Alocação Otimizada"):
                 st.error("Método de otimização desconhecido.")
                 st.stop()
 
+            # === NOVO: Simulação e visualização da Fronteira Eficiente ===
+            st.subheader("🌈 Simulação: Fronteira Eficiente das Carteiras")
+            retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
+            df_front = calcular_fronteira_eficiente_macro(
+                retornos=retornos,
+                score_dict=favorecimentos,
+                n_portfolios=2000
+            )
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots(figsize=(10, 6))
+            scatter = ax.scatter(df_front['Volatilidade'], df_front['Retorno'], c=df_front['Sharpe'], cmap='viridis', alpha=0.5)
+            ax.set_xlabel('Volatilidade (Risco)')
+            ax.set_ylabel('Retorno Esperado')
+            ax.set_title('Fronteira Eficiente (Carteiras Aleatórias com Score Macro)')
+            plt.colorbar(scatter, label='Sharpe')
 
-                st.subheader("🌈 Simulação: Fronteira Eficiente das Carteiras")
-    retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
-    df_front = calcular_fronteira_eficiente_macro(retornos, favorecimentos)
-    fig, ax = plt.subplots(figsize=(10, 6))
-    scatter = ax.scatter(df_front['Volatilidade'], df_front['Retorno'], c=df_front['Sharpe'], cmap='viridis', alpha=0.5)
-    ax.set_xlabel('Volatilidade (Risco)')
-    ax.set_ylabel('Retorno Esperado')
-    ax.set_title('Fronteira Eficiente (Carteiras Aleatórias com Score Macro)')
-    plt.colorbar(scatter, label='Sharpe')
-    # Destaque a carteira otimizada
-    pesos_otimizados = pesos.to_numpy()
-    media_retorno = retornos.mean() * 252
-    cov = retornos.cov() * 252
-    ret_opt = np.dot(pesos_otimizados, media_retorno)
-    vol_opt = np.sqrt(np.dot(pesos_otimizados.T, np.dot(cov, pesos_otimizados)))
-    ax.scatter(vol_opt, ret_opt, c='red', s=100, marker='*', label='Carteira Otimizada')
-    ax.legend()
-    st.pyplot(fig)
-    st.info(
-        "Cada ponto representa uma carteira simulada aleatoriamente. "
-        "A cor indica o índice de Sharpe (quanto mais claro, melhor). "
-        "A estrela vermelha mostra sua carteira otimizada."
-    )
-    
-            if pesos is not None:
-                tickers_completos = set(carteira)
-                tickers_usados = set(tickers_validos)
-                tickers_zerados = tickers_completos - tickers_usados
-                if tickers_zerados:
-                    st.subheader("📉 Ativos da carteira atual sem recomendação de aporte")
-                    st.write(", ".join(tickers_zerados))
-                todos_os_tickers = list(carteira.keys())
-                df_resultado_completo = pd.DataFrame({'ticker': todos_os_tickers})
-                df_validos = pd.DataFrame(ativos_validos)
-                df_resultado = df_resultado_completo.merge(df_validos, on='ticker', how='left')
-                df_resultado["preco_atual"] = df_resultado["preco_atual"].fillna(0)
-                df_resultado["preco_alvo"] = df_resultado["preco_alvo"].fillna(0)
-                df_resultado["score"] = df_resultado["score"].fillna(0)
-                df_resultado["setor"] = df_resultado["setor"].fillna("Não recomendado")
-                pesos_dict = dict(zip(tickers_validos, pesos))
-                df_resultado["peso_otimizado"] = df_resultado["ticker"].map(pesos_dict).fillna(0)
-                df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
-                df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"])\
-                    .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
-                df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
-                tickers_resultado = df_resultado["ticker"].tolist()
-                pesos_atuais_dict = dict(zip(carteira, pesos_atuais))
-                pesos_atuais_filtrados = np.array([pesos_atuais_dict[t] for t in tickers_resultado])
-                valores_atuais = pesos_atuais_filtrados * 1_000_000
-                valores_aporte = df_resultado["Valor Alocado (R$)"].to_numpy()
-                valores_totais = valores_atuais + valores_aporte
-                pesos_finais = valores_totais / valores_totais.sum()
-                df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
-                st.subheader("📈 Ativos Recomendados para Novo Aporte")
-                st.dataframe(df_resultado[[
-                    "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
-                    "Valor Alocado (R$)", "% na Carteira Final"
-                ]], use_container_width=True)
-                valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
-                troco = aporte - valor_utilizado
-                st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
-                st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+            # Destaque a carteira otimizada sugerida
+            pesos_otimizados = pesos.to_numpy() if hasattr(pesos, "to_numpy") else np.array(pesos)
+            media_retorno = retornos.mean() * 252
+            cov = retornos.cov() * 252
+            ret_opt = float(np.dot(pesos_otimizados, media_retorno))
+            vol_opt = float(np.sqrt(np.dot(pesos_otimizados.T, np.dot(cov, pesos_otimizados))))
+            ax.scatter(vol_opt, ret_opt, c='red', s=120, marker='*', label='Carteira Otimizada')
+            ax.legend()
+            st.pyplot(fig)
+            st.info(
+                "Cada ponto representa uma carteira simulada aleatoriamente. "
+                "A cor indica o índice de Sharpe (quanto mais claro, melhor). "
+                "A estrela vermelha mostra sua carteira otimizada sugerida para o aporte."
+            )
 
-                # ---- Top 5 empresas destaque histórico ---
-                historico_7anos_df = montar_historico_7anos(
-                    tickers=list(setores_por_ticker.keys()),
-                    setores_por_ticker=setores_por_ticker,
-                    start='2018-01-01'
+            # === Continuação: recomendação de aporte ===
+            tickers_completos = set(carteira)
+            tickers_usados = set(tickers_validos)
+            tickers_zerados = tickers_completos - tickers_usados
+            if tickers_zerados:
+                st.subheader("📉 Ativos da carteira atual sem recomendação de aporte")
+                st.write(", ".join(tickers_zerados))
+            todos_os_tickers = list(carteira.keys())
+            df_resultado_completo = pd.DataFrame({'ticker': todos_os_tickers})
+            df_validos = pd.DataFrame(ativos_validos)
+            df_resultado = df_resultado_completo.merge(df_validos, on='ticker', how='left')
+            df_resultado["preco_atual"] = df_resultado["preco_atual"].fillna(0)
+            df_resultado["preco_alvo"] = df_resultado["preco_alvo"].fillna(0)
+            df_resultado["score"] = df_resultado["score"].fillna(0)
+            df_resultado["setor"] = df_resultado["setor"].fillna("Não recomendado")
+            pesos_dict = dict(zip(tickers_validos, pesos))
+            df_resultado["peso_otimizado"] = df_resultado["ticker"].map(pesos_dict).fillna(0)
+            df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
+            df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"])\
+                .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
+            df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
+            tickers_resultado = df_resultado["ticker"].tolist()
+            pesos_atuais_dict = dict(zip(carteira, pesos_atuais))
+            pesos_atuais_filtrados = np.array([pesos_atuais_dict[t] for t in tickers_resultado])
+            valores_atuais = pesos_atuais_filtrados * 1_000_000
+            valores_aporte = df_resultado["Valor Alocado (R$)"].to_numpy()
+            valores_totais = valores_atuais + valores_aporte
+            pesos_finais = valores_totais / valores_totais.sum()
+            df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
+            st.subheader("📈 Ativos Recomendados para Novo Aporte")
+            st.dataframe(df_resultado[[
+                "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
+                "Valor Alocado (R$)", "% na Carteira Final"
+            ]], use_container_width=True)
+            valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
+            troco = aporte - valor_utilizado
+            st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
+            st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+
+            # --- Top 5 empresas destaque histórico ---
+            historico_7anos_df = montar_historico_7anos(
+                tickers=list(setores_por_ticker.keys()),
+                setores_por_ticker=setores_por_ticker,
+                start='2018-01-01'
+            )
+            historico_cenario = historico_7anos_df[historico_7anos_df["cenario"] == cenario_atual]  
+            if not historico_cenario.empty:
+                destaque_hist = (
+                    historico_cenario.groupby(["ticker", "setor"])
+                    .agg(media_favorecido=("favorecido", "mean"),
+                         ocorrencias=("favorecido", "count"))
+                    .reset_index()
+                    .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
                 )
-                historico_cenario = historico_7anos_df[historico_7anos_df["cenario"] == cenario_atual]  
-                if not historico_cenario.empty:
-                    destaque_hist = (
-                        historico_cenario.groupby(["ticker", "setor"])
-                        .agg(media_favorecido=("favorecido", "mean"),
-                             ocorrencias=("favorecido", "count"))
-                        .reset_index()
-                        .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
-                    )
-                    tickers_carteira = set(df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"])
-                    destaque_hist = destaque_hist[destaque_hist["ticker"].isin(tickers_carteira)]
-                    st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
-                    st.dataframe(destaque_hist.head(100), use_container_width=True)
-                else:
-                    st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
+                tickers_carteira = set(df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"])
+                destaque_hist = destaque_hist[destaque_hist["ticker"].isin(tickers_carteira)]
+                st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
+                st.dataframe(destaque_hist.head(100), use_container_width=True)
+            else:
+                st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
 
-                st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos) — Ajustado e Close")
-                tickers_validos = df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"].tolist()
-                pesos_otimizados = df_resultado[df_resultado["peso_otimizado"] > 0]["peso_otimizado"].values
-                if len(tickers_validos) >= 2:
-                    backtest_portfolio_vs_ibov_duplo(tickers_validos, pesos_otimizados)
-                else:
-                    st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
+            st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos) — Ajustado e Close")
+            tickers_validos_bt = df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"].tolist()
+            pesos_otimizados_bt = df_resultado[df_resultado["peso_otimizado"] > 0]["peso_otimizado"].values
+            if len(tickers_validos_bt) >= 2:
+                backtest_portfolio_vs_ibov_duplo(tickers_validos_bt, pesos_otimizados_bt)
+            else:
+                st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
             
