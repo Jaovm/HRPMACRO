@@ -1465,3 +1465,99 @@ if (
     troco = aporte - valor_utilizado
     st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
     st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+
+
+import matplotlib.pyplot as plt
+
+# --- BACKTEST: Carteira Recomendada vs IBOV ---
+def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2018-01-01'):
+    df_adj = yf.download(tickers, start=start_date, auto_adjust=True, progress=False)['Close']
+    ibov_adj = yf.download('^BVSP', start=start_date, auto_adjust=True, progress=False)['Close']
+    df_adj = df_adj.ffill().dropna()
+    ibov_adj = ibov_adj.ffill().dropna()
+
+    idx = df_adj.index.intersection(ibov_adj.index)
+    df_adj, ibov_adj = df_adj.loc[idx], ibov_adj.loc[idx]
+
+    df_adj_norm = df_adj / df_adj.iloc[0]
+    ibov_adj_norm = ibov_adj / ibov_adj.iloc[0]
+
+    pesos = np.array(pesos)
+    if len(pesos) != df_adj.shape[1]:
+        pesos = np.ones(df_adj.shape[1]) / df_adj.shape[1]
+
+    port_adj = (df_adj_norm * pesos).sum(axis=1)
+
+    anos = (port_adj.index[-1] - port_adj.index[0]).days / 365.25
+    cagr_port_adj = (float(port_adj.iloc[-1]) / float(port_adj.iloc[0])) ** (1 / anos) - 1
+    cagr_ibov_adj = (float(ibov_adj_norm.iloc[-1]) / float(ibov_adj_norm.iloc[0])) ** (1 / anos) - 1
+
+    st.markdown(f"**CAGR Carteira Recomendada:** {100*float(cagr_port_adj):.2f}% ao ano")
+    st.markdown(f"**CAGR IBOV:** {100*float(cagr_ibov_adj):.2f}% ao ano")
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    port_adj.plot(ax=ax, label='Carteira Recomendada')
+    ibov_adj_norm.plot(ax=ax, label='IBOV')
+    ax.set_title('Backtest: Carteira Recomendada vs IBOV (7 anos)')
+    ax.set_ylabel('Retorno acumulado')
+    ax.set_xlabel('Ano')
+    ax.legend()
+    st.pyplot(fig)
+
+# --- HISTÓRICO AJUSTADO ---
+def mostrar_historico_ajustado(tickers, setores_por_ticker, cenario_atual, anos=7):
+    historico_7anos_df = montar_historico_7anos(
+        tickers=tickers,
+        setores_por_ticker=setores_por_ticker,
+        start=(pd.Timestamp.today() - pd.DateOffset(years=anos)).strftime('%Y-%m-%d')
+    )
+    historico_cenario = historico_7anos_df[historico_7anos_df["cenario"] == cenario_atual]
+    if not historico_cenario.empty:
+        destaque_hist = (
+            historico_cenario.groupby(["ticker", "setor"])
+            .agg(media_favorecido=("favorecido", "mean"), ocorrencias=("favorecido", "count"))
+            .reset_index()
+            .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
+        )
+        st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos {anos} anos")
+        st.dataframe(destaque_hist.head(100), use_container_width=True)
+    else:
+        st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos {anos} anos.")
+
+# --- EXEMPLO DE USO APÓS GERAR ALOCAÇÃO OTIMIZADA ---
+
+# Exiba APÓS a tabela de aportes, se houver pelo menos 2 ativos:
+if (
+    st.session_state.get('pesos_opcoes')
+    and st.session_state.get('ativos_validos_aporte')
+    and st.session_state.get('aporte_valor')
+):
+    pesos_recomendados = st.session_state['pesos_opcoes'][st.session_state['metodo_aporte']]
+    ativos_validos = st.session_state['ativos_validos_aporte']
+    aporte = st.session_state['aporte_valor']
+
+    df_validos = pd.DataFrame(ativos_validos)
+    df_resultado = df_validos[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'score']].copy()
+    df_resultado["peso_otimizado"] = df_resultado["ticker"].map(pesos_recomendados).fillna(0)
+    df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
+    df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"])\
+        .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
+    df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
+    df_resultado = df_resultado[df_resultado["Qtd. Ações"] > 0]
+
+    # BACKTEST
+    tickers_validos_bt = df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"].tolist()
+    pesos_otimizados_bt = df_resultado[df_resultado["peso_otimizado"] > 0]["peso_otimizado"].values
+    if len(tickers_validos_bt) >= 2:
+        st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos)")
+        backtest_portfolio_vs_ibov_duplo(tickers_validos_bt, pesos_otimizados_bt)
+    else:
+        st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
+
+    # HISTÓRICO AJUSTADO
+    mostrar_historico_ajustado(
+        tickers=list(setores_por_ticker.keys()),
+        setores_por_ticker=setores_por_ticker,
+        cenario_atual=cenario_atual,
+        anos=7
+    )
