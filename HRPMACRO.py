@@ -1486,5 +1486,39 @@ if st.button("Gerar Alocação Otimizada"):
                 st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
         except Exception as e:
             st.error(f"Erro na otimização: {str(e)}")
-            
+
+# Supondo que você já tem: df_front (DataFrame das simulações), pesos (da carteira otimizada),
+# retornos (DataFrame dos retornos dos ativos), taxa_risco_livre (tipicamente zero ou muito baixo)
+
+# 1. Calcule retorno e risco da carteira otimizada
+pesos_otimizados = pesos.to_numpy() if hasattr(pesos, "to_numpy") else np.array(pesos)
+media_retorno = retornos.mean() * 252  # anualizado
+cov = retornos.cov() * 252
+ret_opt = float(np.dot(pesos_otimizados, media_retorno))
+vol_opt = float(np.sqrt(np.dot(pesos_otimizados.T, np.dot(cov, pesos_otimizados))))
+taxa_risco_livre = 0.0  # ajuste se desejar
+sharpe_opt = (ret_opt - taxa_risco_livre) / vol_opt if vol_opt > 0 else 0
+
+# 2. Encontre a melhor carteira simulada
+melhor_carteira = df_front.loc[df_front['Sharpe'].idxmax()]
+sharpe_sim = melhor_carteira['Sharpe']
+ret_sim = melhor_carteira['Retorno']
+vol_sim = melhor_carteira['Volatilidade']
+
+# 3. Exiba a comparação no Streamlit
+st.subheader("🔬 Comparação: Carteira Otimizada x Melhor Simulação Aleatória")
+st.write(f"**Carteira Otimizada**:   Sharpe = {sharpe_opt:.2f} | Retorno = {ret_opt:.2%} | Risco = {vol_opt:.2%}")
+st.write(f"**Melhor Simulação**:    Sharpe = {sharpe_sim:.2f} | Retorno = {ret_sim:.2%} | Risco = {vol_sim:.2%}")
+
+if sharpe_sim > sharpe_opt + 1e-4:  # margem pequena para evitar empate numérico
+    st.warning(
+        "⚠️ Uma carteira simulada aleatória apresenta Sharpe superior à otimizada. "
+        "Considere revisar as restrições, os parâmetros ou experimentar outro método de otimização."
+    )
+else:
+    st.success("A carteira otimizada está entre as melhores da simulação (conforme esperado para um otimizador robusto).")
+
+# (Opcional) Mostrar os pesos da melhor simulação
+with st.expander("🔍 Ver pesos da melhor carteira simulada"):
+    st.write(dict(zip(retornos.columns, melhor_carteira['Pesos'])))
          
