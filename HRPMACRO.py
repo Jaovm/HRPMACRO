@@ -1480,7 +1480,7 @@ if st.button("Gerar Alocação Otimizada"):
         df_front = calcular_fronteira_eficiente_macro(
             retornos=retornos,
             score_dict=favorecimentos,
-            n_portfolios=50000
+            n_portfolios=100000
         )
         melhor_carteira = df_front.loc[df_front['Sharpe'].idxmax()]
 
