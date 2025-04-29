@@ -1630,6 +1630,7 @@ if (
     # --- Mostra a carteira integral após o aporte (todas as posições, robusto a tipos) ---
     # --- Mostra a carteira integral após o aporte (todas as posições, robusto a tipos) ---
     # --- Mostra a carteira integral após o aporte (com pesos iniciais e finais corrigidos) ---
+    # --- Mostra a carteira integral após o aporte (com pesos iniciais e finais corrigidos) ---
     st.subheader("📦 Carteira integral após o aporte")
     
     # Inicializa a carteira integral com os valores iniciais
@@ -1654,9 +1655,19 @@ if (
                 "score": row.get("score", 0),
             }
     
-    # Calcula os valores totais antes e depois do aporte
-    valor_total_inicial = sum(carteira.get(t, 0) * carteira_integral[t].get("preco_atual", 0) for t in carteira_integral)
-    valor_total_final = sum(v["quantidade"] * v.get("preco_atual", 0) for v in carteira_integral.values() if isinstance(v, dict))
+    # Calcula o valor total inicial com base nos pesos fornecidos pelo usuário
+    valor_total_inicial = sum(
+        carteira.get(t, 0) * carteira_integral[t].get("preco_atual", 0)
+        for t in carteira_integral
+        if carteira.get(t, 0) > 0  # Garante que só ativos com peso inicial positivo sejam somados
+    )
+    
+    # Calcula o valor total final com base nas quantidades e preços após o aporte
+    valor_total_final = sum(
+        v["quantidade"] * v.get("preco_atual", 0)
+        for v in carteira_integral.values()
+        if isinstance(v, dict) and v.get("quantidade", 0) > 0  # Garante que só ativos com quantidade positiva sejam somados
+    )
     
     # Preenche os dados para todos os ativos, incluindo os que não receberam aportes
     dados_integral = []
