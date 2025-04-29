@@ -1367,7 +1367,7 @@ favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 
 
-            if st.button("Gerar Alocação Otimizada"):
+if st.button("Gerar Alocação Otimizada"):
     try:
         ativos_validos = filtrar_ativos_validos(
             carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score
