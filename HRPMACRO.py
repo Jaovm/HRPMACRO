@@ -1361,6 +1361,8 @@ favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 
 # Função para exibir histórico ajustado (lembre-se de definir montar_historico_7anos!)
+
+# Função para exibir histórico ajustado (lembre-se de definir montar_historico_7anos!)
 def mostrar_historico_ajustado(tickers, setores_por_ticker, cenario_atual, anos=7):
     if 'montar_historico_7anos' not in globals():
         st.warning("Função montar_historico_7anos não definida.")
@@ -1624,6 +1626,31 @@ if (
             st.markdown(f"💰 **Valor utilizado na carteira eficiente:** R$ {valor_utilizado_mc:,.2f}")
             st.markdown(f"🔁 **Troco (não alocado):** R$ {troco_mc:,.2f}")
             st.info("Métricas da carteira precisam de pelo menos 2 ativos.")
+
+    # --- Mostra a carteira integral após o aporte (todas as posições) ---
+    st.subheader("📦 Carteira integral após o aporte")
+    carteira_integral = carteira.copy()
+    # Atualize quantidades para cada ativo do aporte
+    for idx, row in df_resultado.iterrows():
+        ticker = row["ticker"]
+        qtd_nova = row["Qtd. Ações"]
+        if ticker in carteira_integral:
+            carteira_integral[ticker]["quantidade"] += int(qtd_nova)
+        else:
+            carteira_integral[ticker] = {
+                "quantidade": int(qtd_nova),
+                "setor": row["setor"],
+                "preco_atual": row["preco_atual"],
+                "preco_alvo": row["preco_alvo"],
+                "score": row["score"]
+            }
+    df_carteira_integral = pd.DataFrame([
+        {"ticker": t, **v}
+        for t, v in carteira_integral.items()
+    ])
+    st.dataframe(df_carteira_integral[
+        ["ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score"]
+    ].sort_values(by="quantidade", ascending=False), use_container_width=True)
 
     # --- Backtest plug and play ---
     if len(df_resultado) >= 2:
