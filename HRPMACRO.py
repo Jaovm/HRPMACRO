@@ -948,23 +948,7 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
 
 
 # ========= OTIMIZAÇÃO ==========
-def simular_carteiras(tickers, favorecimentos, n_portfolios=3000):
-    dados = obter_preco_diario_ajustado(tickers)
-    dados = dados.ffill().bfill()
-    retornos = np.log(dados / dados.shift(1)).dropna()
-    media_retorno = retornos.mean() * 252
-    cov = retornos.cov() * 252
-    num_ativos = len(tickers)
-    resultados = []
-    for _ in range(n_portfolios):
-        pesos = np.random.random(num_ativos)
-        pesos /= np.sum(pesos)
-        ret = np.dot(pesos, media_retorno)
-        vol = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
-        sharpe = (ret - 0.0) / vol if vol > 0 else 0
-        resultados.append((vol, ret, sharpe, pesos.copy()))
-    df = pd.DataFrame(resultados, columns=['Volatilidade', 'Retorno', 'Sharpe', 'Pesos'])
-    return df
+
 
 
 @st.cache_data(ttl=86400)
@@ -990,6 +974,7 @@ def obter_preco_diario_ajustado(tickers):
             return dados_brutos[['Close']].rename(columns={'Close': tickers[0]})
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
+            
 def calcular_fronteira_eficiente_macro(retornos, score_dict, n_portfolios=100, taxa_risco_livre=0.0):
     """
     Gera portfolios aleatórios usando retornos ajustados pelo score macro.
@@ -1379,23 +1364,6 @@ metodo_otimizacao = st.selectbox(
 ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
 favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
-st.subheader("🔎 Simulação de Carteiras (Risco x Retorno)")
-df_sim = simular_carteiras(tickers_validos, favorecimentos, n_portfolios=3000)
-fig, ax = plt.subplots(figsize=(10, 6))
-scatter = ax.scatter(df_sim['Volatilidade'], df_sim['Retorno'], c=df_sim['Sharpe'], cmap='viridis', alpha=0.5)
-ax.set_xlabel('Volatilidade (Risco)')
-ax.set_ylabel('Retorno Esperado')
-ax.set_title('Simulação: Fronteira de Carteiras Aleatórias')
-plt.colorbar(scatter, label='Sharpe')
-# Destaque a solução otimizada sugerida
-peso_otimizado = pesos.to_numpy()
-media_retorno = df_sim['Retorno'].mean() if len(df_sim) > 0 else 0
-cov = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna().cov() * 252
-ret_opt = np.dot(peso_otimizado, retornos.mean() * 252)
-vol_opt = np.sqrt(np.dot(peso_otimizado.T, np.dot(cov, peso_otimizado)))
-ax.scatter(vol_opt, ret_opt, c='red', s=100, label='Carteira Otimizada', marker='*')
-ax.legend()
-st.pyplot(fig)
 
 
 if st.button("Gerar Alocação Otimizada"):
@@ -1418,6 +1386,31 @@ if st.button("Gerar Alocação Otimizada"):
                 st.error("Método de otimização desconhecido.")
                 st.stop()
 
+
+                st.subheader("🌈 Simulação: Fronteira Eficiente das Carteiras")
+    retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
+    df_front = calcular_fronteira_eficiente_macro(retornos, favorecimentos)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    scatter = ax.scatter(df_front['Volatilidade'], df_front['Retorno'], c=df_front['Sharpe'], cmap='viridis', alpha=0.5)
+    ax.set_xlabel('Volatilidade (Risco)')
+    ax.set_ylabel('Retorno Esperado')
+    ax.set_title('Fronteira Eficiente (Carteiras Aleatórias com Score Macro)')
+    plt.colorbar(scatter, label='Sharpe')
+    # Destaque a carteira otimizada
+    pesos_otimizados = pesos.to_numpy()
+    media_retorno = retornos.mean() * 252
+    cov = retornos.cov() * 252
+    ret_opt = np.dot(pesos_otimizados, media_retorno)
+    vol_opt = np.sqrt(np.dot(pesos_otimizados.T, np.dot(cov, pesos_otimizados)))
+    ax.scatter(vol_opt, ret_opt, c='red', s=100, marker='*', label='Carteira Otimizada')
+    ax.legend()
+    st.pyplot(fig)
+    st.info(
+        "Cada ponto representa uma carteira simulada aleatoriamente. "
+        "A cor indica o índice de Sharpe (quanto mais claro, melhor). "
+        "A estrela vermelha mostra sua carteira otimizada."
+    )
+    
             if pesos is not None:
                 tickers_completos = set(carteira)
                 tickers_usados = set(tickers_validos)
