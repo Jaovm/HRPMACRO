@@ -1629,10 +1629,11 @@ if (
 
     # --- Mostra a carteira integral após o aporte (todas as posições, robusto a tipos) ---
     # --- Mostra a carteira integral após o aporte (todas as posições, robusto a tipos) ---
+    # --- Mostra a carteira integral após o aporte (com pesos iniciais e finais) ---
     st.subheader("📦 Carteira integral após o aporte")
     
     # Inicializa a carteira integral com cópia profunda
-    carteira_integral = {k: v.copy() if isinstance(v, dict) else v for k, v in carteira.items()}
+    carteira_integral = {k: v.copy() if isinstance(v, dict) else {"quantidade": 0} for k, v in carteira.items()}
     
     # Atualiza a carteira integral com os novos aportes
     for idx, row in df_resultado.iterrows():
@@ -1640,34 +1641,38 @@ if (
         qtd_nova = int(row["Qtd. Ações"])
         if ticker in carteira_integral and isinstance(carteira_integral[ticker], dict):
             carteira_integral[ticker]["quantidade"] = int(carteira_integral[ticker].get("quantidade", 0)) + qtd_nova
-            carteira_integral[ticker]["setor"] = row["setor"]
-            carteira_integral[ticker]["preco_atual"] = row["preco_atual"]
-            carteira_integral[ticker]["preco_alvo"] = row["preco_alvo"]
-            carteira_integral[ticker]["score"] = row["score"]
+            carteira_integral[ticker]["setor"] = row.get("setor", "")
+            carteira_integral[ticker]["preco_atual"] = row.get("preco_atual", 0)
+            carteira_integral[ticker]["preco_alvo"] = row.get("preco_alvo", 0)
+            carteira_integral[ticker]["score"] = row.get("score", 0)
         else:
             carteira_integral[ticker] = {
                 "quantidade": qtd_nova,
-                "setor": row["setor"],
-                "preco_atual": row["preco_atual"],
-                "preco_alvo": row["preco_alvo"],
-                "score": row["score"]
+                "setor": row.get("setor", ""),
+                "preco_atual": row.get("preco_atual", 0),
+                "preco_alvo": row.get("preco_alvo", 0),
+                "score": row.get("score", 0),
             }
     
-    # Monta dataframe só com dicts (ignora valores escalares)
+    # Calcula os valores totais antes e depois do aporte
+    valor_total_inicial = sum(carteira.get(t, 0) * carteira_integral[t].get("preco_atual", 0) for t in carteira_integral)
+    valor_total_final = sum(v["quantidade"] * v.get("preco_atual", 0) for v in carteira_integral.values() if isinstance(v, dict))
+    
+    # Monta dataframe com todos os ativos, garantindo os pesos iniciais e finais
     dados_integral = []
     for t, v in carteira_integral.items():
         if isinstance(v, dict):
-            dados = {"ticker": t}
-            dados.update(v)
-            # Calcula os pesos iniciais e pesos finais
-            dados["peso_inicial"] = carteira.get(t, 0)  # Peso inicial antes do aporte
-            dados["peso_final"] = dados["quantidade"] * dados["preco_atual"] / (
-                sum([v["quantidade"] * v["preco_atual"] for v in carteira_integral.values() if isinstance(v, dict)])
-            )  # Peso final após o aporte
+            dados = {
+                "ticker": t,
+                "setor": v.get("setor", ""),
+                "quantidade": v.get("quantidade", 0),
+                "preco_atual": v.get("preco_atual", 0),
+                "preco_alvo": v.get("preco_alvo", 0),
+                "score": v.get("score", 0),
+                "peso_inicial": carteira.get(t, 0) * v.get("preco_atual", 0) / valor_total_inicial if valor_total_inicial > 0 else 0,
+                "peso_final": (v.get("quantidade", 0) * v.get("preco_atual", 0)) / valor_total_final if valor_total_final > 0 else 0,
+            }
             dados_integral.append(dados)
-        else:
-            # Se v não for dict, mostra só ticker e quantidade
-            dados_integral.append({"ticker": t, "quantidade": v, "peso_inicial": 0, "peso_final": 0})
     
     df_carteira_integral = pd.DataFrame(dados_integral)
     
