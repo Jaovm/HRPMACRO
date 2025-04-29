@@ -1367,192 +1367,145 @@ favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 
 
-            
-if st.button("Gerar Alocação Otimizada"):
+            if st.button("Gerar Alocação Otimizada"):
     try:
-        ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
+        ativos_validos = filtrar_ativos_validos(
+            carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score
+        )
         if not ativos_validos:
             st.warning("Nenhum ativo com preço atual abaixo do preço-alvo dos analistas.")
+            st.stop()
+        
+        favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
+        tickers_validos = [a['ticker'] for a in ativos_validos]
+        retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
+        media_retorno = retornos.mean() * 252
+        cov = retornos.cov() * 252
+
+        # === Simulação Monte Carlo ===
+        st.subheader("Simulação: Fronteira Eficiente (Monte Carlo) + Recomendações")
+        df_front = calcular_fronteira_eficiente_macro(
+            retornos=retornos,
+            score_dict=favorecimentos,
+            n_portfolios=50000
+        )
+        fig, ax = plt.subplots(figsize=(10, 6))
+        scatter = ax.scatter(
+            df_front['Volatilidade'], df_front['Retorno'], c=df_front['Sharpe'],
+            cmap='viridis', alpha=0.5
+        )
+        ax.set_xlabel('Volatilidade (Risco)')
+        ax.set_ylabel('Retorno Esperado')
+        ax.set_title('Fronteira Eficiente (Monte Carlo) - Carteiras Aleatórias com Score Macro')
+        plt.colorbar(scatter, label='Sharpe')
+
+        # Melhor carteira Monte Carlo
+        melhor_carteira = df_front.loc[df_front['Sharpe'].idxmax()]
+        ax.scatter(
+            melhor_carteira['Volatilidade'], melhor_carteira['Retorno'],
+            c='orange', s=120, marker='P', label='Monte Carlo (Melhor)'
+        )
+
+        # Otimização Sharpe padrão (seed macro/uniforme)
+        pesos_sharpe = otimizar_carteira_sharpe(
+            tickers_validos, carteira, favorecimentos=favorecimentos
+        )
+        pesos_sharpe_np = pesos_sharpe.to_numpy() if hasattr(pesos_sharpe, "to_numpy") else np.array(pesos_sharpe)
+        ret_sharpe = float(np.dot(pesos_sharpe_np, media_retorno))
+        vol_sharpe = float(np.sqrt(np.dot(pesos_sharpe_np.T, np.dot(cov, pesos_sharpe_np))))
+        ax.scatter(vol_sharpe, ret_sharpe, c='red', s=120, marker='*', label='Sharpe (Seed Macro)')
+
+        # Otimização Sharpe com seed Monte Carlo
+        from scipy.optimize import minimize
+        def sharpe_neg(pesos):
+            retorno = np.dot(pesos, media_retorno)
+            risco = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+            return - (retorno / risco) if risco > 0 else 0
+        limites = tuple((0, 1) for _ in range(len(tickers_validos)))
+        restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
+        pesos_seed_mc = np.array(melhor_carteira['Pesos'])
+        res_mc = minimize(
+            sharpe_neg,
+            pesos_seed_mc,
+            method='SLSQP',
+            bounds=limites,
+            constraints=restricoes,
+            options={'disp': False, 'maxiter': 1000}
+        )
+        if res_mc.success:
+            pesos_sharpe_mc = res_mc.x
         else:
-            favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
-            tickers_validos = [a['ticker'] for a in ativos_validos]
+            st.warning("Falha na otimização Sharpe com seed Monte Carlo.")
+            pesos_sharpe_mc = pesos_sharpe_np.copy()
+        ret_sharpe_mc = float(np.dot(pesos_sharpe_mc, media_retorno))
+        vol_sharpe_mc = float(np.sqrt(np.dot(pesos_sharpe_mc.T, np.dot(cov, pesos_sharpe_mc))))
+        ax.scatter(
+            vol_sharpe_mc, ret_sharpe_mc,
+            c='magenta', s=100, marker='v', label='Sharpe (Seed Monte Carlo)'
+        )
 
-            # Obtenção dos retornos
-            retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
-            media_retorno = retornos.mean() * 252
-            cov = retornos.cov() * 252
+        # HRP
+        pesos_hrp = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
+        pesos_hrp_np = pesos_hrp.to_numpy() if hasattr(pesos_hrp, "to_numpy") else np.array(pesos_hrp)
+        ret_hrp = float(np.dot(pesos_hrp_np, media_retorno))
+        vol_hrp = float(np.sqrt(np.dot(pesos_hrp_np.T, np.dot(cov, pesos_hrp_np))))
+        ax.scatter(vol_hrp, ret_hrp, c='blue', s=100, marker='^', label='HRP')
 
-            # ====== SIMULAÇÃO MONTE CARLO ======
-            st.subheader("Simulação: Fronteira Eficiente (Monte Carlo) + Recomendações")
-            df_front = calcular_fronteira_eficiente_macro(
-                retornos=retornos,
-                score_dict=favorecimentos,
-                n_portfolios=50000
+        ax.legend()
+        st.pyplot(fig)
+        st.info(
+            "Estrela vermelha: Sharpe padrão; triângulo magenta: Sharpe (seed Monte Carlo); "
+            "azul: HRP; laranja: Monte Carlo melhor simulação."
+        )
+
+        # Comparação
+        st.subheader("🔬 Comparação: Métodos")
+        st.write(f"**Sharpe (macro):** Sharpe = {(ret_sharpe/vol_sharpe):.2f} | Retorno = {ret_sharpe:.2%} | Risco = {vol_sharpe:.2%}")
+        st.write(f"**Sharpe (Monte Carlo):** Sharpe = {(ret_sharpe_mc/vol_sharpe_mc):.2f} | Retorno = {ret_sharpe_mc:.2%} | Risco = {vol_sharpe_mc:.2%}")
+        st.write(f"**HRP:** Sharpe = {(ret_hrp/vol_hrp):.2f} | Retorno = {ret_hrp:.2%} | Risco = {vol_hrp:.2%}")
+        st.write(f"**Monte Carlo:** Sharpe = {melhor_carteira['Sharpe']:.2f} | Retorno = {melhor_carteira['Retorno']:.2%} | Risco = {melhor_carteira['Volatilidade']:.2%}")
+
+        with st.expander("🔍 Pesos da melhor carteira Monte Carlo"):
+            st.write(dict(zip(retornos.columns, melhor_carteira['Pesos'])))
+
+        # Escolha do método de aporte
+        metodo_escolha = st.selectbox(
+            "Qual carteira usar para recomendação de aporte?",
+            (
+                "Sharpe (macro)",
+                "Sharpe (Monte Carlo)",
+                "HRP",
+                "Monte Carlo (Melhor Simulada)"
             )
+        )
+        if metodo_escolha == "Sharpe (macro)":
+            pesos_recomendados = pesos_sharpe
+        elif metodo_escolha == "Sharpe (Monte Carlo)":
+            pesos_recomendados = pd.Series(pesos_sharpe_mc, index=retornos.columns)
+        elif metodo_escolha == "HRP":
+            pesos_recomendados = pesos_hrp
+        else:
+            pesos_recomendados = pd.Series(melhor_carteira['Pesos'], index=retornos.columns)
 
-            import matplotlib.pyplot as plt
-            fig, ax = plt.subplots(figsize=(10, 6))
-            scatter = ax.scatter(df_front['Volatilidade'], df_front['Retorno'], c=df_front['Sharpe'], cmap='viridis', alpha=0.5)
-            ax.set_xlabel('Volatilidade (Risco)')
-            ax.set_ylabel('Retorno Esperado')
-            ax.set_title('Fronteira Eficiente (Monte Carlo) - Carteiras Aleatórias com Score Macro')
-            plt.colorbar(scatter, label='Sharpe')
+        # Monta tabela de recomendação de aporte
+        df_validos = pd.DataFrame(ativos_validos)
+        df_resultado = df_validos[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'score']].copy()
+        df_resultado["peso_otimizado"] = df_resultado["ticker"].map(pesos_recomendados).fillna(0)
+        df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
+        df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"])\
+            .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
+        df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
+        df_resultado = df_resultado[df_resultado["Qtd. Ações"] > 0]
 
-            # Melhor simulação Monte Carlo
-            melhor_carteira = df_front.loc[df_front['Sharpe'].idxmax()]
-            sharpe_mc = melhor_carteira['Sharpe']
-            ret_mc = melhor_carteira['Retorno']
-            vol_mc = melhor_carteira['Volatilidade']
-            ax.scatter(vol_mc, ret_mc, c='orange', s=100, marker='P', label='Monte Carlo (Melhor)')
+        st.subheader("📈 Ativos Recomendados para Novo Aporte")
+        st.dataframe(df_resultado[[
+            "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
+            "Valor Alocado (R$)"
+        ]], use_container_width=True)
+        valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
+        troco = aporte - valor_utilizado
+        st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
+        st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
-            # ====== OTIMIZAÇÃO SHARPE: SEED PADRÃO (score macro/uniforme) ======
-            pesos_sharpe = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
-            pesos_sharpe_np = pesos_sharpe.to_numpy() if hasattr(pesos_sharpe, "to_numpy") else np.array(pesos_sharpe)
-            ret_sharpe = float(np.dot(pesos_sharpe_np, media_retorno))
-            vol_sharpe = float(np.sqrt(np.dot(pesos_sharpe_np.T, np.dot(cov, pesos_sharpe_np))))
-            sharpe_sharpe = (ret_sharpe - 0.0) / vol_sharpe if vol_sharpe > 0 else 0
-            ax.scatter(vol_sharpe, ret_sharpe, c='red', s=120, marker='*', label='Sharpe Máximo (Seed Macro)')
-
-            # ====== OTIMIZAÇÃO SHARPE: SEED MONTE CARLO ======
-            from scipy.optimize import minimize
-            def sharpe_neg(pesos):
-                retorno = np.dot(pesos, media_retorno)
-                risco = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
-                return - (retorno / risco) if risco > 0 else 0
-            limites = tuple((0, 1) for _ in range(len(tickers_validos)))
-            restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
-            pesos_seed_mc = np.array(melhor_carteira['Pesos'])
-            res_mc = minimize(
-                sharpe_neg,
-                pesos_seed_mc,
-                method='SLSQP',
-                bounds=limites,
-                constraints=restricoes,
-                options={'disp': False, 'maxiter': 1000}
-            )
-            if res_mc.success:
-                pesos_sharpe_mc = res_mc.x
-            else:
-                st.warning("Falha na otimização Sharpe com seed Monte Carlo.")
-                pesos_sharpe_mc = pesos_sharpe_np.copy()
-            ret_sharpe_mc = float(np.dot(pesos_sharpe_mc, media_retorno))
-            vol_sharpe_mc = float(np.sqrt(np.dot(pesos_sharpe_mc.T, np.dot(cov, pesos_sharpe_mc))))
-            sharpe_sharpe_mc = (ret_sharpe_mc - 0.0) / vol_sharpe_mc if vol_sharpe_mc > 0 else 0
-            ax.scatter(vol_sharpe_mc, ret_sharpe_mc, c='magenta', s=100, marker='v', label='Sharpe Máximo (Seed Monte Carlo)')
-
-            # ====== OTIMIZAÇÃO HRP ======
-            pesos_hrp = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
-            pesos_hrp_np = pesos_hrp.to_numpy() if hasattr(pesos_hrp, "to_numpy") else np.array(pesos_hrp)
-            ret_hrp = float(np.dot(pesos_hrp_np, media_retorno))
-            vol_hrp = float(np.sqrt(np.dot(pesos_hrp_np.T, np.dot(cov, pesos_hrp_np))))
-            sharpe_hrp = (ret_hrp - 0.0) / vol_hrp if vol_hrp > 0 else 0
-            ax.scatter(vol_hrp, ret_hrp, c='blue', s=100, marker='^', label='HRP')
-
-            ax.legend()
-            st.pyplot(fig)
-            st.info(
-                "A estrela vermelha: Sharpe Máximo (seed macro/uniforme), triângulo magenta: Sharpe (seed Monte Carlo), "
-                "azul: HRP, laranja: Monte Carlo melhor simulação."
-            )
-
-            # --- Comparação em tabela
-            st.subheader("🔬 Comparação: Sharpe (Macro), Sharpe (Monte Carlo), HRP, Monte Carlo")
-            st.write(f"**Sharpe Máximo (seed macro)**: Sharpe = {sharpe_sharpe:.2f} | Retorno = {ret_sharpe:.2%} | Risco = {vol_sharpe:.2%}")
-            st.write(f"**Sharpe Máximo (seed Monte Carlo)**: Sharpe = {sharpe_sharpe_mc:.2f} | Retorno = {ret_sharpe_mc:.2%} | Risco = {vol_sharpe_mc:.2%}")
-            st.write(f"**HRP**: Sharpe = {sharpe_hrp:.2f} | Retorno = {ret_hrp:.2%} | Risco = {vol_hrp:.2%}")
-            st.write(f"**Monte Carlo**: Sharpe = {sharpe_mc:.2f} | Retorno = {ret_mc:.2%} | Risco = {vol_mc:.2%}")
-
-            with st.expander("🔍 Pesos da melhor carteira Monte Carlo"):
-                st.write(dict(zip(retornos.columns, melhor_carteira['Pesos'])))
-
-            # === Escolha da carteira para recomendação final
-            metodo_escolha = st.selectbox(
-                "Qual carteira você deseja usar para a recomendação de aporte?",
-                (
-                    "Sharpe Máximo (seed macro)",
-                    "Sharpe Máximo (seed Monte Carlo)",
-                    "HRP",
-                    "Monte Carlo (Melhor Simulada)"
-                )
-            )
-            if metodo_escolha == "Sharpe Máximo (seed macro)":
-                pesos_recomendados = pesos_sharpe
-            elif metodo_escolha == "Sharpe Máximo (seed Monte Carlo)":
-                pesos_recomendados = pd.Series(pesos_sharpe_mc, index=retornos.columns)
-            elif metodo_escolha == "HRP":
-                pesos_recomendados = pesos_hrp
-            else:
-                # Para Monte Carlo, criar uma Series com os tickers e os pesos da melhor simulação
-                pesos_mc = pd.Series(melhor_carteira['Pesos'], index=retornos.columns)
-                pesos_recomendados = pesos_mc
-
-            # === Continuação: recomendação de aporte ===
-            tickers_completos = set(carteira)
-            tickers_usados = set(tickers_validos)
-            tickers_zerados = tickers_completos - tickers_usados
-            if tickers_zerados:
-                st.subheader("📉 Ativos da carteira atual sem recomendação de aporte")
-                st.write(", ".join(tickers_zerados))
-            todos_os_tickers = list(carteira.keys())
-            df_resultado_completo = pd.DataFrame({'ticker': todos_os_tickers})
-            df_validos = pd.DataFrame(ativos_validos)
-            df_resultado = df_resultado_completo.merge(df_validos, on='ticker', how='left')
-            df_resultado["preco_atual"] = df_resultado["preco_atual"].fillna(0)
-            df_resultado["preco_alvo"] = df_resultado["preco_alvo"].fillna(0)
-            df_resultado["score"] = df_resultado["score"].fillna(0)
-            df_resultado["setor"] = df_resultado["setor"].fillna("Não recomendado")
-            pesos_dict = dict(zip(tickers_validos, pesos_recomendados))
-            df_resultado["peso_otimizado"] = df_resultado["ticker"].map(pesos_dict).fillna(0)
-            df_resultado["Valor Alocado Bruto (R$)"] = df_resultado["peso_otimizado"] * aporte
-            df_resultado["Qtd. Ações"] = (df_resultado["Valor Alocado Bruto (R$)"] / df_resultado["preco_atual"])\
-                .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
-            df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
-            tickers_resultado = df_resultado["ticker"].tolist()
-            pesos_atuais_dict = dict(zip(carteira, pesos_atuais))
-            pesos_atuais_filtrados = np.array([pesos_atuais_dict[t] for t in tickers_resultado])
-            valores_atuais = pesos_atuais_filtrados * 1_000_000
-            valores_aporte = df_resultado["Valor Alocado (R$)"].to_numpy()
-            valores_totais = valores_atuais + valores_aporte
-            pesos_finais = valores_totais / valores_totais.sum()
-            df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
-            st.subheader("📈 Ativos Recomendados para Novo Aporte")
-            st.dataframe(df_resultado[[
-                "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
-                "Valor Alocado (R$)", "% na Carteira Final"
-            ]], use_container_width=True)
-            valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
-            troco = aporte - valor_utilizado
-            st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
-            st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
-
-            # --- Top 5 empresas destaque histórico ---
-            historico_7anos_df = montar_historico_7anos(
-                tickers=list(setores_por_ticker.keys()),
-                setores_por_ticker=setores_por_ticker,
-                start='2018-01-01'
-            )
-            historico_cenario = historico_7anos_df[historico_7anos_df["cenario"] == cenario_atual]  
-            if not historico_cenario.empty:
-                destaque_hist = (
-                    historico_cenario.groupby(["ticker", "setor"])
-                    .agg(media_favorecido=("favorecido", "mean"),
-                            ocorrencias=("favorecido", "count"))
-                    .reset_index()
-                    .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
-                )
-                tickers_carteira = set(df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"])
-                destaque_hist = destaque_hist[destaque_hist["ticker"].isin(tickers_carteira)]
-                st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
-                st.dataframe(destaque_hist.head(100), use_container_width=True)
-            else:
-                st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
-
-            st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos) — Ajustado e Close")
-            tickers_validos_bt = df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"].tolist()
-            pesos_otimizados_bt = df_resultado[df_resultado["peso_otimizado"] > 0]["peso_otimizado"].values
-            if len(tickers_validos_bt) >= 2:
-                backtest_portfolio_vs_ibov_duplo(tickers_validos_bt, pesos_otimizados_bt)
-            else:
-                st.info("Backtest requer pelo menos 2 ativos recomendados na carteira.")
     except Exception as e:
         st.error(f"Erro na otimização: {str(e)}")
