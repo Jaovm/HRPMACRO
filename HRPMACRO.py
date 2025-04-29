@@ -1629,11 +1629,11 @@ if (
 
     # --- Mostra a carteira integral após o aporte (todas as posições, robusto a tipos) ---
     # --- Mostra a carteira integral após o aporte (todas as posições, robusto a tipos) ---
-    # --- Mostra a carteira integral após o aporte (com pesos iniciais e finais) ---
+    # --- Mostra a carteira integral após o aporte (com pesos iniciais e finais corrigidos) ---
     st.subheader("📦 Carteira integral após o aporte")
     
-    # Inicializa a carteira integral com cópia profunda
-    carteira_integral = {k: v.copy() if isinstance(v, dict) else {"quantidade": 0} for k, v in carteira.items()}
+    # Inicializa a carteira integral com os valores iniciais
+    carteira_integral = {k: v.copy() if isinstance(v, dict) else {"quantidade": 0, "preco_atual": 0} for k, v in carteira.items()}
     
     # Atualiza a carteira integral com os novos aportes
     for idx, row in df_resultado.iterrows():
@@ -1658,19 +1658,21 @@ if (
     valor_total_inicial = sum(carteira.get(t, 0) * carteira_integral[t].get("preco_atual", 0) for t in carteira_integral)
     valor_total_final = sum(v["quantidade"] * v.get("preco_atual", 0) for v in carteira_integral.values() if isinstance(v, dict))
     
-    # Monta dataframe com todos os ativos, garantindo os pesos iniciais e finais
+    # Preenche os dados para todos os ativos, incluindo os que não receberam aportes
     dados_integral = []
     for t, v in carteira_integral.items():
         if isinstance(v, dict):
+            quantidade_inicial = carteira.get(t, 0)  # Quantidade inicial antes do aporte
+            preco_atual = v.get("preco_atual", 0)
             dados = {
                 "ticker": t,
                 "setor": v.get("setor", ""),
                 "quantidade": v.get("quantidade", 0),
-                "preco_atual": v.get("preco_atual", 0),
+                "preco_atual": preco_atual,
                 "preco_alvo": v.get("preco_alvo", 0),
                 "score": v.get("score", 0),
-                "peso_inicial": carteira.get(t, 0) * v.get("preco_atual", 0) / valor_total_inicial if valor_total_inicial > 0 else 0,
-                "peso_final": (v.get("quantidade", 0) * v.get("preco_atual", 0)) / valor_total_final if valor_total_final > 0 else 0,
+                "peso_inicial": (quantidade_inicial * preco_atual) / valor_total_inicial if valor_total_inicial > 0 else 0,
+                "peso_final": (v.get("quantidade", 0) * preco_atual) / valor_total_final if valor_total_final > 0 else 0,
             }
             dados_integral.append(dados)
     
