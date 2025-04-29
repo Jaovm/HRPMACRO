@@ -1588,26 +1588,26 @@ if st.button("Gerar Alocação Otimizada"):
         st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
             # --- Top 5 empresas destaque histórico ---
-            historico_7anos_df = montar_historico_7anos(
-                tickers=list(setores_por_ticker.keys()),
-                setores_por_ticker=setores_por_ticker,
-                start='2018-01-01'
+        historico_7anos_df = montar_historico_7anos(
+            tickers=list(setores_por_ticker.keys()),
+            setores_por_ticker=setores_por_ticker,
+            start='2018-01-01'
+        )
+        historico_cenario = historico_7anos_df[historico_7anos_df["cenario"] == cenario_atual]  
+        if not historico_cenario.empty:
+            destaque_hist = (
+                historico_cenario.groupby(["ticker", "setor"])
+                .agg(media_favorecido=("favorecido", "mean"),
+                        ocorrencias=("favorecido", "count"))
+                .reset_index()
+                .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
             )
-            historico_cenario = historico_7anos_df[historico_7anos_df["cenario"] == cenario_atual]  
-            if not historico_cenario.empty:
-                destaque_hist = (
-                    historico_cenario.groupby(["ticker", "setor"])
-                    .agg(media_favorecido=("favorecido", "mean"),
-                         ocorrencias=("favorecido", "count"))
-                    .reset_index()
-                    .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
-                )
-                tickers_carteira = set(df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"])
-                destaque_hist = destaque_hist[destaque_hist["ticker"].isin(tickers_carteira)]
-                st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
-                st.dataframe(destaque_hist.head(100), use_container_width=True)
-            else:
-                st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
+            tickers_carteira = set(df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"])
+            destaque_hist = destaque_hist[destaque_hist["ticker"].isin(tickers_carteira)]
+            st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos 7 anos")
+            st.dataframe(destaque_hist.head(100), use_container_width=True)
+        else:
+            st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos 7 anos.")
 
             st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos) — Ajustado e Close")
             tickers_validos_bt = df_resultado[df_resultado["peso_otimizado"] > 0]["ticker"].tolist()
