@@ -1386,12 +1386,12 @@ if st.button("Gerar Alocação Otimizada"):
                 st.stop()
 
             # === NOVO: Simulação e visualização da Fronteira Eficiente ===
-            st.subheader("🌈 Simulação: Fronteira Eficiente das Carteiras")
+            st.subheader("Simulação: Fronteira Eficiente das Carteiras")
             retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
             df_front = calcular_fronteira_eficiente_macro(
                 retornos=retornos,
                 score_dict=favorecimentos,
-                n_portfolios=2000
+                n_portfolios=50000
             )
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(10, 6))
