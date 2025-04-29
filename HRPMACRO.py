@@ -1459,6 +1459,7 @@ if st.button("Gerar Alocação Otimizada"):
             tickers_completos = set(carteira)
             tickers_usados = set(tickers_validos)
             tickers_zerados = tickers_completos - tickers_usados
+            
 if st.button("Gerar Alocação Otimizada"):
     ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
     if not ativos_validos:
@@ -1569,22 +1570,22 @@ if st.button("Gerar Alocação Otimizada"):
             .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
         df_resultado["Valor Alocado (R$)"] = (df_resultado["Qtd. Ações"] * df_resultado["preco_atual"]).round(2)
         tickers_resultado = df_resultado["ticker"].tolist()
-            pesos_atuais_dict = dict(zip(carteira, pesos_atuais))
-            pesos_atuais_filtrados = np.array([pesos_atuais_dict[t] for t in tickers_resultado])
-            valores_atuais = pesos_atuais_filtrados * 1_000_000
-            valores_aporte = df_resultado["Valor Alocado (R$)"].to_numpy()
-            valores_totais = valores_atuais + valores_aporte
-            pesos_finais = valores_totais / valores_totais.sum()
-            df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
-            st.subheader("📈 Ativos Recomendados para Novo Aporte")
-            st.dataframe(df_resultado[[
-                "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
-                "Valor Alocado (R$)", "% na Carteira Final"
-            ]], use_container_width=True)
-            valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
-            troco = aporte - valor_utilizado
-            st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
-            st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
+        pesos_atuais_dict = dict(zip(carteira, pesos_atuais))
+        pesos_atuais_filtrados = np.array([pesos_atuais_dict[t] for t in tickers_resultado])
+        valores_atuais = pesos_atuais_filtrados * 1_000_000
+        valores_aporte = df_resultado["Valor Alocado (R$)"].to_numpy()
+        valores_totais = valores_atuais + valores_aporte
+        pesos_finais = valores_totais / valores_totais.sum()
+        df_resultado["% na Carteira Final"] = (pesos_finais * 100).round(2)
+        st.subheader("📈 Ativos Recomendados para Novo Aporte")
+        st.dataframe(df_resultado[[
+            "ticker", "setor", "preco_atual", "preco_alvo", "score", "Qtd. Ações",
+            "Valor Alocado (R$)", "% na Carteira Final"
+        ]], use_container_width=True)
+        valor_utilizado = df_resultado["Valor Alocado (R$)"].sum()
+        troco = aporte - valor_utilizado
+        st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
+        st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
 
             # --- Top 5 empresas destaque histórico ---
             historico_7anos_df = montar_historico_7anos(
