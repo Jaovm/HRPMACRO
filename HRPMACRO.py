@@ -1627,9 +1627,10 @@ if (
             st.markdown(f"🔁 **Troco (não alocado):** R$ {troco_mc:,.2f}")
             st.info("Métricas da carteira precisam de pelo menos 2 ativos.")
 
-    # --- Mostra a carteira integral após o aporte (todas as posições) ---
+    # --- Mostra a carteira integral após o aporte (todas as posições, robusto a tipos) ---
     st.subheader("📦 Carteira integral após o aporte")
-    carteira_integral = {k: v.copy() for k, v in carteira.items()}  # Cópia profunda dos subdicts
+    carteira_integral = {k: v.copy() if isinstance(v, dict) else v for k, v in carteira.items()}
+
     for idx, row in df_resultado.iterrows():
         ticker = row["ticker"]
         qtd_nova = int(row["Qtd. Ações"])
@@ -1647,14 +1648,22 @@ if (
                 "preco_alvo": row["preco_alvo"],
                 "score": row["score"]
             }
-    df_carteira_integral = pd.DataFrame([
-        {"ticker": t, **v}
-        for t, v in carteira_integral.items()
-    ])
+
+    # Monta dataframe só com dicts (ignora valores escalares)
+    dados_integral = []
+    for t, v in carteira_integral.items():
+        if isinstance(v, dict):
+            dados = {"ticker": t}
+            dados.update(v)
+            dados_integral.append(dados)
+        else:
+            # Se v não for dict, mostra só ticker e quantidade
+            dados_integral.append({"ticker": t, "quantidade": v})
+
+    df_carteira_integral = pd.DataFrame(dados_integral)
+    colunas = [c for c in ["ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score"] if c in df_carteira_integral.columns]
     st.dataframe(
-        df_carteira_integral[
-            ["ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score"]
-        ].sort_values(by="quantidade", ascending=False),
+        df_carteira_integral[colunas].sort_values(by="quantidade", ascending=False),
         use_container_width=True
     )
 
