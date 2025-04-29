@@ -1632,29 +1632,8 @@ if (
     # --- Mostra a carteira integral após o aporte (com pesos iniciais, finais e recomendados) ---
     # --- Mostra a carteira integral após o aporte (com pesos iniciais, finais e recomendados corrigidos) ---
        # --- Mostra a carteira integral após o aporte (com pesos iniciais, finais e recomendados corrigidos) ---
-    st.subheader("📦 Carteira integral após o aporte")
-    
-    # Inicializa a carteira integral com os valores e pesos iniciais fornecidos pelo usuário
-    carteira_integral = {k: v.copy() if isinstance(v, dict) else {"quantidade": 0, "preco_atual": 0} for k, v in carteira.items()}
-    
-    # Atualiza a carteira integral com os novos aportes
-    for idx, row in df_resultado.iterrows():
-        ticker = row["ticker"]
-        qtd_nova = int(row["Qtd. Ações"])
-        if ticker in carteira_integral and isinstance(carteira_integral[ticker], dict):
-            carteira_integral[ticker]["quantidade"] = int(carteira_integral[ticker].get("quantidade", 0)) + qtd_nova
-            carteira_integral[ticker]["setor"] = row.get("setor", "")
-            carteira_integral[ticker]["preco_atual"] = row.get("preco_atual", 0)
-            carteira_integral[ticker]["preco_alvo"] = row.get("preco_alvo", 0)
-            carteira_integral[ticker]["score"] = row.get("score", 0)
-        else:
-            carteira_integral[ticker] = {
-                "quantidade": qtd_nova,
-                "setor": row.get("setor", ""),
-                "preco_atual": row.get("preco_atual", 0),
-                "preco_alvo": row.get("preco_alvo", 0),
-                "score": row.get("score", 0),
-            }
+    # --- Mostra a carteira inicial e os ajustes após o aporte ---
+    st.subheader("📦 Carteira Inicial e Ajustada Após o Aporte")
     
     # Calcula o valor total inicial com base nos pesos fornecidos pelo usuário
     valor_total_inicial = sum(
@@ -1681,7 +1660,8 @@ if (
         dados = {
             "ticker": t,
             "setor": v.get("setor", ""),
-            "quantidade": v.get("quantidade", 0),
+            "quantidade_inicial": round((peso_inicial * valor_total_inicial) / preco_atual) if preco_atual > 0 else 0,
+            "quantidade_final": v.get("quantidade", 0),
             "preco_atual": preco_atual,
             "preco_alvo": v.get("preco_alvo", 0),
             "score": v.get("score", 0),
@@ -1695,8 +1675,8 @@ if (
     
     # Seleciona as colunas desejadas
     colunas = [
-        "ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score",
-        "peso_inicial", "peso_recomendado", "peso_final"
+        "ticker", "setor", "quantidade_inicial", "quantidade_final", "preco_atual",
+        "preco_alvo", "score", "peso_inicial", "peso_recomendado", "peso_final"
     ]
     
     # Exibe a tabela com pesos iniciais, recomendados e finais
