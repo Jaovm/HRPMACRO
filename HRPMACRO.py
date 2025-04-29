@@ -1628,9 +1628,13 @@ if (
             st.info("Métricas da carteira precisam de pelo menos 2 ativos.")
 
     # --- Mostra a carteira integral após o aporte (todas as posições, robusto a tipos) ---
+    # --- Mostra a carteira integral após o aporte (todas as posições, robusto a tipos) ---
     st.subheader("📦 Carteira integral após o aporte")
+    
+    # Inicializa a carteira integral com cópia profunda
     carteira_integral = {k: v.copy() if isinstance(v, dict) else v for k, v in carteira.items()}
-
+    
+    # Atualiza a carteira integral com os novos aportes
     for idx, row in df_resultado.iterrows():
         ticker = row["ticker"]
         qtd_nova = int(row["Qtd. Ações"])
@@ -1648,22 +1652,31 @@ if (
                 "preco_alvo": row["preco_alvo"],
                 "score": row["score"]
             }
-
+    
     # Monta dataframe só com dicts (ignora valores escalares)
     dados_integral = []
     for t, v in carteira_integral.items():
         if isinstance(v, dict):
             dados = {"ticker": t}
             dados.update(v)
+            # Calcula os pesos iniciais e pesos finais
+            dados["peso_inicial"] = carteira.get(t, 0)  # Peso inicial antes do aporte
+            dados["peso_final"] = dados["quantidade"] * dados["preco_atual"] / (
+                sum([v["quantidade"] * v["preco_atual"] for v in carteira_integral.values() if isinstance(v, dict)])
+            )  # Peso final após o aporte
             dados_integral.append(dados)
         else:
             # Se v não for dict, mostra só ticker e quantidade
-            dados_integral.append({"ticker": t, "quantidade": v})
-
+            dados_integral.append({"ticker": t, "quantidade": v, "peso_inicial": 0, "peso_final": 0})
+    
     df_carteira_integral = pd.DataFrame(dados_integral)
-    colunas = [c for c in ["ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score"] if c in df_carteira_integral.columns]
+    
+    # Seleciona as colunas desejadas
+    colunas = [c for c in ["ticker", "setor", "quantidade", "preco_atual", "preco_alvo", "score", "peso_inicial", "peso_final"] if c in df_carteira_integral.columns]
+    
+    # Exibe a tabela com pesos iniciais e finais
     st.dataframe(
-        df_carteira_integral[colunas].sort_values(by="quantidade", ascending=False),
+        df_carteira_integral[colunas].sort_values(by="peso_final", ascending=False),
         use_container_width=True
     )
 
