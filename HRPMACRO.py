@@ -1379,14 +1379,8 @@ if st.button("Gerar Alocação Otimizada"):
 
             # Obtenção dos retornos
             retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
-
-            # ====== OTIMIZAÇÃO SHARPE ======
-            pesos_sharpe = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
-            pesos_sharpe_np = pesos_sharpe.to_numpy() if hasattr(pesos_sharpe, "to_numpy") else np.array(pesos_sharpe)
-
-            # ====== OTIMIZAÇÃO HRP ======
-            pesos_hrp = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
-            pesos_hrp_np = pesos_hrp.to_numpy() if hasattr(pesos_hrp, "to_numpy") else np.array(pesos_hrp)
+            media_retorno = retornos.mean() * 252
+            cov = retornos.cov() * 252
 
             # ====== SIMULAÇÃO MONTE CARLO ======
             st.subheader("Simulação: Fronteira Eficiente (Monte Carlo) + Recomendações")
@@ -1395,6 +1389,7 @@ if st.button("Gerar Alocação Otimizada"):
                 score_dict=favorecimentos,
                 n_portfolios=50000
             )
+
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(10, 6))
             scatter = ax.scatter(df_front['Volatilidade'], df_front['Retorno'], c=df_front['Sharpe'], cmap='viridis', alpha=0.5)
@@ -1403,20 +1398,6 @@ if st.button("Gerar Alocação Otimizada"):
             ax.set_title('Fronteira Eficiente (Monte Carlo) - Carteiras Aleatórias com Score Macro')
             plt.colorbar(scatter, label='Sharpe')
 
-            # Dados auxiliares
-            media_retorno = retornos.mean() * 252
-            cov = retornos.cov() * 252
-
-            # Otimizada Sharpe
-            ret_sharpe = float(np.dot(pesos_sharpe_np, media_retorno))
-            vol_sharpe = float(np.sqrt(np.dot(pesos_sharpe_np.T, np.dot(cov, pesos_sharpe_np))))
-            ax.scatter(vol_sharpe, ret_sharpe, c='red', s=120, marker='*', label='Sharpe Máximo')
-
-            # Otimizada HRP
-            ret_hrp = float(np.dot(pesos_hrp_np, media_retorno))
-            vol_hrp = float(np.sqrt(np.dot(pesos_hrp_np.T, np.dot(cov, pesos_hrp_np))))
-            ax.scatter(vol_hrp, ret_hrp, c='blue', s=100, marker='^', label='HRP')
-
             # Melhor simulação Monte Carlo
             melhor_carteira = df_front.loc[df_front['Sharpe'].idxmax()]
             sharpe_mc = melhor_carteira['Sharpe']
@@ -1424,32 +1405,80 @@ if st.button("Gerar Alocação Otimizada"):
             vol_mc = melhor_carteira['Volatilidade']
             ax.scatter(vol_mc, ret_mc, c='orange', s=100, marker='P', label='Monte Carlo (Melhor)')
 
+            # ====== OTIMIZAÇÃO SHARPE: SEED PADRÃO (score macro/uniforme) ======
+            pesos_sharpe = otimizar_carteira_sharpe(tickers_validos, carteira, favorecimentos=favorecimentos)
+            pesos_sharpe_np = pesos_sharpe.to_numpy() if hasattr(pesos_sharpe, "to_numpy") else np.array(pesos_sharpe)
+            ret_sharpe = float(np.dot(pesos_sharpe_np, media_retorno))
+            vol_sharpe = float(np.sqrt(np.dot(pesos_sharpe_np.T, np.dot(cov, pesos_sharpe_np))))
+            sharpe_sharpe = (ret_sharpe - 0.0) / vol_sharpe if vol_sharpe > 0 else 0
+            ax.scatter(vol_sharpe, ret_sharpe, c='red', s=120, marker='*', label='Sharpe Máximo (Seed Macro)')
+
+            # ====== OTIMIZAÇÃO SHARPE: SEED MONTE CARLO ======
+            from scipy.optimize import minimize
+            def sharpe_neg(pesos):
+                retorno = np.dot(pesos, media_retorno)
+                risco = np.sqrt(np.dot(pesos.T, np.dot(cov, pesos)))
+                return - (retorno / risco) if risco > 0 else 0
+            limites = tuple((0, 1) for _ in range(len(tickers_validos)))
+            restricoes = {'type': 'eq', 'fun': lambda x: np.sum(x) - 1}
+            pesos_seed_mc = np.array(melhor_carteira['Pesos'])
+            res_mc = minimize(
+                sharpe_neg,
+                pesos_seed_mc,
+                method='SLSQP',
+                bounds=limites,
+                constraints=restricoes,
+                options={'disp': False, 'maxiter': 1000}
+            )
+            if res_mc.success:
+                pesos_sharpe_mc = res_mc.x
+            else:
+                st.warning("Falha na otimização Sharpe com seed Monte Carlo.")
+                pesos_sharpe_mc = pesos_sharpe_np.copy()
+            ret_sharpe_mc = float(np.dot(pesos_sharpe_mc, media_retorno))
+            vol_sharpe_mc = float(np.sqrt(np.dot(pesos_sharpe_mc.T, np.dot(cov, pesos_sharpe_mc))))
+            sharpe_sharpe_mc = (ret_sharpe_mc - 0.0) / vol_sharpe_mc if vol_sharpe_mc > 0 else 0
+            ax.scatter(vol_sharpe_mc, ret_sharpe_mc, c='magenta', s=100, marker='v', label='Sharpe Máximo (Seed Monte Carlo)')
+
+            # ====== OTIMIZAÇÃO HRP ======
+            pesos_hrp = otimizar_carteira_hrp(tickers_validos, carteira, favorecimentos=favorecimentos)
+            pesos_hrp_np = pesos_hrp.to_numpy() if hasattr(pesos_hrp, "to_numpy") else np.array(pesos_hrp)
+            ret_hrp = float(np.dot(pesos_hrp_np, media_retorno))
+            vol_hrp = float(np.sqrt(np.dot(pesos_hrp_np.T, np.dot(cov, pesos_hrp_np))))
+            sharpe_hrp = (ret_hrp - 0.0) / vol_hrp if vol_hrp > 0 else 0
+            ax.scatter(vol_hrp, ret_hrp, c='blue', s=100, marker='^', label='HRP')
+
             ax.legend()
             st.pyplot(fig)
             st.info(
-                "A estrela vermelha é a carteira Sharpe Máximo, o triângulo azul é HRP, "
-                "e o losango laranja é a melhor carteira simulada via Monte Carlo."
+                "A estrela vermelha: Sharpe Máximo (seed macro/uniforme), triângulo magenta: Sharpe (seed Monte Carlo), "
+                "azul: HRP, laranja: Monte Carlo melhor simulação."
             )
 
             # --- Comparação em tabela
-            st.subheader("🔬 Comparação: Sharpe, HRP e Monte Carlo (Melhor Simulação)")
-            sharpe_sharpe = (ret_sharpe - 0.0) / vol_sharpe if vol_sharpe > 0 else 0
-            sharpe_hrp = (ret_hrp - 0.0) / vol_hrp if vol_hrp > 0 else 0
-
-            st.write(f"**Sharpe Máximo**: Sharpe = {sharpe_sharpe:.2f} | Retorno = {ret_sharpe:.2%} | Risco = {vol_sharpe:.2%}")
-            st.write(f"**HRP**:           Sharpe = {sharpe_hrp:.2f} | Retorno = {ret_hrp:.2%} | Risco = {vol_hrp:.2%}")
-            st.write(f"**Monte Carlo**:   Sharpe = {sharpe_mc:.2f} | Retorno = {ret_mc:.2%} | Risco = {vol_mc:.2%}")
+            st.subheader("🔬 Comparação: Sharpe (Macro), Sharpe (Monte Carlo), HRP, Monte Carlo")
+            st.write(f"**Sharpe Máximo (seed macro)**: Sharpe = {sharpe_sharpe:.2f} | Retorno = {ret_sharpe:.2%} | Risco = {vol_sharpe:.2%}")
+            st.write(f"**Sharpe Máximo (seed Monte Carlo)**: Sharpe = {sharpe_sharpe_mc:.2f} | Retorno = {ret_sharpe_mc:.2%} | Risco = {vol_sharpe_mc:.2%}")
+            st.write(f"**HRP**: Sharpe = {sharpe_hrp:.2f} | Retorno = {ret_hrp:.2%} | Risco = {vol_hrp:.2%}")
+            st.write(f"**Monte Carlo**: Sharpe = {sharpe_mc:.2f} | Retorno = {ret_mc:.2%} | Risco = {vol_mc:.2%}")
 
             with st.expander("🔍 Pesos da melhor carteira Monte Carlo"):
                 st.write(dict(zip(retornos.columns, melhor_carteira['Pesos'])))
 
-            # === Escolha da carteira para recomendação final (exemplo: Sharpe, mas pode ser outra)
+            # === Escolha da carteira para recomendação final
             metodo_escolha = st.selectbox(
                 "Qual carteira você deseja usar para a recomendação de aporte?",
-                ("Sharpe Máximo", "HRP", "Monte Carlo (Melhor Simulada)")
+                (
+                    "Sharpe Máximo (seed macro)",
+                    "Sharpe Máximo (seed Monte Carlo)",
+                    "HRP",
+                    "Monte Carlo (Melhor Simulada)"
+                )
             )
-            if metodo_escolha == "Sharpe Máximo":
+            if metodo_escolha == "Sharpe Máximo (seed macro)":
                 pesos_recomendados = pesos_sharpe
+            elif metodo_escolha == "Sharpe Máximo (seed Monte Carlo)":
+                pesos_recomendados = pd.Series(pesos_sharpe_mc, index=retornos.columns)
             elif metodo_escolha == "HRP":
                 pesos_recomendados = pesos_hrp
             else:
