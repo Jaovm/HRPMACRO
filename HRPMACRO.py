@@ -1351,15 +1351,6 @@ ranking_df = gerar_ranking_acoes(carteira, macro, usar_pesos_macro=True)
 aporte = st.number_input("💰 Valor do aporte mensal (R$)", min_value=100.0, value=1000.0, step=100.0)
 
 # Novo: seleção do método de otimização
-metodo_otimizacao = st.selectbox(
-    "Selecione o método de otimização de carteira:",
-    (
-        "Sharpe Máximo (risco/retorno)",
-        "Retorno Máximo (limite 20% por ativo)",
-        "HRP (Hierarchical Risk Parity)"
-    ),
-    index=0
-)
 
 ativos_validos = filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, macro, calcular_score)
 favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
