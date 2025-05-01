@@ -1302,6 +1302,22 @@ col5.metric("Petróleo (US$)", f"{macro['petroleo']:.2f}" if macro.get("petroleo
 # --- SIDEBAR ---
 with st.sidebar:
     st.header("Parâmetros")
+    percentual_minimo = st.number_input(
+        "Percentual mínimo de alocação por ativo (%)",
+        min_value=0.00,
+        max_value=100.0,
+        value=0.01,
+        step=0.01,
+        help="Percentual mínimo exibido para cada ativo na carteira otimizada completa."
+    )
+    percentual_maximo = st.number_input(
+        "Percentual máximo de alocação por ativo (%)",
+        min_value=percentual_minimo,
+        max_value=100.0,
+        value=100.0,
+        step=0.01,
+        help="Percentual máximo exibido para cada ativo na carteira otimizada completa."
+    )
     st.markdown("### Dados dos Ativos")
     tickers_default = [
         "AGRO3.SA", "BBAS3.SA", "BBSE3.SA", "BPAC11.SA", "EGIE3.SA",
@@ -1358,36 +1374,6 @@ favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 
 
-
-
-# Função para exibir histórico ajustado (lembre-se de definir montar_historico_7anos!)
-
-# Função para exibir histórico ajustado (lembre-se de definir montar_historico_7anos!)
-def mostrar_historico_ajustado(tickers, setores_por_ticker, cenario_atual, anos=7):
-    if 'montar_historico_7anos' not in globals():
-        st.warning("Função montar_historico_7anos não definida.")
-        return
-
-    historico_7anos_df = montar_historico_7anos(
-        tickers=tickers,
-        setores_por_ticker=setores_por_ticker,
-        start=(pd.Timestamp.today() - pd.DateOffset(years=anos)).strftime('%Y-%m-%d')
-    )
-    historico_cenario = historico_7anos_df[historico_7anos_df["cenario"] == cenario_atual]
-    if not historico_cenario.empty:
-        destaque_hist = (
-            historico_cenario.groupby(["ticker", "setor"])
-            .agg(
-                media_favorecido=("favorecido", "mean"),
-                ocorrencias=("favorecido", "count")
-            )
-            .reset_index()
-            .sort_values(by=["media_favorecido", "ocorrencias"], ascending=False)
-        )
-        st.subheader(f"🏅 Empresas da sua carteira que mais se destacaram em cenários '{cenario_atual}' nos últimos {anos} anos")
-        st.dataframe(destaque_hist.head(100), use_container_width=True)
-    else:
-        st.info(f"Sem dados históricos para o cenário '{cenario_atual}' nos últimos {anos} anos.")
 
 # Função para calcular métricas da carteira (CAGR, risco, Sharpe)
 def calcular_metricas_carteira(tickers, pesos, start_date='2018-01-01', rf=0):
@@ -1585,105 +1571,160 @@ if (
         st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
         st.info("Métricas da carteira precisam de pelo menos 2 ativos.")
 
-    # --- Exibe composição dos pesos HRP/MonteCarlo/Combinado ---
-    if st.session_state['metodo_aporte'] == "HRP + Monte Carlo":
-        st.subheader("🔗 Pesos Individuais e Combinados")
-        st.write(pd.DataFrame({
-            "HRP": pesos_hrp_series,
-            "Monte Carlo": pesos_mc,
-            "Combinado": pesos_combinados
-        }).round(4))
-
-    # --- Mostra a carteira da fronteira eficiente (Monte Carlo) ---
-    if 'Monte Carlo (Melhor Simulada)' in st.session_state['pesos_opcoes']:
-        st.subheader("⭐ Carteira da Fronteira Eficiente (Monte Carlo)")
-        pesos_mc = st.session_state['pesos_opcoes']["Monte Carlo (Melhor Simulada)"]
-        df_resultado_mc = df_validos[['ticker', 'setor', 'preco_atual', 'preco_alvo', 'score']].copy()
-        df_resultado_mc["peso_monte_carlo"] = df_resultado_mc["ticker"].map(pesos_mc).fillna(0)
-        df_resultado_mc["Valor Alocado Bruto (R$)"] = df_resultado_mc["peso_monte_carlo"] * aporte
-        df_resultado_mc["Qtd. Ações"] = (df_resultado_mc["Valor Alocado Bruto (R$)"] / df_resultado_mc["preco_atual"])\
-            .replace([np.inf, -np.inf], 0).fillna(0).apply(np.floor)
-        df_resultado_mc["Valor Alocado (R$)"] = (df_resultado_mc["Qtd. Ações"] * df_resultado_mc["preco_atual"]).round(2)
-        df_resultado_mc = df_resultado_mc[df_resultado_mc["Qtd. Ações"] > 0]
-        st.dataframe(df_resultado_mc[[
-            "ticker", "setor", "preco_atual", "preco_alvo", "score", "peso_monte_carlo",
-            "Qtd. Ações", "Valor Alocado (R$)"
-        ]], use_container_width=True)
-        valor_utilizado_mc = df_resultado_mc["Valor Alocado (R$)"].sum()
-        troco_mc = aporte - valor_utilizado_mc
-
-        # --- Métricas da carteira Monte Carlo (Fronteira) ---
-        tickers_mc = df_resultado_mc["ticker"].tolist()
-        pesos_mc_vec = df_resultado_mc["peso_monte_carlo"].values
-        if len(tickers_mc) >= 2:
-            cagr_mc, risco_mc, sharpe_mc = calcular_metricas_carteira(tickers_mc, pesos_mc_vec)
-            st.markdown(f"💰 **Valor utilizado na carteira eficiente:** R$ {valor_utilizado_mc:,.2f}")
-            st.markdown(f"🔁 **Troco (não alocado):** R$ {troco_mc:,.2f}")
-            st.markdown(f"**CAGR estimado (7 anos):** {100*cagr_mc:.2f}% ao ano")
-            st.markdown(f"**Risco anualizado:** {100*risco_mc:.2f}%")
-            st.markdown(f"**Índice de Sharpe:** {sharpe_mc:.2f}")
-        else:
-            st.markdown(f"💰 **Valor utilizado na carteira eficiente:** R$ {valor_utilizado_mc:,.2f}")
-            st.markdown(f"🔁 **Troco (não alocado):** R$ {troco_mc:,.2f}")
-            st.info("Métricas da carteira precisam de pelo menos 2 ativos.")
-
-
-
-    # --- Mostra a carteira integral após o aporte (com pesos iniciais, finais e recomendados) ---
-    # --- Mostra a carteira integral após o aporte (com pesos iniciais, finais e recomendados corrigidos) ---
-       # --- Mostra a carteira integral após o aporte (com pesos iniciais, finais e recomendados corrigidos) ---
-    # --- Mostra a carteira inicial e os ajustes após o aporte ---
     st.subheader("📦 Carteira Inicial e Ajustada Após o Aporte")
-    
-    # Calcula o valor total inicial com base nos pesos fornecidos pelo usuário
+
+    # Valor fictício para simular o valor da carteira inicial
+    valor_inicial_simulado = 100_000  # Pode ser input do usuário se desejar
+
+    # Calcula a quantidade inicial de cada ativo baseada no peso inicial e preço atual
+    quantidade_inicial = [
+        int(round(peso * valor_inicial_simulado / df_validos.loc[df_validos['ticker'] == ticker, 'preco_atual'].values[0]))
+        for peso, ticker in zip(pesos_atuais, tickers)
+    ]
+
+    # Quantidade comprada no aporte (já calculada na tabela de aporte, se não existir para um ticker, é zero)
+    quantidades_aporte = {
+        ticker: int(df_resultado[df_resultado["ticker"] == ticker]["Qtd. Ações"].values[0])
+        if ticker in df_resultado["ticker"].values else 0
+        for ticker in tickers
+    }
+
+    # Preenche carteira_integral com dados dos ativos
+    carteira_integral = {}
+    for i, ticker in enumerate(tickers):
+        row = df_validos[df_validos['ticker'] == ticker].iloc[0] if ticker in df_validos['ticker'].values else {}
+        q_inicial = quantidade_inicial[i] if i < len(quantidade_inicial) else 0
+        q_aporte = quantidades_aporte.get(ticker, 0)
+        quantidade_final = q_inicial + q_aporte
+        preco_atual = row["preco_atual"] if "preco_atual" in row else 0
+        carteira_integral[ticker] = {
+            "quantidade_inicial": q_inicial,
+            "quantidade_comprada": q_aporte,
+            "quantidade_final": quantidade_final,
+            "preco_atual": preco_atual,
+            "preco_alvo": row["preco_alvo"] if "preco_alvo" in row else 0,
+            "setor": row["setor"] if "setor" in row else "",
+            "score": row["score"] if "score" in row else 0,
+        }
+
+    # Valor total inicial e final
     valor_total_inicial = sum(
-        pesos_atuais[i] * carteira_integral[tickers[i]].get("preco_atual", 0)
-        for i in range(len(tickers))
-        if carteira_integral[tickers[i]].get("preco_atual", 0) > 0
+        v["quantidade_inicial"] * v["preco_atual"] for v in carteira_integral.values()
     )
-    
-    # Calcula o valor total final com base nas quantidades e preços após o aporte
     valor_total_final = sum(
-        v["quantidade"] * v.get("preco_atual", 0)
-        for v in carteira_integral.values()
-        if isinstance(v, dict) and v.get("quantidade", 0) > 0 and v.get("preco_atual", 0) > 0
+        v["quantidade_final"] * v["preco_atual"] for v in carteira_integral.values()
     )
-    
-    # Preenche os dados para todos os ativos, incluindo os que não receberam aportes
+
+    # Monta tabela de exibição
     dados_integral = []
     for i, t in enumerate(tickers):
-        v = carteira_integral.get(t, {"quantidade": 0, "preco_atual": 0})
+        v = carteira_integral.get(t, {})
         preco_atual = v.get("preco_atual", 0)
-        peso_recomendado = pesos_recomendados.get(t, 0)  # Peso recomendado pela carteira otimizada
-        peso_inicial = pesos_atuais[i] if i < len(pesos_atuais) else 0  # Peso inicial fornecido pelo usuário
-        peso_final = (v.get("quantidade", 0) * preco_atual) / valor_total_final if valor_total_final > 0 else 0
+        peso_inicial = (v.get("quantidade_inicial", 0) * preco_atual) / valor_total_inicial if valor_total_inicial > 0 else 0
+        peso_recomendado = pesos_recomendados.get(t, 0)
+        peso_final = (v.get("quantidade_final", 0) * preco_atual) / valor_total_final if valor_total_final > 0 else 0
         dados = {
             "ticker": t,
             "setor": v.get("setor", ""),
-            "quantidade_inicial": round((peso_inicial * valor_total_inicial) / preco_atual) if preco_atual > 0 else 0,
-            "quantidade_final": v.get("quantidade", 0),
+            "quantidade_inicial": v.get("quantidade_inicial", 0),
+            "quantidade_comprada": v.get("quantidade_comprada", 0),
+            "quantidade_final": v.get("quantidade_final", 0),
             "preco_atual": preco_atual,
             "preco_alvo": v.get("preco_alvo", 0),
             "score": v.get("score", 0),
-            "peso_inicial": peso_inicial,  # Peso inicial do usuário
-            "peso_recomendado": peso_recomendado,  # Peso recomendado pela carteira otimizada
-            "peso_final": peso_final,  # Peso final após o aporte
+            "peso_inicial (%)": round(peso_inicial * 100, 2),
+            "peso_recomendado (%)": round(peso_recomendado * 100, 2),
+            "peso_final (%)": round(peso_final * 100, 2),
         }
         dados_integral.append(dados)
-    
+
     df_carteira_integral = pd.DataFrame(dados_integral)
-    
-    # Seleciona as colunas desejadas
+
     colunas = [
-        "ticker", "setor", "quantidade_inicial", "quantidade_final", "preco_atual",
-        "preco_alvo", "score", "peso_inicial", "peso_recomendado", "peso_final"
+        "ticker", "setor", "quantidade_comprada", "preco_atual", "preco_alvo", "peso_inicial (%)", "peso_final (%)"
     ]
-    
-    # Exibe a tabela com pesos iniciais, recomendados e finais
+
     st.dataframe(
-        df_carteira_integral[colunas].sort_values(by="peso_final", ascending=False),
+        df_carteira_integral[colunas].sort_values(by="peso_final (%)", ascending=False),
         use_container_width=True
     )
+
+    # --- Indicadores da carteira ajustada (após o aporte) ---
+    def prob_retornos_12m(retornos, pesos):
+        from scipy.stats import norm
+        port_ret_diario = (retornos * pesos).sum(axis=1)
+        media_anual = port_ret_diario.mean() * 252
+        std_anual = port_ret_diario.std() * np.sqrt(252)
+        p_positivo = 1 - norm.cdf(0, loc=media_anual, scale=std_anual)
+        p_negativo = norm.cdf(0, loc=media_anual, scale=std_anual)
+        p_neutro = norm.cdf(0.02, loc=media_anual, scale=std_anual) - norm.cdf(-0.02, loc=media_anual, scale=std_anual)
+        return p_positivo, p_negativo, p_neutro, media_anual, std_anual
+
+    tickers_validos = df_carteira_integral["ticker"].tolist()
+    pesos_finais = df_carteira_integral["peso_final (%)"].values / 100  # volta para fração
+    if sum(pesos_finais) > 0 and len(tickers_validos) >= 2:
+        pesos_finais_norm = pesos_finais / sum(pesos_finais)
+        retornos = obter_preco_diario_ajustado(tickers_validos).pct_change().dropna()
+        cagr, risco, sharpe = calcular_metricas_carteira(tickers_validos, pesos_finais_norm)
+        p_pos, p_neg, p_neu, media_anual, std_anual = prob_retornos_12m(retornos, pesos_finais_norm)
+
+        st.markdown("### 📊 Indicadores da Carteira Ajustada Após o Aporte")
+        st.markdown(f"**CAGR estimado (7 anos):** {100*cagr:.2f}% ao ano")
+        st.markdown(f"**Risco anualizado:** {100*risco:.2f}%")
+        st.markdown(f"**Índice de Sharpe:** {sharpe:.2f}")
+        st.markdown("---")
+        st.markdown(f"📊 **Probabilidade de Retorno Próximos 12 meses:**")
+        st.markdown(f"- Probabilidade de retorno **positivo**: `{100*p_pos:.1f}%`")
+        st.markdown(f"- Probabilidade de retorno **negativo**: `{100*p_neg:.1f}%`")
+        st.markdown(f"- Probabilidade de retorno **neutro** (-2% a +2%): `{100*p_neu:.1f}%`")
+        st.markdown(f"- Média esperada anual: `{100*media_anual:.2f}%` &nbsp;&nbsp; Desvio padrão anual: `{100*std_anual:.2f}%`")
+    else:
+        st.info("Métricas da carteira precisam de pelo menos 2 ativos com peso não-nulo.")
+
+    # --- Carteira Otimizada Completa: mostrando TODOS os ativos indicados pelo usuário ---
+    st.subheader("🧮 Carteira Otimizada Ideal")
+
+    # Pegue os pesos recomendados do método escolhido
+    pesos_otimizados = st.session_state['pesos_opcoes'][st.session_state['metodo_aporte']]
+    if hasattr(pesos_otimizados, 'to_dict'):
+        pesos_otimizados = pesos_otimizados.to_dict()
+
+    # Lista dos ativos definidos pelo usuário (na ordem do input)
+    tickers_usuario = tickers
+
+    # Aplica limites mínimo e máximo definidos pelo usuário
+    percentuais = [
+        min(max(100 * pesos_otimizados.get(t, 0), percentual_minimo), percentual_maximo)
+        for t in tickers_usuario
+    ]
+
+    df_carteira_ideal = pd.DataFrame({
+        "ticker": tickers_usuario,
+        "% Alocado": percentuais
+    }).sort_values("% Alocado", ascending=False)
+
+    st.dataframe(df_carteira_ideal, use_container_width=True)
+
+    # --- Indicadores da carteira otimizada (usando todos os ativos do usuário, pesos REAIS) ---
+    if sum([pesos_otimizados.get(t, 0) for t in tickers_usuario]) > 0 and len(tickers_usuario) >= 2:
+        pesos_otimizados_lista = [pesos_otimizados.get(t, 0) for t in tickers_usuario]
+        cagr, risco, sharpe = calcular_metricas_carteira(tickers_usuario, pesos_otimizados_lista)
+        retornos = obter_preco_diario_ajustado(tickers_usuario).pct_change().dropna()
+        p_pos, p_neg, p_neu, media_anual, std_anual = prob_retornos_12m(retornos, pesos_otimizados_lista)
+
+        st.markdown("### 📊 Indicadores da Carteira Otimizada")
+        st.markdown(f"**CAGR estimado (7 anos):** {100*cagr:.2f}% ao ano")
+        st.markdown(f"**Risco anualizado:** {100*risco:.2f}%")
+        st.markdown(f"**Índice de Sharpe:** {sharpe:.2f}")
+        st.markdown("---")
+        st.markdown(f"📊 **Probabilidade de Retorno Próximos 12 meses:**")
+        st.markdown(f"- Probabilidade de retorno **positivo**: `{100*p_pos:.1f}%`")
+        st.markdown(f"- Probabilidade de retorno **negativo**: `{100*p_neg:.1f}%`")
+        st.markdown(f"- Probabilidade de retorno **neutro** (-2% a +2%): `{100*p_neu:.1f}%`")
+        st.markdown(f"- Média esperada anual: `{100*media_anual:.2f}%` &nbsp;&nbsp; Desvio padrão anual: `{100*std_anual:.2f}%`")
+    else:
+        st.info("Métricas da carteira precisam de pelo menos 2 ativos com peso não-nulo.")
+ 
 
     # --- Backtest plug and play ---
     if len(df_resultado) >= 2:
@@ -1692,11 +1733,3 @@ if (
         pesos_bt = df_resultado["peso_otimizado"].values
         backtest_portfolio_vs_ibov_duplo(tickers_bt, pesos_bt)
 
-    # --- Histórico ajustado plug and play ---
-    if "cenario_atual" in globals():
-        mostrar_historico_ajustado(
-            tickers=list(setores_por_ticker.keys()),
-            setores_por_ticker=setores_por_ticker,
-            cenario_atual=cenario_atual,
-            anos=7
-        )
