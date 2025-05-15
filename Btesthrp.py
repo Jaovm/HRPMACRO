@@ -7,23 +7,21 @@ from HRPMACRO import (
     setores_por_ticker,
     setores_por_cenario,
     obter_preco_diario_ajustado,
-    obter_macro,
     pontuar_macro,
     classificar_cenario_macro,
     calcular_favorecimento_continuo,
     otimizar_carteira_sharpe,
     otimizar_carteira_hrp,
+    get_bcb_hist,
 )
 
-st.title("Backtest Mensal com Aportes – HRPMACRO (Long Only, max 30% por ativo)")
+st.title("Backtest Mensal com Aportes – HRPMACRO (Macroeconômico Histórico, max 30% por ativo)")
 
-# Configuração inicial
 valor_aporte = 1000.0
-limite_porc_ativo = 0.3  # 30%
+limite_porc_ativo = 0.3
 start_date = pd.to_datetime("2018-01-01")
 end_date = pd.to_datetime(datetime.date.today())
 
-# Seleção manual dos ativos
 tickers_str = st.text_input(
     "Tickers elegíveis (ex: PETR4.SA,VALE3.SA,ITUB4.SA)",
     "PETR4.SA,VALE3.SA,ITUB4.SA"
@@ -48,16 +46,28 @@ if st.button("Executar Backtest Mensal"):
     historico_num_ativos = []
     patrimonio = 0.0
 
-    # Download histórico de preços (ajustado)
+    # Baixar preços históricos dos ativos e benchmark
     st.write("Baixando preços históricos dos ativos e benchmark (BOVA11.SA)...")
     all_tickers = list(set(tickers + ['BOVA11.SA']))
     precos = obter_preco_diario_ajustado(all_tickers)
     precos = precos.ffill().dropna()
 
+    # Baixar séries macroeconômicas históricas
+    st.write("Baixando séries macroeconômicas históricas (Selic, IPCA, Dólar)...")
+    selic_hist = get_bcb_hist(432, start_date.strftime('%d/%m/%Y'), end_date.strftime('%d/%m/%Y'))  # Selic
+    ipca_hist = get_bcb_hist(433, start_date.strftime('%d/%m/%Y'), end_date.strftime('%d/%m/%Y'))   # IPCA
+    dolar_hist = get_bcb_hist(1,    start_date.strftime('%d/%m/%Y'), end_date.strftime('%d/%m/%Y')) # Dólar
+
+    # Montar macro_df mensal alinhado às datas_aporte
+    macro_df = pd.DataFrame(index=datas_aporte)
+    macro_df['selic'] = selic_hist.reindex(datas_aporte, method='ffill')
+    macro_df['ipca'] = ipca_hist.reindex(datas_aporte, method='ffill')
+    macro_df['dolar'] = dolar_hist.reindex(datas_aporte, method='ffill')
+    macro_df['pib'] = 2.0  # Se quiser, pode estimar/baixar série real de PIB
+    macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
+
     carteira = {t: 0 for t in tickers}
     caixa = 0.0
-
-    # Para benchmark DCA no BOVA11
     bova11_prices = precos['BOVA11.SA']
     bova11_quantidade = 0
     bova11_patrimonio = []
@@ -65,24 +75,24 @@ if st.button("Executar Backtest Mensal"):
     for idx, data_aporte in enumerate(datas_aporte):
         st.write(f"Processando mês: {data_aporte.strftime('%Y-%m')}")
 
-        data_fim_mes = data_aporte + pd.DateOffset(months=1) - pd.Timedelta(days=1)
-        data_fim_mes = min(data_fim_mes, end_date)
-        period_prices = precos.loc[:data_fim_mes].copy()
+        # Pega macro daquele mês
+        macro = {
+            "selic": macro_df.loc[data_aporte, "selic"],
+            "ipca": macro_df.loc[data_aporte, "ipca"],
+            "dolar": macro_df.loc[data_aporte, "dolar"],
+            "pib": macro_df.loc[data_aporte, "pib"],
+            # Adicione outros se quiser (soja, milho etc)
+        }
 
-        # Macro e favorecimento
-        macro = obter_macro()
         score_macro = pontuar_macro(macro)
         cenario = classificar_cenario_macro(
             ipca=macro.get("ipca"),
             selic=macro.get("selic"),
             dolar=macro.get("dolar"),
             pib=macro.get("pib"),
-            preco_soja=macro.get("soja"),
-            preco_milho=macro.get("milho"),
-            preco_minerio=macro.get("minerio"),
-            preco_petroleo=macro.get("petroleo"),
         )
         ativos_validos = []
+        period_prices = precos.loc[:data_aporte + pd.offsets.MonthEnd(0)].copy()
         for t in tickers:
             setor = setores_por_ticker.get(t)
             if setor is None or t not in period_prices.columns:
@@ -95,7 +105,6 @@ if st.button("Executar Backtest Mensal"):
             st.warning(f"Nenhum ativo válido em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
             valor_carteira.append(patrimonio)
             datas_carteira.append(data_aporte)
-            # Benchmark DCA
             preco_bova = bova11_prices.asof(data_aporte)
             if np.isnan(preco_bova):
                 bova11_patrimonio.append(np.nan)
@@ -115,7 +124,6 @@ if st.button("Executar Backtest Mensal"):
             st.warning(f"Dados insuficientes para otimização em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
             valor_carteira.append(patrimonio)
             datas_carteira.append(data_aporte)
-            # Benchmark DCA
             preco_bova = bova11_prices.asof(data_aporte)
             if np.isnan(preco_bova):
                 bova11_patrimonio.append(np.nan)
@@ -128,7 +136,6 @@ if st.button("Executar Backtest Mensal"):
 
         returns = lookback_prices.pct_change().dropna()
 
-        # Otimização
         if opt_method == "Sharpe (macro)":
             pesos = otimizar_carteira_sharpe(
                 ativos_validos_tickers, carteira, favorecimentos=favorecimentos
@@ -140,35 +147,30 @@ if st.button("Executar Backtest Mensal"):
         else:
             raise ValueError("Método de otimização desconhecido.")
 
-        # Limite de 30% por ativo e normalização
         pesos = pd.Series(pesos).clip(upper=limite_porc_ativo)
         if pesos.sum() > 0:
             pesos = pesos / pesos.sum()
         else:
             pesos = pd.Series(1.0 / len(ativos_validos_tickers), index=ativos_validos_tickers)
 
-        # Preços do mês para compra
         if data_aporte in period_prices.index:
             precos_mes = period_prices.loc[data_aporte, ativos_validos_tickers]
         else:
             precos_mes = period_prices.loc[period_prices.index.asof(data_aporte), ativos_validos_tickers]
         valores_ativos_atuais = {ativo: carteira.get(ativo, 0) * precos_mes[ativo] for ativo in ativos_validos_tickers}
 
-        # Sugere alocação do novo aporte (proporcional aos pesos alvo)
         total_carteira = sum(valores_ativos_atuais.values())
         total_novo = total_carteira + valor_aporte
         valor_total_alvo = {ativo: pesos[ativo] * total_novo for ativo in ativos_validos_tickers}
         valor_alocar = {ativo: max(0.0, valor_total_alvo[ativo] - valores_ativos_atuais.get(ativo, 0)) for ativo in ativos_validos_tickers}
 
-        # Atualiza quantidades da carteira
         for ativo in ativos_validos_tickers:
             valor_compra = valor_alocar[ativo]
             if valor_compra > 0 and precos_mes[ativo] > 0:
                 qtd = int(valor_compra // precos_mes[ativo])
                 carteira[ativo] = carteira.get(ativo, 0) + qtd
 
-        # Atualiza patrimônio com preços do fim do mês
-        data_ultima = period_prices.index.asof(data_fim_mes)
+        data_ultima = period_prices.index.asof(data_aporte + pd.offsets.MonthEnd(0))
         precos_fim = period_prices.loc[data_ultima, ativos_validos_tickers]
         patrimonio = sum(carteira.get(ativo, 0) * precos_fim[ativo] for ativo in ativos_validos_tickers)
         valor_carteira.append(patrimonio)
@@ -176,7 +178,6 @@ if st.button("Executar Backtest Mensal"):
         historico_pesos.append(pesos.to_dict())
         historico_num_ativos.append(len(ativos_validos_tickers))
 
-        # Benchmark DCA
         preco_bova = bova11_prices.asof(data_aporte)
         if np.isnan(preco_bova):
             bova11_patrimonio.append(np.nan)
@@ -195,7 +196,6 @@ if st.button("Executar Backtest Mensal"):
     st.write("Evolução da carteira (HRPMACRO) vs Benchmark (BOVA11):")
     st.write(df_result)
 
-    # Métricas finais
     n_years = (df_result.index[-1] - df_result.index[0]).days / 365.25
     total_aportado = valor_aporte * len(datas_aporte)
     carteira_cagr = (df_result['Carteira HRPMACRO'].iloc[-1] / total_aportado) ** (1/n_years) - 1
@@ -206,4 +206,4 @@ if st.button("Executar Backtest Mensal"):
     st.write("Pesos por mês:", historico_pesos)
     st.success("Backtest mensal com aportes e rebalanceamento concluído!")
 
-st.caption("Backtest mensal com aportes e rebalanceamento usando otimização macro ou HRP do arquivo HRPMACRO.py. Limite de 30% por ativo, long only, alocação recalculada a cada mês. Benchmark: BOVA11 DCA.")
+st.caption("Backtest mensal usando cenário macroeconômico histórico real de cada mês para as decisões e otimização. Limite de 30% por ativo, long only, benchmark: BOVA11.")
