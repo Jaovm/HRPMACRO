@@ -46,6 +46,9 @@ if st.button("Executar Backtest Mensal"):
     historico_num_ativos = []
     patrimonio = 0.0
 
+    # Para guardar histórico macroeconômico de cada mês
+    historico_macro = []
+
     # Baixar preços históricos dos ativos e benchmark
     st.write("Baixando preços históricos dos ativos e benchmark (BOVA11.SA)...")
     all_tickers = list(set(tickers + ['BOVA11.SA']))
@@ -73,16 +76,20 @@ if st.button("Executar Backtest Mensal"):
     bova11_patrimonio = []
 
     for idx, data_aporte in enumerate(datas_aporte):
-        st.write(f"Processando mês: {data_aporte.strftime('%Y-%m')}")
-
         # Pega macro daquele mês
         macro = {
             "selic": macro_df.loc[data_aporte, "selic"],
             "ipca": macro_df.loc[data_aporte, "ipca"],
             "dolar": macro_df.loc[data_aporte, "dolar"],
             "pib": macro_df.loc[data_aporte, "pib"],
-            # Adicione outros se quiser (soja, milho etc)
         }
+        historico_macro.append({
+            "data": data_aporte,
+            "selic": macro["selic"],
+            "ipca": macro["ipca"],
+            "dolar": macro["dolar"],
+            "pib": macro["pib"],
+        })
 
         score_macro = pontuar_macro(macro)
         cenario = classificar_cenario_macro(
@@ -102,7 +109,6 @@ if st.button("Executar Backtest Mensal"):
                 {"ticker": t, "setor": setor, "favorecido": favorecido}
             )
         if not ativos_validos:
-            st.warning(f"Nenhum ativo válido em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
             valor_carteira.append(patrimonio)
             datas_carteira.append(data_aporte)
             preco_bova = bova11_prices.asof(data_aporte)
@@ -113,6 +119,8 @@ if st.button("Executar Backtest Mensal"):
                 bova11_quantidade += qtd_bova
                 patrimonio_bova = bova11_quantidade * preco_bova
                 bova11_patrimonio.append(patrimonio_bova)
+            historico_pesos.append({})
+            historico_num_ativos.append(0)
             continue
 
         ativos_validos_tickers = [a["ticker"] for a in ativos_validos]
@@ -121,7 +129,6 @@ if st.button("Executar Backtest Mensal"):
         lookback_inicio = data_aporte - pd.DateOffset(months=12)
         lookback_prices = precos.loc[lookback_inicio:data_aporte, ativos_validos_tickers].dropna()
         if len(lookback_prices) < 2:
-            st.warning(f"Dados insuficientes para otimização em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
             valor_carteira.append(patrimonio)
             datas_carteira.append(data_aporte)
             preco_bova = bova11_prices.asof(data_aporte)
@@ -132,6 +139,8 @@ if st.button("Executar Backtest Mensal"):
                 bova11_quantidade += qtd_bova
                 patrimonio_bova = bova11_quantidade * preco_bova
                 bova11_patrimonio.append(patrimonio_bova)
+            historico_pesos.append({})
+            historico_num_ativos.append(0)
             continue
 
         returns = lookback_prices.pct_change().dropna()
@@ -196,6 +205,12 @@ if st.button("Executar Backtest Mensal"):
     st.write("Evolução da carteira (HRPMACRO) vs Benchmark (BOVA11):")
     st.write(df_result)
 
+    # Exibir tabela dos indicadores macroeconômicos utilizados em cada mês
+    st.subheader("Histórico dos Indicadores Macroeconômicos Utilizados")
+    df_macro = pd.DataFrame(historico_macro)
+    df_macro.set_index('data', inplace=True)
+    st.dataframe(df_macro, use_container_width=True)
+
     n_years = (df_result.index[-1] - df_result.index[0]).days / 365.25
     total_aportado = valor_aporte * len(datas_aporte)
     carteira_cagr = (df_result['Carteira HRPMACRO'].iloc[-1] / total_aportado) ** (1/n_years) - 1
@@ -204,6 +219,27 @@ if st.button("Executar Backtest Mensal"):
     st.metric("CAGR BOVA11", f"{bova_cagr:.2%}")
     st.write("Número de ativos por mês:", historico_num_ativos)
     st.write("Pesos por mês:", historico_pesos)
-    st.success("Backtest mensal com aportes e rebalanceamento concluído!")
+
+    # Mostrar composição final da carteira ao término da simulação
+    st.subheader("Carteira Final no Término da Simulação")
+    final_prices = precos.loc[df_result.index[-1], [t for t in carteira.keys() if t in precos.columns]]
+    carteira_final = []
+    for ativo, qtd in carteira.items():
+        if ativo in final_prices and qtd > 0:
+            valor = qtd * final_prices[ativo]
+            carteira_final.append({
+                "Ativo": ativo,
+                "Quantidade": int(qtd),
+                "Preço Final": final_prices[ativo],
+                "Valor Final (R$)": valor
+            })
+    df_carteira_final = pd.DataFrame(carteira_final)
+    if not df_carteira_final.empty:
+        df_carteira_final["% da Carteira"] = 100 * df_carteira_final["Valor Final (R$)"] / df_carteira_final["Valor Final (R$)"].sum()
+        st.dataframe(df_carteira_final.sort_values("Valor Final (R$)", ascending=False), use_container_width=True)
+    else:
+        st.write("Nenhum ativo na carteira final.")
+
+    st.success("Backtest mensal com aportes, rebalanceamento, macro histórico e carteira final exibidos!")
 
 st.caption("Backtest mensal usando cenário macroeconômico histórico real de cada mês para as decisões e otimização. Limite de 30% por ativo, long only, benchmark: BOVA11.")
