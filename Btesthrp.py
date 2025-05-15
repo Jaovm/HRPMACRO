@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import datetime
+import yfinance as yf
 from HRPMACRO import (
     setores_por_ticker,
     setores_por_cenario,
@@ -48,12 +49,18 @@ if st.button("Executar Backtest Mensal"):
     patrimonio = 0.0
 
     # Download histórico de preços (ajustado)
-    st.write("Baixando preços históricos dos ativos...")
-    precos = obter_preco_diario_ajustado(tickers)
+    st.write("Baixando preços históricos dos ativos e benchmark (BOVA11.SA)...")
+    all_tickers = list(set(tickers + ['BOVA11.SA']))
+    precos = obter_preco_diario_ajustado(all_tickers)
     precos = precos.ffill().dropna()
 
     carteira = {t: 0 for t in tickers}
     caixa = 0.0
+
+    # Para benchmark DCA no BOVA11
+    bova11_prices = precos['BOVA11.SA']
+    bova11_quantidade = 0
+    bova11_patrimonio = []
 
     for idx, data_aporte in enumerate(datas_aporte):
         st.write(f"Processando mês: {data_aporte.strftime('%Y-%m')}")
@@ -88,6 +95,15 @@ if st.button("Executar Backtest Mensal"):
             st.warning(f"Nenhum ativo válido em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
             valor_carteira.append(patrimonio)
             datas_carteira.append(data_aporte)
+            # Benchmark DCA
+            preco_bova = bova11_prices.asof(data_aporte)
+            if np.isnan(preco_bova):
+                bova11_patrimonio.append(np.nan)
+            else:
+                qtd_bova = valor_aporte // preco_bova
+                bova11_quantidade += qtd_bova
+                patrimonio_bova = bova11_quantidade * preco_bova
+                bova11_patrimonio.append(patrimonio_bova)
             continue
 
         ativos_validos_tickers = [a["ticker"] for a in ativos_validos]
@@ -99,6 +115,15 @@ if st.button("Executar Backtest Mensal"):
             st.warning(f"Dados insuficientes para otimização em {data_aporte.strftime('%Y-%m')}. Pulando mês.")
             valor_carteira.append(patrimonio)
             datas_carteira.append(data_aporte)
+            # Benchmark DCA
+            preco_bova = bova11_prices.asof(data_aporte)
+            if np.isnan(preco_bova):
+                bova11_patrimonio.append(np.nan)
+            else:
+                qtd_bova = valor_aporte // preco_bova
+                bova11_quantidade += qtd_bova
+                patrimonio_bova = bova11_quantidade * preco_bova
+                bova11_patrimonio.append(patrimonio_bova)
             continue
 
         returns = lookback_prices.pct_change().dropna()
@@ -151,21 +176,34 @@ if st.button("Executar Backtest Mensal"):
         historico_pesos.append(pesos.to_dict())
         historico_num_ativos.append(len(ativos_validos_tickers))
 
+        # Benchmark DCA
+        preco_bova = bova11_prices.asof(data_aporte)
+        if np.isnan(preco_bova):
+            bova11_patrimonio.append(np.nan)
+        else:
+            qtd_bova = valor_aporte // preco_bova
+            bova11_quantidade += qtd_bova
+            patrimonio_bova = bova11_quantidade * preco_bova
+            bova11_patrimonio.append(patrimonio_bova)
+
     df_result = pd.DataFrame({
         'Carteira HRPMACRO': valor_carteira,
+        'BOVA11': bova11_patrimonio
     }, index=datas_carteira)
 
     st.line_chart(df_result)
-    st.write("Evolução da carteira (HRPMACRO):")
+    st.write("Evolução da carteira (HRPMACRO) vs Benchmark (BOVA11):")
     st.write(df_result)
 
     # Métricas finais
     n_years = (df_result.index[-1] - df_result.index[0]).days / 365.25
     total_aportado = valor_aporte * len(datas_aporte)
     carteira_cagr = (df_result['Carteira HRPMACRO'].iloc[-1] / total_aportado) ** (1/n_years) - 1
+    bova_cagr = (df_result['BOVA11'].iloc[-1] / total_aportado) ** (1/n_years) - 1
     st.metric("CAGR Carteira HRPMACRO", f"{carteira_cagr:.2%}")
+    st.metric("CAGR BOVA11", f"{bova_cagr:.2%}")
     st.write("Número de ativos por mês:", historico_num_ativos)
     st.write("Pesos por mês:", historico_pesos)
     st.success("Backtest mensal com aportes e rebalanceamento concluído!")
 
-st.caption("Backtest mensal com aportes e rebalanceamento usando otimização macro ou HRP do arquivo HRPMACRO.py. Limite de 30% por ativo, long only, alocação recalculada a cada mês.")
+st.caption("Backtest mensal com aportes e rebalanceamento usando otimização macro ou HRP do arquivo HRPMACRO.py. Limite de 30% por ativo, long only, alocação recalculada a cada mês. Benchmark: BOVA11 DCA.")
