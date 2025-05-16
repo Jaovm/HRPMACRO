@@ -57,7 +57,7 @@ def montar_historico_7anos(tickers, setores_por_ticker, start='2015-01-01'):
     macro_df['ipca'] = ipca_hist.reindex(datas, method='ffill')
     macro_df['dolar'] = dolar_hist.reindex(datas, method='ffill')
     macro_df['petroleo'] = petroleo_hist.reindex(datas, method='ffill')
-    macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
+    macro_df = macro_df.ffill().bfill()
 
     historico = []
     for data in datas:
