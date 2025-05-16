@@ -1188,7 +1188,7 @@ def otimizar_carteira_hrp(tickers, carteira_atual, favorecimentos=None):
 
 macro = obter_macro()
 
-historico_7anos = montar_historico_10anos(
+historico_7anos = montar_historico_7anos(
     tickers=list(setores_por_ticker.keys()),
     setores_por_ticker=setores_por_ticker,
     start='2015-01-01'
