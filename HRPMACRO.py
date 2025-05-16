@@ -953,7 +953,7 @@ def filtrar_ativos_validos(carteira, setores_por_ticker, setores_por_cenario, ma
 
 @st.cache_data(ttl=86400)
 def obter_preco_diario_ajustado(tickers):
-    dados_brutos = yf.download(tickers, period="7y", auto_adjust=False)
+    dados_brutos = yf.download(tickers, period="10y", auto_adjust=False)
 
     # Forçar tickers a ser lista, mesmo se for string
     if isinstance(tickers, str):
@@ -975,7 +975,7 @@ def obter_preco_diario_ajustado(tickers):
         else:
             raise ValueError("Coluna 'Adj Close' ou 'Close' não encontrada nos dados.")
             
-def calcular_fronteira_eficiente_macro(retornos, score_dict, n_portfolios=100, taxa_risco_livre=0.0):
+def calcular_fronteira_eficiente_macro(retornos, score_dict, n_portfolios=50000, taxa_risco_livre=0.0):
     """
     Gera portfolios aleatórios usando retornos ajustados pelo score macro.
     """
@@ -1188,10 +1188,10 @@ def otimizar_carteira_hrp(tickers, carteira_atual, favorecimentos=None):
 
 macro = obter_macro()
 
-historico_7anos = montar_historico_7anos(
+historico_7anos = montar_historico_10anos(
     tickers=list(setores_por_ticker.keys()),
     setores_por_ticker=setores_por_ticker,
-    start='2018-01-01'
+    start='2015-01-01'
 )
 
 
@@ -1376,7 +1376,7 @@ favorecimentos = {a['ticker']: a['favorecido'] for a in ativos_validos}
 
 
 # Função para calcular métricas da carteira (CAGR, risco, Sharpe)
-def calcular_metricas_carteira(tickers, pesos, start_date='2018-01-01', rf=0):
+def calcular_metricas_carteira(tickers, pesos, start_date='2015-01-01', rf=0):
     import yfinance as yf
     df_adj = yf.download(tickers, start=start_date, auto_adjust=True, progress=False)['Close']
     df_adj = df_adj.ffill().dropna()
@@ -1391,7 +1391,7 @@ def calcular_metricas_carteira(tickers, pesos, start_date='2018-01-01', rf=0):
     return cagr, risco, sharpe
 
 # Função para backtest plug and play (ajuste para seu fluxo)
-def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2018-01-01'):
+def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2015-01-01'):
     import yfinance as yf
     df_adj = yf.download(tickers, start=start_date, auto_adjust=True, progress=False)['Close']
     ibov_adj = yf.download('^BVSP', start=start_date, auto_adjust=True, progress=False)['Close']
@@ -1669,7 +1669,7 @@ if (
         p_pos, p_neg, p_neu, media_anual, std_anual = prob_retornos_12m(retornos, pesos_finais_norm)
 
         st.markdown("### 📊 Indicadores da Carteira Ajustada Após o Aporte")
-        st.markdown(f"**CAGR estimado (7 anos):** {100*cagr:.2f}% ao ano")
+        st.markdown(f"**CAGR estimado (10 anos):** {100*cagr:.2f}% ao ano")
         st.markdown(f"**Risco anualizado:** {100*risco:.2f}%")
         st.markdown(f"**Índice de Sharpe:** {sharpe:.2f}")
         st.markdown("---")
@@ -1728,7 +1728,7 @@ if (
 
     # --- Backtest plug and play ---
     if len(df_resultado) >= 2:
-        st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (7 anos)")
+        st.subheader("📊 Backtest: Carteira Recomendada vs IBOV (10 anos)")
         tickers_bt = df_resultado["ticker"].tolist()
         pesos_bt = df_resultado["peso_otimizado"].values
         backtest_portfolio_vs_ibov_duplo(tickers_bt, pesos_bt)
