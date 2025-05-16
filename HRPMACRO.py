@@ -33,7 +33,7 @@ def obter_preco_petroleo_hist(start, end):
         return df['Close']
     return pd.Series(dtype=float)
 
-def montar_historico_7anos(tickers, setores_por_ticker, start='2018-01-01'):
+def montar_historico_7anos(tickers, setores_por_ticker, start='2015-01-01'):
     """Gera histórico dos últimos 7 anos (em memória, sem salvar em CSV)."""
     hoje = datetime.date.today()
     inicio = pd.to_datetime(start)
@@ -1201,7 +1201,7 @@ import matplotlib.pyplot as plt
 def calcular_cagr(valor_final, valor_inicial, anos):
     return (valor_final / valor_inicial) ** (1 / anos) - 1
 
-def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2018-01-01'):
+def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2015-01-01'):
     df_adj = yf.download(tickers, start=start_date, auto_adjust=True, progress=False)['Close']
     df_close = yf.download(tickers, start=start_date, auto_adjust=False, progress=False)['Close']
 
