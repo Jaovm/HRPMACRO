@@ -13,6 +13,7 @@ from HRPMACRO import (
     otimizar_carteira_sharpe,
     otimizar_carteira_hrp,
     get_bcb_hist,
+    calcular_media_movel,  # <--- Importa função de médias móveis
 )
 
 st.title("Backtest Mensal com Aportes – HRPMACRO (Macroeconômico Histórico, max 30% por ativo)")
@@ -57,9 +58,9 @@ if st.button("Executar Backtest Mensal"):
 
     # Baixar séries macroeconômicas históricas
     st.write("Baixando séries macroeconômicas históricas (Selic, IPCA, Dólar)...")
-    selic_hist = get_bcb_hist(432, start_date.strftime('%d/%m/%Y'), end_date.strftime('%d/%m/%Y'))  # Selic
-    ipca_hist = get_bcb_hist(433, start_date.strftime('%d/%m/%Y'), end_date.strftime('%d/%m/%Y'))   # IPCA
-    dolar_hist = get_bcb_hist(1,    start_date.strftime('%d/%m/%Y'), end_date.strftime('%d/%m/%Y')) # Dólar
+    selic_hist = get_bcb_hist(432, start_date.strftime('%d/%m/%Y'), end_date.strftime('%d/%m/%Y'))
+    ipca_hist = get_bcb_hist(433, start_date.strftime('%d/%m/%Y'), end_date.strftime('%d/%m/%Y'))
+    dolar_hist = get_bcb_hist(1,   start_date.strftime('%d/%m/%Y'), end_date.strftime('%d/%m/%Y'))
 
     # Montar macro_df mensal alinhado às datas_aporte
     macro_df = pd.DataFrame(index=datas_aporte)
@@ -67,7 +68,27 @@ if st.button("Executar Backtest Mensal"):
     macro_df['ipca'] = ipca_hist.reindex(datas_aporte, method='ffill')
     macro_df['dolar'] = dolar_hist.reindex(datas_aporte, method='ffill')
     macro_df['pib'] = 2.0  # Se quiser, pode estimar/baixar série real de PIB
-    macro_df = macro_df.fillna(method='ffill').fillna(method='bfill')
+
+    # Médias móveis de commodities
+    st.write("Calculando médias móveis históricas de commodities (soja, milho, minério, petróleo)...")
+    def rolling_media_movel(ticker, datas):
+        # Calcula médias móveis de 12 meses para cada data de aporte
+        valores = []
+        for data in datas:
+            end = data
+            start = (data - pd.DateOffset(months=12)).strftime('%Y-%m-%d')
+            end_str = data.strftime('%Y-%m-%d')
+            try:
+                m = calcular_media_movel(ticker, periodo="12mo", intervalo="1mo")
+            except Exception:
+                m = np.nan
+            valores.append(m)
+        return pd.Series(valores, index=datas)
+
+    macro_df['soja_ideal'] = rolling_media_movel("ZS=F", datas_aporte)
+    macro_df['milho_ideal'] = rolling_media_movel("ZC=F", datas_aporte)
+    macro_df['minerio_ideal'] = rolling_media_movel("TIO=F", datas_aporte)
+    macro_df['petroleo_ideal'] = rolling_media_movel("BZ=F", datas_aporte)
 
     carteira = {t: 0 for t in tickers}
     caixa = 0.0
@@ -76,12 +97,15 @@ if st.button("Executar Backtest Mensal"):
     bova11_patrimonio = []
 
     for idx, data_aporte in enumerate(datas_aporte):
-        # Pega macro daquele mês
         macro = {
             "selic": macro_df.loc[data_aporte, "selic"],
             "ipca": macro_df.loc[data_aporte, "ipca"],
             "dolar": macro_df.loc[data_aporte, "dolar"],
             "pib": macro_df.loc[data_aporte, "pib"],
+            "soja": macro_df.loc[data_aporte, "soja_ideal"],
+            "milho": macro_df.loc[data_aporte, "milho_ideal"],
+            "minerio": macro_df.loc[data_aporte, "minerio_ideal"],
+            "petroleo": macro_df.loc[data_aporte, "petroleo_ideal"],
         }
         historico_macro.append({
             "data": data_aporte,
@@ -89,6 +113,10 @@ if st.button("Executar Backtest Mensal"):
             "ipca": macro["ipca"],
             "dolar": macro["dolar"],
             "pib": macro["pib"],
+            "soja_ideal": macro["soja"],
+            "milho_ideal": macro["milho"],
+            "minerio_ideal": macro["minerio"],
+            "petroleo_ideal": macro["petroleo"]
         })
 
         score_macro = pontuar_macro(macro)
@@ -97,6 +125,10 @@ if st.button("Executar Backtest Mensal"):
             selic=macro.get("selic"),
             dolar=macro.get("dolar"),
             pib=macro.get("pib"),
+            preco_soja=macro.get("soja"),
+            preco_milho=macro.get("milho"),
+            preco_minerio=macro.get("minerio"),
+            preco_petroleo=macro.get("petroleo"),
         )
         ativos_validos = []
         period_prices = precos.loc[:data_aporte + pd.offsets.MonthEnd(0)].copy()
@@ -240,6 +272,6 @@ if st.button("Executar Backtest Mensal"):
     else:
         st.write("Nenhum ativo na carteira final.")
 
-    st.success("Backtest mensal com aportes, rebalanceamento, macro histórico e carteira final exibidos!")
+    st.success("Backtest mensal com aportes, rebalanceamento, macro histórico, médias móveis e carteira final exibidos!")
 
-st.caption("Backtest mensal usando cenário macroeconômico histórico real de cada mês para as decisões e otimização. Limite de 30% por ativo, long only, benchmark: BOVA11.")
+st.caption("Backtest mensal usando cenário macroeconômico histórico real (com médias móveis de commodities) para as decisões e otimização. Limite de 30% por ativo, long only, benchmark: BOVA11.")
