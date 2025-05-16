@@ -34,7 +34,7 @@ def obter_preco_petroleo_hist(start, end):
     return pd.Series(dtype=float)
 
 def montar_historico_7anos(tickers, setores_por_ticker, start='2015-01-01'):
-    """Gera histórico dos últimos 7 anos (em memória, sem salvar em CSV)."""
+    """Gera histórico dos últimos 10 anos (em memória, sem salvar em CSV)."""
     hoje = datetime.date.today()
     inicio = pd.to_datetime(start)
     final = hoje
@@ -1246,7 +1246,7 @@ def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2015-01-01'):
     port_close.plot(ax=ax, label='Carteira Recomendada (Close)')
     ibov_adj_norm.plot(ax=ax, label='IBOV (Ajustado)')
     ibov_close_norm.plot(ax=ax, label='IBOV (Close)')
-    ax.set_title('Backtest: Carteira Recomendada vs IBOV (7 anos)')
+    ax.set_title('Backtest: Carteira Recomendada vs IBOV (10 anos)')
     ax.set_ylabel('Retorno acumulado')
     ax.set_xlabel('Ano')
     ax.legend()
@@ -1413,7 +1413,7 @@ def backtest_portfolio_vs_ibov_duplo(tickers, pesos, start_date='2015-01-01'):
     fig, ax = plt.subplots(figsize=(10, 6))
     port_adj.plot(ax=ax, label='Carteira Recomendada')
     ibov_adj_norm.plot(ax=ax, label='IBOV')
-    ax.set_title('Backtest: Carteira Recomendada vs IBOV (7 anos)')
+    ax.set_title('Backtest: Carteira Recomendada vs IBOV (10 anos)')
     ax.set_ylabel('Retorno acumulado')
     ax.set_xlabel('Ano')
     ax.legend()
@@ -1563,7 +1563,7 @@ if (
         cagr, risco, sharpe = calcular_metricas_carteira(tickers_aporte, pesos_aporte)
         st.markdown(f"💰 **Valor utilizado no aporte:** R$ {valor_utilizado:,.2f}")
         st.markdown(f"🔁 **Troco (não alocado):** R$ {troco:,.2f}")
-        st.markdown(f"**CAGR estimado (7 anos):** {100*cagr:.2f}% ao ano")
+        st.markdown(f"**CAGR estimado (10 anos):** {100*cagr:.2f}% ao ano")
         st.markdown(f"**Risco anualizado:** {100*risco:.2f}%")
         st.markdown(f"**Índice de Sharpe:** {sharpe:.2f}")
     else:
@@ -1713,7 +1713,7 @@ if (
         p_pos, p_neg, p_neu, media_anual, std_anual = prob_retornos_12m(retornos, pesos_otimizados_lista)
 
         st.markdown("### 📊 Indicadores da Carteira Otimizada")
-        st.markdown(f"**CAGR estimado (7 anos):** {100*cagr:.2f}% ao ano")
+        st.markdown(f"**CAGR estimado (10 anos):** {100*cagr:.2f}% ao ano")
         st.markdown(f"**Risco anualizado:** {100*risco:.2f}%")
         st.markdown(f"**Índice de Sharpe:** {sharpe:.2f}")
         st.markdown("---")
