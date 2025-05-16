@@ -13,16 +13,21 @@ from scipy.optimize import minimize
 
 st.set_page_config(page_title="Sugestão de Carteira", layout="wide")
 
-def get_bcb_hist(code, start, end):
-    """Baixa série histórica mensal do BCB para um código SGS."""
-    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados?formato=json&dataInicial={start}&dataFinal={end}"
+def get_bcb_hist(code, inicio, final):
+    url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados?formato=json&dataInicial={inicio}&dataFinal={final}"
     r = requests.get(url)
     if r.status_code == 200:
-        df = pd.DataFrame(r.json())
+        data = r.json()
+        # Se o retorno não for uma lista ou está vazio, retorna um Series vazio
+        if not isinstance(data, list) or not data:
+            print(f"Retorno vazio ou inválido da API BCB para código {code}: {data}")
+            return pd.Series(dtype=float)
+        df = pd.DataFrame(data)
         df['data'] = pd.to_datetime(df['data'], dayfirst=True)
         df['valor'] = df['valor'].str.replace(",", ".").astype(float)
         return df.set_index('data')['valor']
     else:
+        print(f"Request falhou para código {code} com status {r.status_code}")
         return pd.Series(dtype=float)
 
 def obter_preco_petroleo_hist(start, end):
