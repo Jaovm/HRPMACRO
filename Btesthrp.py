@@ -19,7 +19,7 @@ from HRPMACRO import (
 st.title("Backtest Mensal com Aportes – HRPMACRO (Macroeconômico Histórico, max 30% por ativo)")
 
 valor_aporte = 1000.0
-limite_porc_ativo = 0.2
+limite_porc_ativo = 0.15
 start_date = pd.to_datetime("2018-01-01")
 end_date = pd.to_datetime(datetime.date.today())
 
